@@ -110,6 +110,19 @@ import kotlin.math.min
 
 /** Logcat tag for the background-image loader (top-level helper outside MainActivity). */
 private const val BG_TAG = "BgImage"
+// PackageParser stores android:supportsPictureInPicture in ActivityInfo.flags, but the matching
+// ActivityInfo constant is stripped from the public SDK stubs (including compileSdk 37). Reading the
+// stable framework parser bit lets each merged flavor manifest decide at runtime instead of trusting a
+// duplicated Boolean. ManualPipPolicyTest also guards every launcher declaration in source.
+private const val ACTIVITY_INFO_FLAG_SUPPORTS_PICTURE_IN_PICTURE = 0x00400000
+
+/** Pure capability gate kept outside the Activity so TV/API/manifest exclusions stay unit-tested. */
+internal fun manualPipSupported(
+    apiLevel: Int,
+    touchShell: Boolean,
+    systemFeature: Boolean,
+    activityDeclared: Boolean,
+): Boolean = apiLevel >= Build.VERSION_CODES.O && touchShell && systemFeature && activityDeclared
 
 @OptIn(ExperimentalCoroutinesApi::class)
 open class MainActivity : FragmentActivity() {
@@ -269,12 +282,7 @@ open class MainActivity : FragmentActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (!usesTouchShell() || !pipEnabled || !pip.playerOnScreen.value) return
-        if (cast.engine.value != null) return
-        val playing = mobileEngine
-        if (!playing.isPlaying.value || playing.audioOnly.value || playing.audioOnlyMedia.value) return
-        runCatching { enterPictureInPictureMode(pipParams()) }
-            .onFailure { Log.w(TAG, "Could not enter Picture-in-Picture", it) }
+        enterTouchPictureInPicture(requirePlaying = true)
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
@@ -329,6 +337,36 @@ open class MainActivity : FragmentActivity() {
             smallestWidthDp = config.smallestScreenWidthDp,
             legacyBuild = BuildConfig.LEGACY_BUILD,
         ).toAdaptiveDeviceProfile().shell == ZenShell.TOUCH
+    }
+
+    /** Device feature + the merged activity manifest + adaptive shell decide whether the button may exist. */
+    private fun supportsSystemPictureInPicture(): Boolean {
+        val declared = runCatching {
+            val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                packageManager.getActivityInfo(componentName, PackageManager.ComponentInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                packageManager.getActivityInfo(componentName, 0)
+            }
+            info.flags and ACTIVITY_INFO_FLAG_SUPPORTS_PICTURE_IN_PICTURE != 0
+        }.getOrDefault(false)
+        return manualPipSupported(
+            apiLevel = Build.VERSION.SDK_INT,
+            touchShell = usesTouchShell(),
+            systemFeature = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE),
+            activityDeclared = declared,
+        )
+    }
+
+    /** Manual and automatic entry share one path, so neither remounts or restarts the live/VOD engine. */
+    private fun enterTouchPictureInPicture(requirePlaying: Boolean) {
+        if (!pipEnabled || !supportsSystemPictureInPicture() || !pip.playerOnScreen.value) return
+        if (isInPictureInPictureMode || cast.engine.value != null || !mobileTuner.hasStream) return
+        val playing = mobileEngine
+        if (playing.audioOnly.value || playing.audioOnlyMedia.value) return
+        if (requirePlaying && !playing.isPlaying.value) return
+        runCatching { enterPictureInPictureMode(pipParams()) }
+            .onFailure { Log.w(TAG, "Could not enter Picture-in-Picture", it) }
     }
 
     private fun applyPipParams() {
@@ -416,7 +454,23 @@ open class MainActivity : FragmentActivity() {
                     .flatMapLatest { it.isPlaying }
                     .collectLatest { if (pip.inPip.value) applyPipParams() }
             }
-            lifecycleScope.launch { settings.pipEnabled.collect { pipEnabled = it } }
+            // Availability drives the player's visible button. It follows the user's PiP setting
+            // and casting state, while the static device/activity capability is rechecked on entry.
+            lifecycleScope.launch {
+                combine(settings.pipEnabled, cast.engine) { enabled, remote -> enabled to (remote == null) }
+                    .collect { (enabled, notCasting) ->
+                        pipEnabled = enabled
+                        pip.manualEntryAvailable.value =
+                            enabled && notCasting && supportsSystemPictureInPicture()
+                    }
+            }
+            lifecycleScope.launch {
+                pip.manualEntryRequests.collect {
+                    // A paused frame may also be floated. Unlike Home auto-entry, the explicit
+                    // button is an instruction to open PiP now and must preserve that paused state.
+                    enterTouchPictureInPicture(requirePlaying = false)
+                }
+            }
             lifecycleScope.launch { settings.backgroundPlayback.collect { backgroundPlayback = it } }
             lifecycleScope.launch { settings.audioOnScreenOff.collect { audioOnScreenOff = it } }
             lifecycleScope.launch {
@@ -429,6 +483,10 @@ open class MainActivity : FragmentActivity() {
                     else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 }
             }
+        } else {
+            // PipController is process-scoped; make the remote shell's exclusion explicit even if
+            // this process previously hosted a touch window on an unusual convertible device.
+            pip.manualEntryAvailable.value = false
         }
         val splashDeadline = SystemClock.uptimeMillis() + SPLASH_TIMEOUT_MS
         splash.setKeepOnScreenCondition { !contentReady && SystemClock.uptimeMillis() < splashDeadline }

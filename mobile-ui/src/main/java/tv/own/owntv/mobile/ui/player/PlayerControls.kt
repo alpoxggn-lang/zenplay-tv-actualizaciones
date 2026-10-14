@@ -102,6 +102,8 @@ fun PlayerControls(
     onToggleFavorite: () -> Unit,
     /** Live-only entry to the grid; null on hardware that cannot sustain two decoders. */
     onMultiview: (() -> Unit)? = null,
+    /** Touch-only system floating window; null on TV, Fire TV and devices without platform PiP. */
+    onPictureInPicture: (() -> Unit)? = null,
     /** Live-only glass channel browser. */
     onChannels: (() -> Unit)? = null,
     /** Live-only +1 zap within the category currently playing. */
@@ -187,6 +189,7 @@ fun PlayerControls(
                         favorite = favorite,
                         onToggleFavorite = onToggleFavorite,
                         onMultiview = onMultiview,
+                        onPictureInPicture = onPictureInPicture,
                     )
                 }
             }
@@ -445,10 +448,12 @@ private fun ToolBar(
     favorite: Boolean,
     onToggleFavorite: () -> Unit,
     onMultiview: (() -> Unit)? = null,
+    onPictureInPicture: (() -> Unit)? = null,
 ) {
-    // Deliberately four clear actions at most. Brightness remains a gesture and all track/display
-    // choices live under one Settings sheet; recording, sleep, sound-only, engine switching,
-    // diagnostics and an in-app mini-player do not belong on the touch player's primary bar.
+    // Only direct watching actions live here. Brightness remains a gesture and all track/display
+    // choices live under one Settings sheet; recording, sleep, sound-only, engine switching and
+    // diagnostics do not belong on the touch player's primary bar. System PiP is kept distinct from
+    // the old in-app mini-player: this button really leaves ZenPlay in Android's floating window.
     Row(
         Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -464,6 +469,13 @@ private fun ToolBar(
             stringResource(R.string.zenplay_player_playback_settings),
             { onOpenSheet(PlayerSheet.PLAYBACK_SETTINGS) },
         )
+        if (onPictureInPicture != null) {
+            CtrlButton(
+                MobileIcons.PictureInPictureAlt,
+                stringResource(R.string.player_enter_picture_in_picture),
+                onPictureInPicture,
+            )
+        }
         CtrlButton(
             icon = if (favorite) MobileIcons.Favorite else MobileIcons.FavoriteBorder,
             label = stringResource(if (favorite) R.string.content_favorited else R.string.content_favorite),

@@ -16,6 +16,9 @@ class ZenPlayTouchPlayerContractTest {
         assertTrue(toolbar.contains("PlayerSheet.VOLUME"))
         assertTrue(toolbar.contains("PlayerSheet.PLAYBACK_SETTINGS"))
         assertTrue(toolbar.contains("onMultiview"))
+        assertTrue(toolbar.contains("onPictureInPicture"))
+        assertTrue(toolbar.contains("MobileIcons.PictureInPictureAlt"))
+        assertTrue(toolbar.contains("player_enter_picture_in_picture"))
         listOf("RECORD", "SLEEP_TIMER", "INFO", "BRIGHTNESS", "MINI_PLAYER").forEach {
             assertFalse("unexpected touch toolbar action $it", toolbar.contains(it))
         }
@@ -80,5 +83,16 @@ class ZenPlayTouchPlayerContractTest {
         assertTrue(screen.contains("activeEngine.seekTo(target)"))
         assertTrue(stopAndExit.contains("if (film != null) vodTuner.stop() else tuner.stop()"))
         assertFalse(stopAndExit.contains("tuner.stop()\n        vodTuner.stop()"))
+    }
+
+    @Test
+    fun `system pip is capability gated and shared by live movies and episodes`() {
+        val screen = source("PlayerScreen.kt")
+
+        assertTrue(screen.contains("pip.manualEntryAvailable.collectAsStateWithLifecycle()"))
+        assertTrue(screen.contains("manualPipAvailable && !audioOnly && !audioOnlyMedia"))
+        assertTrue(screen.contains("pip.requestManualEntry()"))
+        // One PlayerControls call serves channel, film and episode playback; no media-specific copy.
+        assertTrue(screen.indexOf("PlayerControls(") == screen.lastIndexOf("PlayerControls("))
     }
 }

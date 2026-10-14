@@ -544,6 +544,8 @@
     <string name="player_sleep_timer_screen_off_unavailable">This device does not let apps turn the screen off.</string>
     <!-- Translators: Action on the floating mini-player. Return to the full-screen player. -->
     <string name="player_pip_expand">Expand</string>
+    <!-- Accessibility label for the touch player's manual Android Picture-in-Picture action. -->
+    <string name="player_enter_picture_in_picture">Open floating window</string>
     <!-- Translators: Player error shown when a Chromecast-style receiver refuses the stream. The receiver decodes the stream itself, so a format it does not support cannot be cast at all. -->
     <string name="player_error_cast_unsupported">The device you\'re casting to can\'t play this stream. Many live channels use a format it doesn\'t support \u2014 play it on your phone instead.</string>
     <!-- Translators: Player status while the stream plays on a Chromecast-style receiver instead of the phone. The placeholder is the receiver's own name, for example "Living Room TV". -->

@@ -124,6 +124,7 @@ fun PlayerScreen(
     val castDevice by cast.deviceName.collectAsStateWithLifecycle()
     val activity = LocalActivity.current
     val inPip by pip.inPip.collectAsStateWithLifecycle()
+    val manualPipAvailable by pip.manualEntryAvailable.collectAsStateWithLifecycle()
     val channel by tuner.channel.collectAsStateWithLifecycle()
     val autoFrameRate by settings.autoFrameRate.collectAsStateWithLifecycle(initialValue = false)
     val film by vodTuner.playing.collectAsStateWithLifecycle()
@@ -146,6 +147,7 @@ fun PlayerScreen(
     // playing", and the spinner over a deliberately paused picture reads as a stall. The television
     // has always drawn this from `buffering`; so does this now.
     val buffering by activeEngine.buffering.collectAsStateWithLifecycle()
+    val audioOnly by activeEngine.audioOnly.collectAsStateWithLifecycle()
     // Only the stream that never had a picture — a radio channel — reaches this screen without one.
     // The user's own sound-only choice cannot, see below.
     val audioOnlyMedia by activeEngine.audioOnlyMedia.collectAsStateWithLifecycle()
@@ -644,6 +646,14 @@ fun PlayerScreen(
                 val type = favoriteType ?: return@PlayerControls
                 val id = favoriteId ?: return@PlayerControls
                 scope.launch { actions.toggleFavorite(type, id) }
+            },
+            // The activity enables this only for the touch shell when the OS and this activity both
+            // support system PiP. Radio has no picture to float; live TV, films and episodes all use
+            // this same player route and therefore the same button and uninterrupted engine.
+            onPictureInPicture = if (manualPipAvailable && !audioOnly && !audioOnlyMedia) {
+                { pip.requestManualEntry() }
+            } else {
+                null
             },
             // Live channels only, whenever this device can sustain at least two decoders. The
             // channel on screen becomes tile 1 and the grid takes over from this player.

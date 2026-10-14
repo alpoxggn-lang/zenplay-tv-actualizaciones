@@ -50,14 +50,29 @@ soluciones pequeñas, comprobables y con procedencia clara.
 | `jonzey231/AerioTV-Android` `900e767` | GPL-3.0-or-later | Compatible solo con la línea Android GPL; integrar con atribución o usar como referencia | Interfaz adaptativa en una sola base, presión de memoria, PiP/multiview y fallback de audio FFmpeg con procedencia reproducible |
 | `Guts444/Onyx` `b321279` | MIT | Reutilizable en escritorio con aviso MIT | Empaquetado reproducible de libmpv, verificación por hash, reproducción nativa, caché local y controles de integridad para Windows |
 | `air-tv/iptv` `2f6303f` | MIT | Evaluar como biblioteca o portar pruebas acotadas | Parser Xtream/M3U/XMLTV por streaming, límites de memoria, snapshots atómicos, redacción de credenciales e identificadores estables |
+| `opentvproject/opentv` `43b95c0` | GPL-3.0-or-later | Compatible únicamente con la línea Android GPL; adaptar con atribución o usar como referencia | Política de errores HTTP para IPTV, sincronización durable con WorkManager, cambio de canal y reproducción de grabaciones remotas |
+| `Hunter-Clipper/OpenIPTV` `7797be8` | GPL-3.0 | Referencia Android GPL; no trasladar su capa Flutter al proyecto Kotlin | Watchdog de reproducción, base cifrada y llave protegida por Keystore, selección de pistas y detección TV/táctil |
+| `open-ott-play/ottplay-android` `5bc4f14` | MIT | Candidato preferente para portar pruebas y patrones pequeños con aviso MIT | Pruebas instrumentadas de Media3, almacenamiento atómico/Keystore, servicio de reproducción y cambio de canal que conserva el stream anterior ante fallo |
+| `newjan/StreamBox` `3505dcb` | Sin licencia raíz expresa | No reutilizar código | Sus afirmaciones de APK adaptable, Paging y reintentos solo sirven como lista de comprobación; un repositorio público sin licencia no concede permiso de copia |
 
 La base actual ya implementa Media3 con fallback de decodificador, selección de idiomas, paginación
 Room/Paging 3, caché Coil y perfiles de búfer. Por eso no se copiarán versiones duplicadas de esas
 piezas. Cada candidato se comparará mediante una prueba que demuestre una carencia concreta de
 ZenPlay; si la prueba ya pasa, se conserva la implementación existente.
 
+Primera incorporación acotada de esta revisión: el patrón de backoff exponencial con *equal jitter*
+observado en Strix (Apache-2.0, revisión `a131b43`) se adaptó en una implementación propia dentro de
+`OwnTV_Core/core` para los reintentos de API y catálogo. La política conserva `Retry-After`, limita
+esperas anómalas y tiene reloj y aleatoriedad inyectables para pruebas deterministas. No se conecta a
+`StreamingHttpClient` ni a los sockets o reintentos del reproductor.
+
 Se descartó el uso directo de proyectos sin una licencia expresa, aunque el repositorio sea público.
 Los repositorios jóvenes se consideran una fuente de pruebas e ideas, no una garantía de calidad.
+
+La ampliación de la búsqueda no cambia el motor elegido. Las referencias nuevas también convergen
+en Media3 para Android y no demuestran una cadena de reproducción superior a la ya implementada por
+ZenPlay (Media3, correcciones por tipo de stream y mpv como último recurso). Su valor principal está
+en endurecer pruebas, almacenamiento, actualización en segundo plano y recuperación ante fallos.
 
 ## Qué se conserva de ZenPlay Android
 

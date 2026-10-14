@@ -20,10 +20,19 @@ import java.io.InputStream
  * a block (so huge payloads are never fully buffered) and always closes the response. A per-source
  * custom User-Agent can be supplied (Phase 12 power feature).
  */
-class HttpClient(private val client: OkHttpClient) {
+class HttpClient internal constructor(
+    private val client: OkHttpClient,
+    private val retryPolicy: CatalogRetryPolicy,
+) {
+
+    constructor(client: OkHttpClient) : this(client, CatalogRetryPolicy())
 
     /** Non-2xx response. Thrown before the body block runs, so retrying it never re-emits parsed items. */
-    class HttpStatusException(val code: Int, message: String) : IOException(message)
+    class HttpStatusException(
+        val code: Int,
+        message: String,
+        internal val retryAfter: String? = null,
+    ) : IOException(message)
 
     suspend fun <T> get(
         url: String,
@@ -54,12 +63,19 @@ class HttpClient(private val client: OkHttpClient) {
                 if (cause is CancellationException) call.cancel()
             }
             var responseReceived = false
+            var retryAfterHeader: String? = null
             Log.d(TAG, "GET start url=$safeUrl ua=${ua.take(48)} attempt=$attempt/$attempts")
             try {
                 call.execute().use { response ->
                     responseReceived = true
                     val headersAt = SystemClock.elapsedRealtime()
-                    if (!response.isSuccessful) throw HttpStatusException(response.code, "HTTP ${response.code} for ${redact(url)}")
+                    if (!response.isSuccessful) {
+                        throw HttpStatusException(
+                            response.code,
+                            "HTTP ${response.code} for ${redact(url)}",
+                            retryAfter = response.header("Retry-After"),
+                        )
+                    }
                     val body = response.body
                     val totalBytes = body.contentLength().takeIf { it >= 0 }
                     // Info, not debug, and deliberately so: release builds strip Log.d, and this one
@@ -100,10 +116,13 @@ class HttpClient(private val client: OkHttpClient) {
                     e,
                 )
                 if (!retrying) throw e
+                retryAfterHeader = (e as? HttpStatusException)?.retryAfter
             } finally {
                 cancellationHook?.dispose()
             }
-            delay((RETRY_DELAY_MS * attempt).coerceAtMost(MAX_RETRY_DELAY_MS))
+            // This wrapper serves catalogue/API reads. Playback and long-lived media sockets use
+            // StreamingHttpClient instead and never enter this retry policy.
+            delay(retryPolicy.delayBeforeRetry(attempt, retryAfterHeader))
             attempt++
         }
         throw IOException("GET failed for $safeUrl")
@@ -141,9 +160,6 @@ class HttpClient(private val client: OkHttpClient) {
          */
         const val FALLBACK_USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-        private const val RETRY_DELAY_MS = 750L
-        private const val MAX_RETRY_DELAY_MS = 3_000L
-
         /** Mask credentials for display (info overlay / logs): query params AND Xtream `/type/user/pass/`
          *  path segments, which is where live URLs embed them. */
         fun redactUrl(url: String): String = url

@@ -279,9 +279,14 @@ jobs:
             EXPECTED_SIGNER="956cde3e1d4d96e3367a28860614e9a26998faa39bb2a94363fbf10a7b4c2f2c"
             for APK in "$NORMAL_SRC" "$LEGACY_SRC"; do
               "$APKSIGNER" verify --verbose "$APK"
-              ACTUAL_SIGNER=$("$APKSIGNER" verify --print-certs "$APK" \
-                | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
+              ACTUAL_SIGNER=$("$APKSIGNER" verify --verbose --print-certs "$APK" 2>&1 \
+                | sed -n 's/^[[:space:]]*Signer #1 certificate SHA-256 digest:[[:space:]]*//p' \
+                | head -n1 \
                 | tr '[:upper:]' '[:lower:]')
+              if [ -z "$ACTUAL_SIGNER" ]; then
+                echo "::error::Could not read the SHA-256 signer fingerprint from $APK."
+                exit 1
+              fi
               if [ "$ACTUAL_SIGNER" != "$EXPECTED_SIGNER" ]; then
                 echo "::error::$APK is signed by $ACTUAL_SIGNER, not the ZenPlay update key."
                 exit 1
@@ -323,6 +328,18 @@ jobs:
           if [ "$IS_TAG" = "true" ]; then
             cp "$NORMAL_SRC" "dist/ZenPlay.apk"
             cp "$LEGACY_SRC" "dist/ZenPlayLegacy.apk"
+            if ! cmp -s "dist/$NORMAL_OUT" dist/ZenPlay.apk; then
+              echo "::error::ZenPlay.apk does not match its versioned Normal APK."
+              exit 1
+            fi
+            if ! cmp -s "dist/$LEGACY_OUT" dist/ZenPlayLegacy.apk; then
+              echo "::error::ZenPlayLegacy.apk does not match its versioned Legacy APK."
+              exit 1
+            fi
+            if cmp -s dist/ZenPlay.apk dist/ZenPlayLegacy.apk; then
+              echo "::error::Normal and Legacy APKs are unexpectedly identical."
+              exit 1
+            fi
           fi
 
       - name: Generate and verify APK checksums

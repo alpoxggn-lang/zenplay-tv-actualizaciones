@@ -14,7 +14,6 @@ import tv.own.owntv.core.database.entity.FOLLOW_GLOBAL_LATENCY_SECS
 import tv.own.owntv.core.database.entity.FOLLOW_GLOBAL_PREROLL
 import tv.own.owntv.core.model.HlsSupport
 import tv.own.owntv.core.database.entity.ProfileEntity
-import tv.own.owntv.core.database.entity.ProfileSyncId
 import tv.own.owntv.core.database.entity.ProfileSourceCrossRef
 import tv.own.owntv.core.database.entity.SourceEntity
 import tv.own.owntv.core.database.transaction
@@ -103,7 +102,7 @@ class BackupManager(
             val seal: ((String) -> JSONObject)? = key?.let { k -> { plain -> BackupCrypto.encrypt(k, plain) } }
 
             val root = JSONObject().apply {
-                put("version", 25) // v25: profiles carry their stable cross-platform sync UUID. v24: "preferredLanguages" — each profile's preferred audio/subtitle language ({ "<profileId>": { "a", "s" } }); the shared pref_audio_lang/pref_sub_lang settings stay as the fallback for a profile with no entry. v23: "playbackQuirks" — what a stream needs, shared by every profile (sound-only marks and audio delays; the engine pins stay in compatMode so older readers still get them), and playbackPrefs carry the remembered track languages ("al"/"sl"). A playbackPrefs "d" from an older file restores into the shared delay. v22: sources carry the measured stream limit (maxConnections + maxConnectionsProbedAt), because measuring it costs minutes and interrupts playback and the answer belongs to the account, not the device. v21: "tombstones" — the user data the user DELETED, so a merge (restore or local sync) does not reinstate it. Older readers ignore the block and behave exactly as they do today. v20: playbackPrefs carry the per-item A/V-sync offset. v19: sources carry the per-playlist Live TV engine and Live latency overrides. v18: per-profile specific-channel startup targets. v17: startupModes/customizePins moved SOURCES→SETTINGS (readers accept both); PIN hashes and legacy URL-shaped player keys are encrypted-only; sources carry preferHls/livePrerollSecs/hlsSupported; source-keyed blocks scoped to the ticked profiles' sources. v16: optional Stalker serial/device IDs/signature. v15: custom category membership (issue #87) rides userData as kind "member"; customCategories blobs pass through unremapped. v14: .own container (wallpaper rides along). v13: sources.syncLive/Movies/Series. v12: per-profile OpenSubtitles login (encrypted-only). v11: profile-scoped export. v10: sources.mac. v9: custom TMDB names, encrypted TMDB key
+                put("version", 24) // v24: "preferredLanguages" — each profile's preferred audio/subtitle language ({ "<profileId>": { "a", "s" } }); the shared pref_audio_lang/pref_sub_lang settings stay as the fallback for a profile with no entry. v23: "playbackQuirks" — what a stream needs, shared by every profile (sound-only marks and audio delays; the engine pins stay in compatMode so older readers still get them), and playbackPrefs carry the remembered track languages ("al"/"sl"). A playbackPrefs "d" from an older file restores into the shared delay. v22: sources carry the measured stream limit (maxConnections + maxConnectionsProbedAt), because measuring it costs minutes and interrupts playback and the answer belongs to the account, not the device. v21: "tombstones" — the user data the user DELETED, so a merge (restore or local sync) does not reinstate it. Older readers ignore the block and behave exactly as they do today. v20: playbackPrefs carry the per-item A/V-sync offset. v19: sources carry the per-playlist Live TV engine and Live latency overrides. v18: per-profile specific-channel startup targets. v17: startupModes/customizePins moved SOURCES→SETTINGS (readers accept both); PIN hashes and legacy URL-shaped player keys are encrypted-only; sources carry preferHls/livePrerollSecs/hlsSupported; source-keyed blocks scoped to the ticked profiles' sources. v16: optional Stalker serial/device IDs/signature. v15: custom category membership (issue #87) rides userData as kind "member"; customCategories blobs pass through unremapped. v14: .own container (wallpaper rides along). v13: sources.syncLive/Movies/Series. v12: per-profile OpenSubtitles login (encrypted-only). v11: profile-scoped export. v10: sources.mac. v9: custom TMDB names, encrypted TMDB key
                 put("sections", JSONArray().apply { sections.forEach { put(it.name) } })
                 if (salt != null) put("crypto", BackupCrypto.cryptoBlock(salt))
                 // Ticked profiles always ride (backup is profile-based); restore needs SOURCES to apply them.
@@ -676,7 +675,7 @@ class BackupManager(
             val fileProfiles = root.optJSONArray("profiles") ?: JSONArray()
             for (i in 0 until fileProfiles.length()) {
                 val incoming = profileFrom(fileProfiles.getJSONObject(i), noSecrets)
-                val existing = matchProfileForRestore(deviceProfiles, incoming)
+                val existing = deviceProfiles.firstOrNull { profileMatchKey(it.name) == profileMatchKey(incoming.name) }
                 if (existing != null) profileIdByFileId[incoming.id] = existing.id else newProfiles++
             }
 
@@ -872,12 +871,11 @@ class BackupManager(
                 // collide across devices, so they can't identify a person. Match → update in place;
                 // new name → insert (keeping the file id only when it's free).
                 val deviceProfiles = profileDao.getAllOnce()
-                val byName = deviceProfiles.associateBy { profileMatchKey(it.name) }.toMutableMap()
-                val bySyncUuid = deviceProfiles.associateBy { it.syncUuid }.toMutableMap()
+                val byName = deviceProfiles.associateBy { profileMatchKey(it.name) }
                 val takenProfileIds = deviceProfiles.map { it.id }.toMutableSet()
                 for (i in 0 until fileProfiles.length()) {
                     val incoming = profileFrom(fileProfiles.getJSONObject(i), unseal)
-                    val existing = bySyncUuid[incoming.syncUuid] ?: byName[profileMatchKey(incoming.name)]
+                    val existing = byName[profileMatchKey(incoming.name)]
                     // Which local profile each entry ended up as, so its picture can be written to
                     // disk AFTER this transaction — a database transaction is no place for file I/O.
                     fun claimedAvatar(localId: Long) {
@@ -886,26 +884,16 @@ class BackupManager(
                     when {
                         existing != null -> {
                             if (applySources) {
-                                val updated = existing.copy(
-                                        name = incoming.name,
+                                profileDao.update(
+                                    existing.copy(
                                         avatarColor = incoming.avatarColor, avatarId = incoming.avatarId,
                                         isKids = incoming.isKids,
                                         // A passwordless backup omits PIN hashes (v17), so `null` here
                                         // means "not carried", not "this profile has no lock" — keep the
                                         // device's own PIN rather than silently unlocking the profile.
                                         pinHash = incoming.pinHash ?: existing.pinHash,
-                                        // A fresh install commonly has one locally-created profile
-                                        // with the same name as the backup. Explicit restore adopts
-                                        // the file identity so the profile remains the same person on
-                                        // every platform; a UUID already owned by another local row is
-                                        // never stolen.
-                                        syncUuid = syncUuidForRestore(existing, incoming, bySyncUuid),
-                                    )
-                                profileDao.update(updated)
-                                byName.remove(profileMatchKey(existing.name))
-                                bySyncUuid.remove(existing.syncUuid)
-                                byName[profileMatchKey(updated.name)] = updated
-                                bySyncUuid[updated.syncUuid] = updated
+                                    ),
+                                )
                             }
                             profileIdMap[incoming.id] = existing.id
                             if (applySources) claimedAvatar(existing.id)
@@ -916,9 +904,6 @@ class BackupManager(
                             val deviceId = if (keepId) incoming.id else rowId
                             takenProfileIds += deviceId
                             profileIdMap[incoming.id] = deviceId
-                            val inserted = incoming.copy(id = deviceId)
-                            byName[profileMatchKey(inserted.name)] = inserted
-                            bySyncUuid[inserted.syncUuid] = inserted
                             claimedAvatar(deviceId)
                         }
                         // else: not restoring SOURCES and no matching profile on the device — leave
@@ -1512,7 +1497,7 @@ class BackupManager(
      */
     private fun profileJson(p: ProfileEntity, seal: ((String) -> JSONObject)?) = JSONObject().apply {
         put("id", p.id); put("name", p.name); put("avatarColor", p.avatarColor); put("avatarId", p.avatarId)
-        put("isKids", p.isKids); put("createdAt", p.createdAt); put("syncUuid", p.syncUuid)
+        put("isKids", p.isKids); put("createdAt", p.createdAt)
         val pin = p.pinHash?.takeIf { it.isNotEmpty() }
         put("pinHash", if (pin != null && seal != null) seal(pin) else JSONObject.NULL)
         if (pin != null) put("pinLocked", true)
@@ -1524,7 +1509,6 @@ class BackupManager(
         // Pre-v17 backups stored the hash as a plain string; `unseal` returns those unchanged.
         pinHash = if (o.isNull("pinHash")) null else unseal(o.opt("pinHash")),
         createdAt = o.optLong("createdAt", System.currentTimeMillis()),
-        syncUuid = o.optString("syncUuid").takeIf(ProfileSyncId::isValid) ?: ProfileSyncId.newId(),
     )
 
     private fun sourceJson(s: SourceEntity, seal: ((String) -> JSONObject)?) = JSONObject().apply {
@@ -1726,26 +1710,6 @@ class BackupManager(
  * "Kids" and "KIDS" are different people and end up with two profiles.
  */
 internal fun profileMatchKey(name: String) = name.trim().lowercase()
-
-/** UUID is authoritative; name remains the compatibility fallback for pre-v25 backup files. */
-internal fun matchProfileForRestore(
-    deviceProfiles: Collection<ProfileEntity>,
-    incoming: ProfileEntity,
-): ProfileEntity? = deviceProfiles.firstOrNull { it.syncUuid == incoming.syncUuid }
-    ?: deviceProfiles.firstOrNull { profileMatchKey(it.name) == profileMatchKey(incoming.name) }
-
-/**
- * An explicit restore carries identity with it. Adopt the incoming UUID for a name-only match unless
- * another local row already owns it; in that collision the existing identity is the only safe one.
- */
-internal fun syncUuidForRestore(
-    existing: ProfileEntity,
-    incoming: ProfileEntity,
-    profilesBySyncUuid: Map<String, ProfileEntity>,
-): String {
-    val owner = profilesBySyncUuid[incoming.syncUuid]
-    return if (owner == null || owner.id == existing.id) incoming.syncUuid else existing.syncUuid
-}
 
 /**
  * Identity a restored source is merged onto. Username is part of the key because one portal commonly

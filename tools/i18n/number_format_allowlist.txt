@@ -1,2 +1,4 @@
 # CATEGORY<TAB>path<TAB>format-literal<TAB>occurrence<TAB>justification
 # Line numbers may be recorded in comments, but are never matching keys.
+DISPLAY	app/src/main/java/tv/own/owntv/features/live/ZenRecordDialog.kt	%02d	1	The scheduled recording hour deliberately follows the selected app locale.
+DISPLAY	app/src/main/java/tv/own/owntv/features/live/ZenRecordDialog.kt	%02d	2	The scheduled recording minute deliberately follows the selected app locale.

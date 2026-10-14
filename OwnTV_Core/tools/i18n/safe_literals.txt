@@ -2274,6 +2274,16 @@
 1	protocol	core/src/main/java/tv/own/owntv/core/parser/XmltvParser.kt	totalParseOrReadMs=${metrics.parseOrReadMs} totalCallbackMs=${metrics.callbackMs}
 1	protocol	core/src/main/java/tv/own/owntv/core/parser/XmltvParser.kt	—
 2	protocol	core/src/main/java/tv/own/owntv/core/parser/XmltvTime.kt	\0
+1	protocol	core/src/main/java/tv/own/owntv/core/parser/XtAccountAccessPolicy.kt	banned
+1	protocol	core/src/main/java/tv/own/owntv/core/parser/XtAccountAccessPolicy.kt	blocked
+1	protocol	core/src/main/java/tv/own/owntv/core/parser/XtAccountAccessPolicy.kt	denied
+1	protocol	core/src/main/java/tv/own/owntv/core/parser/XtAccountAccessPolicy.kt	disabled
+1	protocol	core/src/main/java/tv/own/owntv/core/parser/XtAccountAccessPolicy.kt	expir
+1	protocol	core/src/main/java/tv/own/owntv/core/parser/XtAccountAccessPolicy.kt	expired
+1	protocol	core/src/main/java/tv/own/owntv/core/parser/XtAccountAccessPolicy.kt	inactive
+1	protocol	core/src/main/java/tv/own/owntv/core/parser/XtAccountAccessPolicy.kt	invalid
+1	protocol	core/src/main/java/tv/own/owntv/core/parser/XtAccountAccessPolicy.kt	revoked
+1	protocol	core/src/main/java/tv/own/owntv/core/parser/XtAccountAccessPolicy.kt	suspended
 7	protocol	core/src/main/java/tv/own/owntv/core/parser/XtreamClient.kt	\0
 1	protocol	core/src/main/java/tv/own/owntv/core/parser/XtreamClient.kt	#EXTM3U
 1	protocol	core/src/main/java/tv/own/owntv/core/parser/XtreamClient.kt	${base(s)}/live/${s.username}/${s.password}/$streamId.m3u8
@@ -2478,6 +2488,9 @@
 1	log	core/src/main/java/tv/own/owntv/core/profile/ProfileAvatarStore.kt	profile $profileId: unable to scale the chosen image
 1	log	core/src/main/java/tv/own/owntv/core/profile/ProfileAvatarStore.kt	profile $profileId: unable to write the picture
 1	technical	core/src/main/java/tv/own/owntv/core/profile/ProfileAvatarStore.kt	profile_$profileId.jpg
+1	protocol	core/src/main/java/tv/own/owntv/core/profile/ProfileCustomizationAccess.kt	customize:$profileId
+1	protocol	core/src/main/java/tv/own/owntv/core/profile/ProfileManager.kt	profile:${profile.id}
+1	protocol	core/src/main/java/tv/own/owntv/core/profile/ProfileManager.kt	profile:${requirement.profile.id}
 2	technical	core/src/main/java/tv/own/owntv/core/recording/DashManifest.kt	\0
 1	technical	core/src/main/java/tv/own/owntv/core/recording/DashManifest.kt	$it/$ref
 1	technical	core/src/main/java/tv/own/owntv/core/recording/DashManifest.kt	%$format
@@ -2956,6 +2969,7 @@
 1	protocol	core/src/main/java/tv/own/owntv/core/setup/SetupText.kt	Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/601.1 (KHTML, like Gecko) MAG420 stbapp ver: 4 rev: 2721 Safari/601.1
 13	empty	core/src/main/java/tv/own/owntv/core/setup/SourceImporter.kt	\0
 1	file-path	core/src/main/java/tv/own/owntv/core/setup/SourceImporter.kt	/
+1	assertion	core/src/main/java/tv/own/owntv/core/setup/SourceImporter.kt	Profile creation requires adult authorization
 1	technical	core/src/main/java/tv/own/owntv/core/setup/SourceImporter.kt	add_remainder
 1	url	core/src/main/java/tv/own/owntv/core/setup/SourceImporter.kt	content://
 1	url	core/src/main/java/tv/own/owntv/core/setup/SourceImporter.kt	file://
@@ -3927,10 +3941,14 @@
 1	log	core/src/main/java/tv/own/owntv/core/util/Perf.kt	OwnTVPerf
 1	log	core/src/main/java/tv/own/owntv/core/util/Perf.kt	process-begin @0ms
 1	empty	core/src/main/java/tv/own/owntv/core/util/Pin.kt	\0
-1	technical	core/src/main/java/tv/own/owntv/core/util/Pin.kt	${salt.toHex()}:${digest(salt, pin)}
+1	protocol	core/src/main/java/tv/own/owntv/core/util/Pin.kt	${PBKDF2_PREFIX}$
+1	protocol	core/src/main/java/tv/own/owntv/core/util/Pin.kt	${PBKDF2_PREFIX}$${PBKDF2_ITERATIONS}$${salt.toHex()}$${derive(salt, pin, PBKDF2_ITERATIONS).toHex()}
 1	technical	core/src/main/java/tv/own/owntv/core/util/Pin.kt	%02x
 1	technical	core/src/main/java/tv/own/owntv/core/util/Pin.kt	:
+1	protocol	core/src/main/java/tv/own/owntv/core/util/Pin.kt	PBKDF2WithHmacSHA256
+1	assertion	core/src/main/java/tv/own/owntv/core/util/Pin.kt	PIN must contain 4 to 6 digits
 1	technical	core/src/main/java/tv/own/owntv/core/util/Pin.kt	SHA-256
+1	protocol	core/src/main/java/tv/own/owntv/core/util/Pin.kt	pbkdf2-sha256
 1	protocol	core/src/main/java/tv/own/owntv/core/weather/WeatherData.kt	clearNight
 2	protocol	core/src/main/java/tv/own/owntv/core/weather/WeatherData.kt	cloudy
 1	protocol	core/src/main/java/tv/own/owntv/core/weather/WeatherData.kt	drizzle
@@ -4500,11 +4518,12 @@
 1	log	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	VOD failed on ExoPlayer ($exoError) and the engine setting is ExoPlayer-only
 1	log	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	VOD failed on mpv but audio codec unsafe for ExoPlayer — no fallback
 1	log	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	VOD failed on mpv but the engine setting is mpv-only — no fallback
+1	log	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	VOD seek stalled at ${_position.value}ms en route to ${plan.targetMs}ms — recovering playback
 1	log	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	VOD starting on ExoPlayer (preferred engine setting)
 1	log	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	VOD terminally failed on ExoPlayer ($exoError) — falling back to mpv
 1	log	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	VOD terminally failed on mpv ($mpvError) — falling back to ExoPlayer
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	aac
-1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	absolute
+2	protocol	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	absolute+keyframes
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	ac-3
 2	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	ac3
 4	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	af
@@ -4539,7 +4558,7 @@
 1	mime	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	audio/true-hd
 1	mime	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	audio/vnd.dts
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	audiotrack
-4	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	auto
+5	protocol	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	auto
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	auto-safe
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	av1
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	avc
@@ -4555,7 +4574,6 @@
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	correct-pts
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	curl-enabled
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	custom
-1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	cycle
 1	log	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	decode check: hwdec-current='$hw' height=${h}px direct=${_directRender.value}
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	decodeGuard
 1	log	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	decoder failure with no rescue rung left — surfacing decode error
@@ -4709,7 +4727,7 @@
 3	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	path:$path
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	path:${extSelect.path}
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	path:${it.path}
-8	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	pause
+10	protocol	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	pause
 3	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	paused-for-cache
 1	log	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	paused-for-cache=${getPropertyString("paused-for-cache")}
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	pcm
@@ -4728,7 +4746,6 @@
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	ranchu
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	reconnect=1,reconnect_streamed=1,reconnect_delay_max=8,reconnect_on_http_error=5xx
 1	log	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	redirect
-1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	relative
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	replacement loadfile
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	rgba8
 2	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	s16
@@ -4786,7 +4803,7 @@
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	vc1
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	vd-lavc-fast
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	vd-lavc-skiploopfilter
-4	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	vid
+5	protocol	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	vid
 2	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	video
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	video-aspect-override
 4	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	video-bitrate

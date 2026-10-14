@@ -347,6 +347,7 @@ private fun ZenRecordChoice(
                 else -> Color.White
             },
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 10.dp),
         )

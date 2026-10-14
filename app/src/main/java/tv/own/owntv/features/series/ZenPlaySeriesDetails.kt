@@ -542,4 +542,5 @@ private fun ZenSimilarShow(rec: ZenPlayRecommendation, onClick: () -> Unit) {
 }
 
 /** Seconds → "00:42:10". */
-private fun clock(secs: Long): String = "%02d:%02d:%02d".format(secs / 3600, (secs % 3600) / 60, secs % 60)
+private fun clock(secs: Long): String =
+    "%02d:%02d:%02d".format(java.util.Locale.ROOT, secs / 3600, (secs % 3600) / 60, secs % 60)

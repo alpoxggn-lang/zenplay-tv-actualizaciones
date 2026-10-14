@@ -250,6 +250,7 @@ private fun NowPlayingNavButton(onClick: () -> Unit, compact: Boolean) {
                     style = MaterialTheme.typography.labelMedium,
                     color = if (focused) colors.onPrimaryContainer else colors.onSurface,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -534,6 +535,7 @@ private fun ExpiryChip(expiryMs: Long) {
             color = if (expired) Color.White else colors.onSurfaceVariant,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

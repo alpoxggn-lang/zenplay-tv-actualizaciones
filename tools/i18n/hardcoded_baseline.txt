@@ -26,6 +26,35 @@
 1	app/src/main/java/tv/own/owntv/features/customize/MoveToCategoryDialog.kt	☐
 1	app/src/main/java/tv/own/owntv/features/customize/MoveToCategoryDialog.kt	☑
 1	app/src/main/java/tv/own/owntv/features/epg/EpgScreen.kt	ALL
+1	app/src/main/java/tv/own/owntv/features/live/ZenRecordDialog.kt	$h h
+1	app/src/main/java/tv/own/owntv/features/live/ZenRecordDialog.kt	$h h $m min
+1	app/src/main/java/tv/own/owntv/features/live/ZenRecordDialog.kt	$m min
+1	app/src/main/java/tv/own/owntv/features/live/ZenRecordDialog.kt	$start – $stop
+4	app/src/main/java/tv/own/owntv/features/live/ZenRecordDialog.kt	+
+1	app/src/main/java/tv/own/owntv/features/live/ZenRecordDialog.kt	:
+4	app/src/main/java/tv/own/owntv/features/live/ZenRecordDialog.kt	−
+1	app/src/main/java/tv/own/owntv/features/live/ZenSportsAgendaScreen.kt	–
+2	app/src/main/java/tv/own/owntv/features/live/ZenSportsAgendaScreen.kt	⚽
+1	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	$pct%
+2	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	${h}h ${m}min
+2	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	${m}min
+1	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	1080
+1	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	2160
+2	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	4K
+1	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	720
+2	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	FHD
+1	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	HD
+2	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	SD
+1	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	UHD
+1	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	•
+1	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	★ ${"%.1f".format(it)}
+1	app/src/main/java/tv/own/owntv/features/series/ZenPlaySeriesDetails.kt	${ep.episodeNumber}. ${episodeDisplayTitle(ep)}
+1	app/src/main/java/tv/own/owntv/features/series/ZenPlaySeriesDetails.kt	HD
+1	app/src/main/java/tv/own/owntv/features/series/ZenPlaySeriesDetails.kt	•
+1	app/src/main/java/tv/own/owntv/features/series/ZenPlaySeriesDetails.kt	★ ${"%.1f".format(it)}
+1	app/src/main/java/tv/own/owntv/features/series/ZenPlaySeriesDetails.kt	😊
+1	app/src/main/java/tv/own/owntv/features/series/ZenPlaySeriesDetails.kt	😐
+1	app/src/main/java/tv/own/owntv/features/series/ZenPlaySeriesDetails.kt	🙂
 8	app/src/main/java/tv/own/owntv/features/settings/DnsSettingsScreen.kt	\0
 1	app/src/main/java/tv/own/owntv/features/settings/DnsSettingsScreen.kt	${cfg.host}$p
 1	app/src/main/java/tv/own/owntv/features/settings/DnsSettingsScreen.kt	:${cfg.port}
@@ -50,6 +79,24 @@
 1	app/src/main/java/tv/own/owntv/features/settings/VideoPlayerSettingsScreen.kt	–
 1	app/src/main/java/tv/own/owntv/features/shell/components/MediaDetailsScreen.kt	\0
 6	app/src/main/java/tv/own/owntv/features/shell/components/SettingsScreen.kt	#
+1	app/src/main/java/tv/own/owntv/features/shell/components/Sidebar.kt	⚙️
+2	app/src/main/java/tv/own/owntv/features/shell/components/Sidebar.kt	⚽
+1	app/src/main/java/tv/own/owntv/features/shell/components/Sidebar.kt	❤️
+1	app/src/main/java/tv/own/owntv/features/shell/components/Sidebar.kt	🍿
+1	app/src/main/java/tv/own/owntv/features/shell/components/Sidebar.kt	🎬
+1	app/src/main/java/tv/own/owntv/features/shell/components/Sidebar.kt	🏠
+1	app/src/main/java/tv/own/owntv/features/shell/components/Sidebar.kt	📅
+1	app/src/main/java/tv/own/owntv/features/shell/components/Sidebar.kt	📥
+1	app/src/main/java/tv/own/owntv/features/shell/components/Sidebar.kt	📺
+1	app/src/main/java/tv/own/owntv/features/shell/components/Sidebar.kt	🔄
+1	app/src/main/java/tv/own/owntv/features/shell/components/Sidebar.kt	🔍
+1	app/src/main/java/tv/own/owntv/features/shell/components/Sidebar.kt	🔴
+2	app/src/main/java/tv/own/owntv/player/PlayerHud.kt	ExoPlayer
+2	app/src/main/java/tv/own/owntv/player/PlayerHud.kt	MPV
+1	app/src/main/java/tv/own/owntv/player/PlayerHudDialogs.kt	${stringResource(R.string.player_tool_engine)} · ${engineName.orEmpty()}
+1	app/src/main/java/tv/own/owntv/player/PlayerHudDialogs.kt	${stringResource(R.string.player_tool_quality)} · $value
+2	app/src/main/java/tv/own/owntv/player/PlayerHudDialogs.kt	4K
+2	app/src/main/java/tv/own/owntv/player/PlayerHudDialogs.kt	8K
 1	app/src/main/java/tv/own/owntv/ui/components/ColorPicker.kt	#%06X
 1	app/src/main/java/tv/own/owntv/ui/components/TextInputDialog.kt	\0
 1	app/src/main/java/tv/own/owntv/ui/components/TvImeMetrics.kt	$trigger visible=${next.visible} source=${next.source} displayH=$displayHeight
@@ -64,3 +111,4 @@
 1	app/src/main/java/tv/own/owntv/ui/components/TvImeMetrics.kt	owntv_ime_calibration
 1	app/src/main/java/tv/own/owntv/ui/components/TvImeMetrics.kt	poll
 1	app/src/main/java/tv/own/owntv/ui/components/TvImeMetrics.kt	requested
+1	app/src/main/java/tv/own/owntv/ui/components/ZenPlaySplash.kt	.

@@ -352,6 +352,7 @@ internal fun InfoChip(text: String, outlined: Boolean = false) {
         fontWeight = FontWeight.SemiBold,
         color = Color.White,
         maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .clip(shape)
             .then(
@@ -390,7 +391,14 @@ internal fun DetailButton(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             tv.own.owntv.ui.components.OwnTVIcon(icon = icon, tint = fg, filled = true, modifier = Modifier.size(20.dp))
-            Text(label, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = fg, maxLines = 1)
+            Text(
+                label,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                color = fg,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -496,7 +504,11 @@ private fun compactDuration(raw: String): String {
 private fun formatClock(ms: Long): String {
     val total = ms / 1000
     val h = total / 3600; val m = (total % 3600) / 60; val s = total % 60
-    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+    return if (h > 0) {
+        "%d:%02d:%02d".format(java.util.Locale.ROOT, h, m, s)
+    } else {
+        "%d:%02d".format(java.util.Locale.ROOT, m, s)
+    }
 }
 
 /** A quality tag from the provider's title ("4K", "FHD", "HD"), when it carries one. */

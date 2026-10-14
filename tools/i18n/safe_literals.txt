@@ -20,8 +20,11 @@
 # category technical: Reviewed non-user-facing technical literal.
 
 1	log	app/src/main/java/tv/own/owntv/MainActivity.kt	BgImage
+1	log	app/src/main/java/tv/own/owntv/MainActivity.kt	Could not enter Picture-in-Picture
 1	log	app/src/main/java/tv/own/owntv/MainActivity.kt	OwnTVHome
 1	compiler	app/src/main/java/tv/own/owntv/MainActivity.kt	RememberReturnType
+1	preference-key	app/src/main/java/tv/own/owntv/MainActivity.kt	asked
+1	protocol	app/src/main/java/tv/own/owntv/MainActivity.kt	back
 1	log	app/src/main/java/tv/own/owntv/MainActivity.kt	background image load failed: ${it.result.throwable.message}
 1	log	app/src/main/java/tv/own/owntv/MainActivity.kt	background image loaded: ${file.absolutePath} (${file.length()} bytes)
 1	log	app/src/main/java/tv/own/owntv/MainActivity.kt	blur: bounds decode failed for $path
@@ -32,15 +35,23 @@
 1	performance	app/src/main/java/tv/own/owntv/MainActivity.kt	db-probed
 1	performance	app/src/main/java/tv/own/owntv/MainActivity.kt	destination-ready
 1	performance	app/src/main/java/tv/own/owntv/MainActivity.kt	first-composition
+1	protocol	app/src/main/java/tv/own/owntv/MainActivity.kt	forward
 2	technical	app/src/main/java/tv/own/owntv/MainActivity.kt	none
 1	log	app/src/main/java/tv/own/owntv/MainActivity.kt	onCreate deepLinkHost=${intent.data?.host} deepLinkType=${pendingDeepLink?.javaClass?.simpleName ?: "none"}
 1	log	app/src/main/java/tv/own/owntv/MainActivity.kt	onNewIntent deepLinkHost=${intent.data?.host} deepLinkType=${pendingDeepLink?.javaClass?.simpleName ?: "none"}
+1	protocol	app/src/main/java/tv/own/owntv/MainActivity.kt	open_player
+1	protocol	app/src/main/java/tv/own/owntv/MainActivity.kt	pip_action
 1	performance	app/src/main/java/tv/own/owntv/MainActivity.kt	profile-id-loaded
 1	performance	app/src/main/java/tv/own/owntv/MainActivity.kt	profiles-loaded
+1	protocol	app/src/main/java/tv/own/owntv/MainActivity.kt	toggle
+1	protocol	app/src/main/java/tv/own/owntv/MainActivity.kt	tv.zenplay.universal.PIP
+1	preference-key	app/src/main/java/tv/own/owntv/MainActivity.kt	zenplay_notification_permission
 1	compiler	app/src/main/java/tv/own/owntv/OwnTVApp.kt	DEPRECATION
-1	technical	app/src/main/java/tv/own/owntv/OwnTVApp.kt	ahXN00/OwnTV
+1	technical	app/src/main/java/tv/own/owntv/OwnTVApp.kt	alpoxggn-lang/zenplay-tv-actualizaciones
 1	file-path	app/src/main/java/tv/own/owntv/OwnTVApp.kt	image_cache
 1	performance	app/src/main/java/tv/own/owntv/OwnTVApp.kt	koin-started
+1	protocol	app/src/main/java/tv/own/owntv/TvWorkerFactory.kt	owntv-downloads
+1	protocol	app/src/main/java/tv/own/owntv/TvWorkerFactory.kt	tv.own.owntv.core.download.DownloadWorker
 3	empty	app/src/main/java/tv/own/owntv/core/i18n/LocalizedContent.kt	\0
 1	assertion	app/src/main/java/tv/own/owntv/features/customize/CustomizeItemsViewModel.kt	EPISODE not applicable
 2	assertion	app/src/main/java/tv/own/owntv/features/customize/CustomizeItemsViewModel.kt	EPISODE not applicable to category items
@@ -54,9 +65,7 @@
 1	technical	app/src/main/java/tv/own/owntv/features/customize/CustomizeScreen.kt	⤒
 1	technical	app/src/main/java/tv/own/owntv/features/customize/CustomizeScreen.kt	⤓
 1	empty	app/src/main/java/tv/own/owntv/features/customize/CustomizeViewModel.kt	\0
-1	technical	app/src/main/java/tv/own/owntv/features/downloads/DownloadsScreen.kt	d_${download.id}
-1	technical	app/src/main/java/tv/own/owntv/features/downloads/DownloadsScreen.kt	hdr_$group
-1	empty	app/src/main/java/tv/own/owntv/features/downloads/DownloadsViewModel.kt	\0
+1	protocol	app/src/main/java/tv/own/owntv/features/customize/CustomizeViewModel.kt	customize:${ctx.value.profileId}
 2	technical	app/src/main/java/tv/own/owntv/features/epg/EpgScreen.kt	ALL
 1	technical	app/src/main/java/tv/own/owntv/features/epg/EpgScreen.kt	EEEdMMM
 1	empty	app/src/main/java/tv/own/owntv/features/epg/EpgViewModel.kt	\0
@@ -74,22 +83,34 @@
 1	log	app/src/main/java/tv/own/owntv/features/epg/EpgViewModel.kt	totalMs=${android.os.SystemClock.elapsedRealtime() - loadStartedAt}
 1	log	app/src/main/java/tv/own/owntv/features/epg/EpgViewModel.kt	window-moved
 1	technical	app/src/main/java/tv/own/owntv/features/epg/GuideCore.kt	↻
-1	technical	app/src/main/java/tv/own/owntv/features/home/HomeScreen.kt	#${activeIndex + 1}
-2	locale	app/src/main/java/tv/own/owntv/features/home/HomeScreen.kt	EN
 1	technical	app/src/main/java/tv/own/owntv/features/home/HomeScreen.kt	episode:${episode.id}
 1	technical	app/src/main/java/tv/own/owntv/features/home/HomeScreen.kt	heroCardWidth
 1	technical	app/src/main/java/tv/own/owntv/features/home/HomeScreen.kt	live:${channel.id}
 1	technical	app/src/main/java/tv/own/owntv/features/home/HomeScreen.kt	movie:${movie.id}
 2	url	app/src/main/java/tv/own/owntv/features/home/HomeScreen.kt	w1280
-3	url	app/src/main/java/tv/own/owntv/features/home/HomeScreen.kt	w500
+2	url	app/src/main/java/tv/own/owntv/features/home/HomeScreen.kt	w500
 1	technical	app/src/main/java/tv/own/owntv/features/home/HomeScreen.kt	|
 1	technical	app/src/main/java/tv/own/owntv/features/home/HomeScreen.kt	·
 1	technical	app/src/main/java/tv/own/owntv/features/home/HomeScreen.kt	•
-1	technical	app/src/main/java/tv/own/owntv/features/home/HomeScreen.kt	✓ $providerMatchLabel
 1	locale	app/src/main/java/tv/own/owntv/features/home/HomeViewModel.kt	EN
 1	performance	app/src/main/java/tv/own/owntv/features/home/HomeViewModel.kt	home-data
 3	technical	app/src/main/java/tv/own/owntv/features/home/HomeViewModel.kt	w1280
 2	technical	app/src/main/java/tv/own/owntv/features/home/HomeViewModel.kt	w780
+4	empty	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	\0
+1	protocol	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	$profileId|$year|${movieSources.sorted()}|${seriesSources.sorted()}
+3	technical	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	,
+1	sql	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	AND COALESCE(year, parsedYear) = $year
+1	sql	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	SELECT id, COALESCE(NULLIF(canonicalTitle, ''), name) FROM $table
+1	sql	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	WHERE sourceId IN ($inList)$yearClause ORDER BY addedAt DESC, id DESC LIMIT ${limit * SCAN_FACTOR}
+1	protocol	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	movies
+1	protocol	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	series
+1	preference-key	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	trending_force_at
+1	preference-key	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	trending_key
+1	preference-key	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	trending_movies
+1	preference-key	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	trending_saved_at
+1	preference-key	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	trending_series
+1	preference-key	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	zenplay
+1	preference-key	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	zenplay_home
 1	technical	app/src/main/java/tv/own/owntv/features/live/CatchupJumpDialog.kt	EEEHm
 1	technical	app/src/main/java/tv/own/owntv/features/live/CatchupJumpDialog.kt	Hm
 1	technical	app/src/main/java/tv/own/owntv/features/live/CatchupJumpDialog.kt	exact
@@ -112,7 +133,6 @@
 1	preference-key	app/src/main/java/tv/own/owntv/features/live/LiveScreen.kt	move
 1	preference-key	app/src/main/java/tv/own/owntv/features/live/LiveScreen.kt	move_to_category
 1	preference-key	app/src/main/java/tv/own/owntv/features/live/LiveScreen.kt	play_external
-1	technical	app/src/main/java/tv/own/owntv/features/live/LiveScreen.kt	record
 1	preference-key	app/src/main/java/tv/own/owntv/features/live/LiveScreen.kt	remove_history
 1	preference-key	app/src/main/java/tv/own/owntv/features/live/LiveScreen.kt	rename
 2	technical	app/src/main/java/tv/own/owntv/features/live/LiveScreen.kt	−
@@ -128,9 +148,20 @@
 1	log	app/src/main/java/tv/own/owntv/features/live/LiveViewModel.kt	tuneByNumber($number) failed
 1	log	app/src/main/java/tv/own/owntv/features/live/LiveZapList.kt	LiveZapList
 1	log	app/src/main/java/tv/own/owntv/features/live/LiveZapList.kt	direct tune: zap rebuild failed
-1	empty	app/src/main/java/tv/own/owntv/features/more/MoreScreen.kt	\0
+2	locale	app/src/main/java/tv/own/owntv/features/live/ZenRecordDialog.kt	%02d
+1	locale	app/src/main/java/tv/own/owntv/features/live/ZenRecordDialog.kt	EEE d MMM · HH:mm
+2	locale	app/src/main/java/tv/own/owntv/features/live/ZenRecordDialog.kt	HH:mm
+1	locale	app/src/main/java/tv/own/owntv/features/live/ZenSportsAgendaScreen.kt	EEEE d 'de' MMMM
+1	locale	app/src/main/java/tv/own/owntv/features/live/ZenSportsAgendaScreen.kt	HH:mm
+1	locale	app/src/main/java/tv/own/owntv/features/live/ZenSportsAgendaScreen.kt	MX
+1	technical	app/src/main/java/tv/own/owntv/features/live/ZenSportsAgendaScreen.kt	_
+1	technical	app/src/main/java/tv/own/owntv/features/live/ZenSportsAgendaScreen.kt	e
+1	locale	app/src/main/java/tv/own/owntv/features/live/ZenSportsAgendaScreen.kt	es
+1	technical	app/src/main/java/tv/own/owntv/features/live/ZenSportsAgendaScreen.kt	events_header
+1	technical	app/src/main/java/tv/own/owntv/features/live/ZenSportsAgendaScreen.kt	p
+8	empty	app/src/main/java/tv/own/owntv/features/more/MoreScreen.kt	\0
 1	technical	app/src/main/java/tv/own/owntv/features/more/MoreScreen.kt	dMMM
-1	technical	app/src/main/java/tv/own/owntv/features/more/MoreScreen.kt	dMMMyyyy
+2	locale	app/src/main/java/tv/own/owntv/features/more/MoreScreen.kt	dMMMyyyy
 1	preference-key	app/src/main/java/tv/own/owntv/features/more/QuickPreview.kt	quick_autoplay
 1	preference-key	app/src/main/java/tv/own/owntv/features/more/QuickPreview.kt	quick_channel_numbers
 1	preference-key	app/src/main/java/tv/own/owntv/features/more/QuickPreview.kt	quick_check_update
@@ -138,7 +169,6 @@
 1	preference-key	app/src/main/java/tv/own/owntv/features/more/QuickPreview.kt	quick_live_preview
 1	preference-key	app/src/main/java/tv/own/owntv/features/more/QuickPreview.kt	quick_preview_sound
 2	empty	app/src/main/java/tv/own/owntv/features/movies/MovieViewModel.kt	\0
-1	technical	app/src/main/java/tv/own/owntv/features/movies/MovieViewModel.kt	${StorageAccess.sanitize(movie.name)}.${movie.containerExt ?: StorageAccess.extOf(movie.streamUrl)}
 1	technical	app/src/main/java/tv/own/owntv/features/movies/MovieViewModel.kt	MOVIE
 1	log	app/src/main/java/tv/own/owntv/features/movies/MovieViewModel.kt	OwnTVHome
 2	log	app/src/main/java/tv/own/owntv/features/movies/MovieViewModel.kt	external play history record failed movieId=${movie.id} profile=$pid
@@ -152,7 +182,6 @@
 2	log	app/src/main/java/tv/own/owntv/features/movies/MovieViewModel.kt	stalker resolve failed movieId=${movie.id}
 1	technical	app/src/main/java/tv/own/owntv/features/movies/MoviesScreen.kt	,
 1	preference-key	app/src/main/java/tv/own/owntv/features/movies/MoviesScreen.kt	delete_subtitles
-1	preference-key	app/src/main/java/tv/own/owntv/features/movies/MoviesScreen.kt	download
 1	preference-key	app/src/main/java/tv/own/owntv/features/movies/MoviesScreen.kt	favourite
 1	preference-key	app/src/main/java/tv/own/owntv/features/movies/MoviesScreen.kt	hide
 1	preference-key	app/src/main/java/tv/own/owntv/features/movies/MoviesScreen.kt	mark_watched
@@ -167,6 +196,37 @@
 1	preference-key	app/src/main/java/tv/own/owntv/features/movies/MoviesScreen.kt	tmdb_details
 1	url	app/src/main/java/tv/own/owntv/features/movies/MoviesScreen.kt	w1280
 1	technical	app/src/main/java/tv/own/owntv/features/movies/MoviesScreen.kt	✓
+4	empty	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	\0
+1	locale	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	%.1f
+1	locale	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	%d:%02d
+1	locale	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	%d:%02d:%02d
+1	technical	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	,
+1	uri	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	/player_api.php?username=$u&password=$p&action=get_vod_info&vod_id=
+3	protocol	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	UTF-8
+1	regex	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	[^\\p{L}\\p{N}]+
+1	regex	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	\\(.*?\\)|\\[.*?]
+1	regex	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	\\bHD\\b
+1	json	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	actors
+1	json	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	age
+2	json	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	backdrop_path
+1	json	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	cast
+1	json	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	certification
+1	json	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	cover_big
+1	json	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	description
+1	json	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	director
+1	json	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	duration
+1	json	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	genre
+3	protocol	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	http
+1	json	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	info
+1	json	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	movie_image
+1	json	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	mpaa_rating
+1	protocol	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	null
+1	json	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	plot
+1	json	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	rating
+1	json	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	release_date
+1	json	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	releasedate
+1	protocol	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	w1280
+1	json	app/src/main/java/tv/own/owntv/features/movies/ZenPlayMovieDetails.kt	year
 4	empty	app/src/main/java/tv/own/owntv/features/profiles/ProfileComponents.kt	\0
 1	locale	app/src/main/java/tv/own/owntv/features/recordings/RecordingsScreen.kt	EEEdMMMjm
 1	technical	app/src/main/java/tv/own/owntv/features/recordings/RecordingsScreen.kt	r_${recording.id}
@@ -179,11 +239,10 @@
 2	empty	app/src/main/java/tv/own/owntv/features/search/SearchViewModel.kt	\0
 1	technical	app/src/main/java/tv/own/owntv/features/search/SearchViewModel.kt	MOVIE
 1	log	app/src/main/java/tv/own/owntv/features/search/SearchViewModel.kt	OwnTVHome
-1	log	app/src/main/java/tv/own/owntv/features/search/SearchViewModel.kt	record history failed profile=$pid type=$type itemId=$itemId
+1	log	app/src/main/java/tv/own/owntv/features/search/SearchViewModel.kt	record history failed profile=$profileId type=$type itemId=$itemId
 1	log	app/src/main/java/tv/own/owntv/features/search/SearchViewModel.kt	stalker resolve failed movieId=${movie.id}
 1	technical	app/src/main/java/tv/own/owntv/features/series/SeriesScreen.kt	,
 1	preference-key	app/src/main/java/tv/own/owntv/features/series/SeriesScreen.kt	delete_subtitles
-2	preference-key	app/src/main/java/tv/own/owntv/features/series/SeriesScreen.kt	download
 1	preference-key	app/src/main/java/tv/own/owntv/features/series/SeriesScreen.kt	favourite
 1	preference-key	app/src/main/java/tv/own/owntv/features/series/SeriesScreen.kt	hide
 1	preference-key	app/src/main/java/tv/own/owntv/features/series/SeriesScreen.kt	mark_watched
@@ -200,14 +259,9 @@
 1	technical	app/src/main/java/tv/own/owntv/features/series/SeriesScreen.kt	w300
 2	technical	app/src/main/java/tv/own/owntv/features/series/SeriesScreen.kt	✓
 2	empty	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	\0
-1	technical	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	${StorageAccess.sanitize(ep.name.ifBlank { "episode-${ep.episodeNumber}" })}.$ext
-1	technical	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	${StorageAccess.sanitize(episode.name.ifBlank { "episode-${episode.episodeNumber}" })}.$ext
 3	technical	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	EPISODE
 1	log	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	OwnTVHome
 1	technical	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	SERIES
-1	technical	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	Series
-1	technical	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	episode-${ep.episodeNumber}
-1	technical	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	episode-${episode.episodeNumber}
 2	log	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	external play episode history record failed episodeId=${episode.id} profile=$pid
 2	log	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	external play series history record failed seriesId=${episode.seriesId} profile=$pid
 1	log	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	openSeries seriesId=${s.id} profile=${ctx.value.profileId}
@@ -215,13 +269,16 @@
 1	log	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	playEpisodeQueue episode history record failed episodeId=${episode.id} profile=$pid
 1	log	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	playEpisodeQueue series history record failed seriesId=${episode.seriesId} profile=$pid
 1	log	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	playEpisodeQueue seriesId=${show.id} episodeId=${episode.id} -> external player
-1	log	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	playEpisodeQueue seriesId=${show.id} episodeId=${episode.id} profile=$pid queue=${queue.size} startIndex=$startIndex startPositionMs=$startPositionMs
+1	log	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	playEpisodeQueue seriesId=${show.id} episodeId=${episode.id} profile=$pid queue=${authorizedQueue.size} startIndex=$startIndex startPositionMs=$startPositionMs
 1	log	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	saveEpisodeProgressNow episodeId=${ep.id} profile=$pid positionMs=$pos durationMs=$dur
 1	log	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	saveEpisodeProgressNow progress save failed episodeId=${ep.id} profile=$pid
 1	log	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	stalker resolve failed episodeId=${episode.id}
+1	locale	app/src/main/java/tv/own/owntv/features/series/ZenPlaySeriesDetails.kt	%.1f
+1	locale	app/src/main/java/tv/own/owntv/features/series/ZenPlaySeriesDetails.kt	%02d:%02d:%02d
 3	empty	app/src/main/java/tv/own/owntv/features/settings/BackupScreen.kt	\0
 3	technical	app/src/main/java/tv/own/owntv/features/settings/ChNavSettingsScreen.kt	false
 2	technical	app/src/main/java/tv/own/owntv/features/settings/ChNavSettingsScreen.kt	true
+1	protocol	app/src/main/java/tv/own/owntv/features/settings/ContentMenuSettingsScreen.kt	download
 1	empty	app/src/main/java/tv/own/owntv/features/settings/DeleteSubtitlesScreen.kt	\0
 1	regex	app/src/main/java/tv/own/owntv/features/settings/DeleteSubtitlesScreen.kt	:S(\\d+)E(\\d+)$
 2	technical	app/src/main/java/tv/own/owntv/features/settings/DeleteSubtitlesScreen.kt	ALL
@@ -425,25 +482,13 @@
 1	technical	app/src/main/java/tv/own/owntv/features/setup/AddSourceScreen.kt	m3u8
 12	empty	app/src/main/java/tv/own/owntv/features/setup/SetupViewModel.kt	\0
 1	empty	app/src/main/java/tv/own/owntv/features/setup/SetupWizard.kt	\0
-5	technical	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	\0
-2	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	Action
-1	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	All Channels
-1	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	All Downloads
-1	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	All Movies
-1	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	All Series
-1	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	Animation
-1	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	Comedy
-1	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	Documentary
-2	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	Drama
-3	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	Favorites
-1	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	Germany
-3	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	History
-1	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	Horror
-1	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	Movies
-1	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	Series
-1	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	Sports
-1	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	United Kingdom
-1	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	United States
+1	protocol	app/src/main/java/tv/own/owntv/features/setup/SetupWizard.kt	zenplay-fixed-source-v1
+2	empty	app/src/main/java/tv/own/owntv/features/setup/ZenPlayLoginScreen.kt	\0
+1	uri	app/src/main/java/tv/own/owntv/features/setup/ZenPlayLoginScreen.kt	${uri.host?.lowercase()}:$port
+1	protocol	app/src/main/java/tv/own/owntv/features/setup/ZenPlayLoginScreen.kt	http
+1	protocol	app/src/main/java/tv/own/owntv/features/setup/ZenPlayLoginScreen.kt	https
+1	url	app/src/main/java/tv/own/owntv/features/setup/ZenPlayLoginScreen.kt	https://dns.ruta5.xyz:8443/
+4	technical	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	\0
 1	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	ass
 1	technical	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	bmp
 1	performance	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	epg-preload
@@ -461,13 +506,16 @@
 1	log	app/src/main/java/tv/own/owntv/features/shell/ShellViewModel.kt	activeProfileChanged profile=$pid androidTvHomeEnabled=${settings.androidTvHomeEnabled.first()}
 2	technical	app/src/main/java/tv/own/owntv/features/shell/ShellViewModel.kt	auto_refresh
 1	log	app/src/main/java/tv/own/owntv/features/shell/ShellViewModel.kt	checkAutoRefresh epg sourceId=${src.id} mode=$mode — enqueuing
-1	log	app/src/main/java/tv/own/owntv/features/shell/ShellViewModel.kt	checkAutoRefresh playlist sourceId=${source.id} mode=$mode — enqueuing
+1	log	app/src/main/java/tv/own/owntv/features/shell/ShellViewModel.kt	checkAutoRefresh playlist sourceId=${source.id} zenplay — enqueuing
 1	log	app/src/main/java/tv/own/owntv/features/shell/ShellViewModel.kt	epgRefill check failed
 1	log	app/src/main/java/tv/own/owntv/features/shell/ShellViewModel.kt	epgRefill sourceId=${src.id} — synced before but guide is empty, re-fetching
+2	protocol	app/src/main/java/tv/own/owntv/features/shell/ShellViewModel.kt	manual_refresh
 1	technical	app/src/main/java/tv/own/owntv/features/shell/ShellViewModel.kt	migration_refill
+1	protocol	app/src/main/java/tv/own/owntv/features/shell/ShellViewModel.kt	plan_switch
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/AvatarPickerDialog.kt	\0
 2	empty	app/src/main/java/tv/own/owntv/features/shell/components/CategoryRail.kt	\0
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/CategoryRail.kt	__rail_search__
+1	technical	app/src/main/java/tv/own/owntv/features/shell/components/CategoryRail.kt	category_navigation
 1	empty	app/src/main/java/tv/own/owntv/features/shell/components/CinematicBrowse.kt	\0
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/CinematicBrowse.kt	1080p
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/CinematicBrowse.kt	4K
@@ -573,14 +621,18 @@
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/TopBar.kt	continueChipAlpha
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/TopBar.kt	drizzle
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/TopBar.kt	fog
+1	performance	app/src/main/java/tv/own/owntv/features/shell/components/TopBar.kt	guidePillAlpha
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/TopBar.kt	partlyDay
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/TopBar.kt	partlyNight
+1	technical	app/src/main/java/tv/own/owntv/features/shell/components/TopBar.kt	primary_navigation
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/TopBar.kt	rain
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/TopBar.kt	searchPillAlpha
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/TopBar.kt	snow
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/TopBar.kt	sunny
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/TopBar.kt	thunder
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/TopBar.kt	topBarHeight
+1	technical	app/src/main/java/tv/own/owntv/features/shell/components/TopBar.kt	topbar_refresh_content
+1	technical	app/src/main/java/tv/own/owntv/features/shell/components/TopBar.kt	zenplay_header_wordmark
 1	json	app/src/main/java/tv/own/owntv/features/subtitles/SubtitleSearchViewModel.kt	ai_translated
 1	json	app/src/main/java/tv/own/owntv/features/subtitles/SubtitleSearchViewModel.kt	attributes
 1	json	app/src/main/java/tv/own/owntv/features/subtitles/SubtitleSearchViewModel.kt	data
@@ -634,6 +686,7 @@
 1	technical	app/src/main/java/tv/own/owntv/player/RecordingBadge.kt	recPulse
 1	file-path	app/src/main/java/tv/own/owntv/ui/components/BackgroundImageChooserDialog.kt	background_${System.currentTimeMillis()}.$ext
 1	file-path	app/src/main/java/tv/own/owntv/ui/components/BackgroundImageChooserDialog.kt	png
+2	compiler	app/src/main/java/tv/own/owntv/ui/components/BrandLockup.kt	UNUSED_PARAMETER
 1	log	app/src/main/java/tv/own/owntv/ui/components/DayStepperDialog.kt	+
 1	log	app/src/main/java/tv/own/owntv/ui/components/DayStepperDialog.kt	−
 1	performance	app/src/main/java/tv/own/owntv/ui/components/FocusableSurface.kt	focusContainer
@@ -1077,10 +1130,83 @@
 1	uri	app/src/main/java/tv/own/owntv/ui/components/TrailerPlayerScreen.kt	https://www.youtube.com/watch?v=$videoKey
 1	uri	app/src/main/java/tv/own/owntv/ui/components/TrailerPlayerScreen.kt	vnd.youtube:$videoKey
 1	log	app/src/main/java/tv/own/owntv/ui/components/TvImeMetrics.kt	frame=$rect imeBottom=$imeBottom
+1	performance	app/src/main/java/tv/own/owntv/ui/components/ZenPlaySplash.kt	dots
+1	performance	app/src/main/java/tv/own/owntv/ui/components/ZenPlaySplash.kt	glow
+1	performance	app/src/main/java/tv/own/owntv/ui/components/ZenPlaySplash.kt	pulse
+1	performance	app/src/main/java/tv/own/owntv/ui/components/ZenPlaySplash.kt	spin
+1	performance	app/src/main/java/tv/own/owntv/ui/components/ZenPlaySplash.kt	zenLogo
+1	performance	app/src/main/java/tv/own/owntv/ui/components/ZenPlaySplash.kt	zenSplash
 1	technical	app/src/main/java/tv/own/owntv/ui/format/TimeFormat.kt	Hm
 1	technical	app/src/main/java/tv/own/owntv/ui/format/TimeFormat.kt	hm
 1	technical	app/src/main/java/tv/own/owntv/ui/format/TimeFormat.kt	yMMMd
 1	technical	app/src/main/java/tv/own/owntv/ui/theme/Glass.kt	chromeCondense
 1	technical	app/src/main/java/tv/own/owntv/ui/theme/Glass.kt	glassPosition
-2	empty	app/src/main/java/tv/own/owntv/ui/theme/OwnTVColors.kt	\0
+4	empty	app/src/main/java/tv/own/owntv/ui/theme/OwnTVColors.kt	\0
+1	technical	app/src/main/java/tv/own/owntv/ui/theme/OwnTVColors.kt	unused
 2	empty	app/src/main/java/tv/own/owntv/ui/theme/Theme.kt	\0
+1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenCategoryMembers.kt	${type.name}|$categoryId
+1	uri	app/src/main/java/tv/own/owntv/zenplay/ZenCategoryMembers.kt	&password=${enc(src.password)}&action=$action&category_id=${enc(remote)}
+1	uri	app/src/main/java/tv/own/owntv/zenplay/ZenCategoryMembers.kt	/player_api.php?username=${enc(src.username)}
+1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenCategoryMembers.kt	UTF-8
+1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenCategoryMembers.kt	get_series
+1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenCategoryMembers.kt	get_vod_streams
+1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenCategoryMembers.kt	null
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenCategoryMembers.kt	series_id
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenCategoryMembers.kt	stream_id
+1	preference-key	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDefaults.kt	audio_es_v1_
+1	locale	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDefaults.kt	es-MX
+1	preference-key	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDefaults.kt	metadata_es_v1
+2	preference-key	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDefaults.kt	record_watching_v1
+2	locale	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDefaults.kt	spa
+1	preference-key	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDefaults.kt	subtitle_es_v1_
+1	preference-key	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDefaults.kt	vod_exo_first_v1
+1	preference-key	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDefaults.kt	zenplay_defaults
+6	empty	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	\0
+1	uri	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	&password=${enc(source.password)}&action=$action&$idParam=${enc(id)}
+1	uri	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	/player_api.php?username=${enc(source.username)}
+1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	UTF-8
+1	regex	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	[^\\p{L}\\p{N}]+
+1	regex	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	\\(.*?\\)|\\[.*?]
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	actors
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	age
+2	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	backdrop_path
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	cast
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	certification
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	cover
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	cover_big
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	description
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	director
+2	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	duration
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	episodes
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	genre
+1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	get_series_info
+1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	get_vod_info
+4	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	http
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	id
+2	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	info
+2	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	movie_image
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	mpaa_rating
+2	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	null
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	plot
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	rating
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	releaseDate
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	release_date
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	releasedate
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	series_id
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	vod_id
+1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	year
+1	preference-key	app/src/main/java/tv/own/owntv/zenplay/ZenPlayEpg.kt	zenplay_epg
+1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenPlayExpiryMonitor.kt	$expiryMs:$days
+1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenPlayExpiryMonitor.kt	${key.profileId}:${key.activeSourceId}:${key.sources.map { it.first }.sorted()}
+1	preference-key	app/src/main/java/tv/own/owntv/zenplay/ZenPlayExpiryMonitor.kt	in_app_token
+1	preference-key	app/src/main/java/tv/own/owntv/zenplay/ZenPlayExpiryMonitor.kt	system_token
+1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenPlayExpiryMonitor.kt	zenplay-subscription-expiry-now
+1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenPlayExpiryMonitor.kt	zenplay-subscription-expiry-periodic
+1	preference-key	app/src/main/java/tv/own/owntv/zenplay/ZenPlayExpiryMonitor.kt	zenplay_subscription
+1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenPlayExpiryMonitor.kt	zenplay_subscription_notices
+1	regex	app/src/main/java/tv/own/owntv/zenplay/ZenSportsAgenda.kt	(EVENT|\\bPPV\\b|PASS\\b|GAMES)
+1	regex	app/src/main/java/tv/own/owntv/zenplay/ZenSportsAgenda.kt	(SPORT|DEPORT|FUTBOL|FÚTBOL|SOCCER|\\bNFL\\b|\\bNBA\\b|\\bMLB\\b|\\bNHL\\b|\\bUFC\\b|\\bWWE\\b|BOXEO|\\bBOX\\b|
+1	regex	app/src/main/java/tv/own/owntv/zenplay/ZenSportsAgenda.kt	(\\d{1,2}):(\\d{2})\\s*([AaPp])\\.?\\s*[Mm]
+1	regex	app/src/main/java/tv/own/owntv/zenplay/ZenSportsAgenda.kt	NASCAR|BEISBOL|BÉISBOL|BASEBALL|BASKET|HOCKEY|MOTOR|\\bAFIZZIONADOS\\b|FOX ONE|SKY SPORTS|\\bCUP\\b|COPA)
+1	regex	app/src/main/java/tv/own/owntv/zenplay/ZenSportsAgenda.kt	\\bF1\\b|FORMULA|LIGA|PREMIER|CHAMPIONS|ESPN|TUDN|DAZN|TIGO|\\bPPV\\b|EVENT|FIFA|GOLF|TENIS|TENNIS|
+1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenSportsAgenda.kt	p

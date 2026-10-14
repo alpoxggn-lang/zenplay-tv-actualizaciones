@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="zenplay_categories_button">Categorías</string>
+    <string name="zenplay_categories_no_matches">No hay categorías que coincidan con tu búsqueda.</string>
+    <string name="zenplay_categories_options">Opciones de la categoría %1$s</string>
+</resources>

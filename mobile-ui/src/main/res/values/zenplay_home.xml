@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- These ZenPlay sections use Spanish by default for locales without a custom translation. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="zenplay_home_trending">Tendencias</string>
+    <string name="zenplay_home_recent_movies">Recién agregado · Películas</string>
+    <string name="zenplay_home_recent_series">Recién agregado · Series</string>
+    <string name="zenplay_home_catalog_empty">Todavía no hay títulos disponibles en tu lista.</string>
+    <string name="zenplay_home_trending_empty">Todavía no hay películas identificadas como estrenos de 2026 en tu lista.</string>
+    <string name="zenplay_home_trending_catalog_description">Hasta 6 películas de 2026 incorporadas recientemente a tu lista. La selección se actualiza al sincronizar el catálogo.</string>
+    <string name="zenplay_home_featured_year">Películas %1$d · Recién agregadas</string>
+    <string name="zenplay_home_carousel_position">%1$d de %2$d</string>
+    <string name="zenplay_home_fixed_sections_mobile">El carrusel de Tendencias y las películas y series recién agregadas siempre aparecen primero. Puedes personalizar las demás secciones.</string>
+</resources>

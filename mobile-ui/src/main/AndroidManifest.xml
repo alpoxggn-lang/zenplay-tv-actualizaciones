@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Phase 1 staging manifest only. The existing mobile UI is compiled as a library, but it does not
+  contribute an Application, launcher Activity, service, provider, receiver, permission or feature
+  to the universal APK yet. The host will opt into each platform integration explicitly when the
+  adaptive MobileShell is mounted in a later phase.
+-->
+<manifest />

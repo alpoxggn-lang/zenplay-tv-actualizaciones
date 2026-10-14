@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="zenplay_refresh_action">Actualizar</string>
+    <string name="zenplay_refresh_requested">Actualización solicitada. Comenzará cuando haya conexión.</string>
+    <string name="zenplay_refresh_preparing">Ya se está preparando una actualización.</string>
+    <string name="zenplay_refresh_no_sources">No hay listas activas para actualizar.</string>
+    <string name="zenplay_refresh_failed">No se pudo iniciar la actualización. Inténtalo de nuevo.</string>
+    <string name="zenplay_refresh_partial">Se inició la actualización de algunas listas. Inténtalo de nuevo para las restantes.</string>
+    <string name="zenplay_refresh_on_entry">Al abrir o volver a ZenPlay</string>
+    <string name="zenplay_refresh_on_entry_description">El contenido se actualiza cada vez que entras a la app. También puedes usar Actualizar en la barra inferior.</string>
+</resources>

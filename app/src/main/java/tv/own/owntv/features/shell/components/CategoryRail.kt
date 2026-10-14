@@ -48,6 +48,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -203,7 +204,10 @@ fun CategoryRail(
 
     // Fixed full-label column in the screen's Row — a real grid column (no overlay), so it takes its own
     // space and nothing reflows when focus enters/leaves it.
-    val railModifier = modifier.fillMaxHeight().width(width)
+    // This is a contextual category selector, not a second global application menu. Keeping a
+    // stable semantics tag lets device/UI tests enforce that distinction while the adaptive shell
+    // evolves.
+    val railModifier = modifier.testTag("category_navigation").fillMaxHeight().width(width)
     Box(
         modifier = if (showPanel) {
             railModifier.roundedPanel(fillColor = panelFill ?: RailPanelFill, surface = GlassSurface.SIDEBAR)

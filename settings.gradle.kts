@@ -46,6 +46,10 @@ when {
 
 rootProject.name = "ZenPlay"
 include(":app")
+// Existing touch-first phone/tablet UI, staged as an inert library in Phase 1. It has no launcher,
+// Application or process registration; :app will mount its shell only after the adaptive boundary
+// and shared Koin ownership are explicit.
+include(":mobile-ui")
 // Baseline-profile generator (audit ST1). Test-only module: it ships nothing to users, it records
 // the cold-start journey on a device and writes the profile :app packages.
 include(":baselineprofile")

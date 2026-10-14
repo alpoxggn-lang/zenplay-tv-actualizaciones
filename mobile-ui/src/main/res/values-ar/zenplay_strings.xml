@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Product wording only; upstream credits, services, and licenses retain their attribution. -->
+    <string name="content_exit_owntv">هل تريد الخروج من ZenPlay؟</string>
+    <string name="content_storage_folder_fallback">مجلد التنزيلات غير متاح الآن، لذا تُحفظ التنزيلات في مجلد ZenPlay الخاص حتى يعود.</string>
+    <string name="content_epg_own_player">مشغّل ZenPlay</string>
+    <string name="recovery_title">تعذّر على ZenPlay فتح قاعدة بياناته</string>
+    <string name="settings_recording_timers_inexact">لا يسمح هذا الجهاز لـ ZenPlay بضبط منبّهات دقيقة، لذلك قد يبدأ التسجيل متأخرًا بضع دقائق. تبدأ التسجيلات مبكرًا لتعويض ذلك.</string>
+    <string name="recording_failed_drm">هذه القناة محمية بنظام DRM، لذا يمكن مشاهدتها لكن لا يمكن تسجيلها. الحماية من مزوّد الخدمة لديك، وليست من ZenPlay.</string>
+    <string name="multiview_unknown_connections">لم يتمكن ZenPlay من معرفة عدد البثوث التي تسمح بها هذه القائمة. إذا فشل مربع فهذا هو السبب.</string>
+    <string name="settings_proxy_description">إرسال كل حركة بيانات ZenPlay والتشغيل عبر وكيل HTTP.</string>
+    <string name="settings_app_startup_description">ما يفتحه ZenPlay عند بدء تشغيله</string>
+    <string name="settings_catchup_player_internal">مشغّل ZenPlay</string>
+    <string name="settings_sources_probe_warning">لا يذكر كثير من المزوّدين عدد القنوات التي يمكنك مشاهدتها في وقت واحد، لذا يكتشف ZenPlay ذلك بفتح بضع قنوات ومعرفة أيها يستمر. سيتوقف كل ما يعمل الآن، وقد يستغرق هذا حتى دقيقتين.</string>
+    <string name="settings_sources_probe_unknown">تعذّر على ZenPlay تحديد عدد القنوات التي يسمح بها هذا المزوّد.</string>
+    <string name="settings_dns_toggle_description">حلّ جميع أسماء النطاقات التي يستعلم عنها ZenPlay عبر خادم DNS مخصص.</string>
+    <string name="settings_live_tune_timeout_description">إذا لم تظهر أي صورة على قناة مباشرة خلال هذه المدة، يتوقف ZenPlay عن المحاولة ويخبرك بذلك، بدلاً من ترك شاشة سوداء بينما يجرّب كل مشغّل لديه. الخيار «أبدًا» يواصل المحاولة، وقد يستغرق ذلك أكثر من دقيقة على قناة أزالها مزوّدك. لا تُحتسب فترات الانتظار التي يطلبها المزوّد.</string>
+    <string name="settings_surround_forced_description">صوت محيطي — أرسل Dolby/DTS إلى مستقبل 5.1/7.1 حقيقي. إذا انقطع الصوت أو تذبذب، يعود ZenPlay إلى الستيريو ويخبرك.</string>
+    <string name="settings_auto_frame_rate_warning_description">يعمل هذا الجهاز بنظام Android <xliff:g id="android_version">%1$s</xliff:g>. على الإصدارات الأقدم من Android 12، لا يستطيع التلفزيون إخبار ZenPlay بمعدلات التحديث التي يمكنه التبديل إليها بسلاسة، لذا قد يؤدي تغيير معدل الإطارات إلى اسوداد الشاشة لثانية أو ثانيتين — وأحيانًا أكثر من مرة أثناء البرنامج.\n\nنوصي بترك معدل الإطارات التلقائي معطّلًا هنا. إذا كان تلفزيونك ينتقل بين معدلات التحديث بسلاسة، فعّله وجرّب: يمكنك تغييره مرة أخرى في أي وقت.</string>
+    <string name="settings_auto_frame_rate_warning_description_mobile">يعمل هذا الجهاز بنظام Android <xliff:g id="android_version">%1$s</xliff:g>. على الإصدارات الأقدم من Android 12، لا يستطيع الجهاز إخبار ZenPlay بمعدلات التحديث التي يمكنه التبديل إليها بسلاسة، لذا قد يؤدي تغيير معدل الإطارات إلى اسوداد الشاشة لثانية أو ثانيتين — وأحيانًا أكثر من مرة أثناء البرنامج.\n\nنوصي بترك معدل الإطارات التلقائي معطّلًا هنا. إذا كانت شاشتك تنتقل بين معدلات التحديث بسلاسة، فعّله وجرّب: يمكنك تغييره مرة أخرى في أي وقت.</string>
+    <string name="local_sync_error_unreachable">تعذّر الوصول إلى هذا الجهاز. افتح عليه ZenPlay ← الإعدادات ← البيانات ← المزامنة المحلية وفعّل وضع المزامنة. يجب أن يكون الجهازان على نفس شبكة الواي فاي.</string>
+    <string name="settings_app_icon_summary">لون أيقونة ZenPlay وشعاره</string>
+    <string name="app_icon_restart_title">إعادة تشغيل ZenPlay؟</string>
+    <string name="app_icon_restart_message">اخترت أيقونة وشعارًا جديدين. سيُطبَّقان بعد إعادة تشغيل ZenPlay.</string>
+    <string name="setup_disclaimer">ZenPlay هو مشغّل وسائط فقط. ولا يتضمن أي قنوات أو قوائم تشغيل أو محتوى. أنت مسؤول عن إضافة مصادر Xtream أو M3U أو Stalker الخاصة بك التي يحق لك الوصول إليها قانونيًا.</string>
+    <string name="setup_set_up_owntv">إعداد ZenPlay</string>
+    <string name="setup_sync_device_description">انسخ كل شيء من جهاز ZenPlay الآخر عبر الواي فاي</string>
+    <string name="setup_byo_source_description">ZenPlay هو مشغّل — أضف مصدر Xtream أو M3U أو Stalker الخاص بك.</string>
+    <string name="companion_pin_page_title">ZenPlay — إدخال PIN</string>
+    <string name="companion_add_page_title">ZenPlay — إضافة مصدر</string>
+    <string name="companion_saved_page_title">ZenPlay — تم الإرسال</string>
+    <string name="companion_backup_page_title">ZenPlay — استعادة نسخة احتياطية</string>
+    <string name="companion_image_page_title">ZenPlay — صورة الخلفية</string>
+    <string name="companion_download_page_title">ZenPlay — تنزيل نسخة احتياطية</string>
+    <string name="local_sync_browser_title">المزامنة المحلية في ZenPlay</string>
+    <string name="local_sync_browser_body">هذا العنوان مخصص لتطبيق ZenPlay على جهازك الآخر. افتح المزامنة المحلية هناك واختر هذا الجهاز من القائمة.</string>
+    <string name="common_own_tv_user">مستخدم ZenPlay</string>
+</resources>

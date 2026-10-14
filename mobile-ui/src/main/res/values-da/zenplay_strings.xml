@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Product wording only; upstream credits, services, and licenses retain their attribution. -->
+    <string name="content_exit_owntv">Afslut ZenPlay?</string>
+    <string name="content_storage_folder_fallback">Din downloadmappe er ikke tilgængelig lige nu, så downloads gemmes i ZenPlay\'s egen mappe, indtil den er tilbage.</string>
+    <string name="content_epg_own_player">ZenPlay-afspiller</string>
+    <string name="recovery_title">ZenPlay kunne ikke åbne sin database</string>
+    <string name="settings_recording_timers_inexact">Denne enhed tillader ikke ZenPlay at sætte præcise alarmer, så en optagelse kan starte et par minutter for sent. Optagelser starter tidligere for at opveje det.</string>
+    <string name="recording_failed_drm">Denne kanal er DRM-beskyttet, så den kan ses, men ikke optages. Beskyttelsen kommer fra din udbyder, ikke fra ZenPlay.</string>
+    <string name="multiview_unknown_connections">ZenPlay kunne ikke finde ud af, hvor mange streams denne playliste tillader. Hvis en flade fejler, er det derfor.</string>
+    <string name="settings_proxy_description">Send al trafik og afspilning fra ZenPlay gennem en HTTP-proxy.</string>
+    <string name="settings_app_startup_description">Hvad ZenPlay åbner ved start</string>
+    <string name="settings_catchup_player_internal">ZenPlay-afspiller</string>
+    <string name="settings_sources_probe_warning">Mange udbydere oplyser aldrig, hvor mange kanaler du må se samtidig, så ZenPlay finder ud af det ved at åbne nogle stykker og se, hvilke der overlever. Alt, der afspilles nu, stopper, og det kan tage op til to minutter.</string>
+    <string name="settings_sources_probe_unknown">ZenPlay kunne ikke finde ud af, hvor mange kanaler denne udbyder tillader.</string>
+    <string name="settings_dns_toggle_description">Foretag alle ZenPlay-domæneopslag via en brugerdefineret DNS-server.</string>
+    <string name="settings_live_tune_timeout_description">Hvis en live-kanal ikke har vist billede inden for denne tid, holder ZenPlay op med at prøve og siger det til dig i stedet for at efterlade en sort skærm, mens den arbejder sig gennem alle sine afspillere. “Aldrig” bliver ved med at prøve, hvilket kan tage langt over et minut på en kanal, din udbyder har fjernet. Ventetid, som udbyderen selv beder om, tælles ikke med.</string>
+    <string name="settings_surround_forced_description">Surround – send Dolby/DTS til en ægte 5.1/7.1-modtager. Hvis lyden forsvinder eller hakker, falder ZenPlay stadig tilbage til stereo og fortæller dig det.</string>
+    <string name="settings_auto_frame_rate_warning_description">Denne enhed kører Android <xliff:g id="android_version">%1$s</xliff:g>. Under Android 12 kan TV\'et ikke fortælle ZenPlay, hvilke opdateringshastigheder det kan skifte problemfrit imellem, så en ændring af hastigheden kan få skærmen til at blive sort i et sekund eller to — sommetider mere end én gang under et program.\n\nVi anbefaler at lade Auto-billedhastighed være slået fra her. Hvis dit TV skifter problemfrit, kan du slå det til og se: du kan altid skifte tilbage.</string>
+    <string name="settings_auto_frame_rate_warning_description_mobile">Denne enhed kører Android <xliff:g id="android_version">%1$s</xliff:g>. Under Android 12 kan enheden ikke fortælle ZenPlay, hvilke opdateringshastigheder den kan skifte problemfrit imellem, så en ændring af hastigheden kan få skærmen til at blive sort i et sekund eller to — sommetider mere end én gang under et program.\n\nVi anbefaler at lade Auto-billedhastighed være slået fra her. Hvis din skærm skifter problemfrit, kan du slå det til og se: du kan altid skifte tilbage.</string>
+    <string name="local_sync_error_unreachable">Enheden kunne ikke nås. Åbn ZenPlay → Indstillinger → Data → Lokal synkronisering på den, og slå Synkroniseringstilstand til. Begge enheder skal være på samme Wi-Fi.</string>
+    <string name="settings_app_icon_summary">Farve på ZenPlay-ikonet og -logoet</string>
+    <string name="app_icon_restart_title">Genstart ZenPlay?</string>
+    <string name="app_icon_restart_message">Du har valgt et nyt ikon og logo. De træder i kraft, når ZenPlay genstartes.</string>
+    <string name="setup_disclaimer">ZenPlay er udelukkende en medieafspiller. Den indeholder ingen kanaler, afspilningslister eller noget indhold. Du er selv ansvarlig for at tilføje dine egne Xtream-, M3U- eller Stalker-kilder, som du har lovlig adgang til.</string>
+    <string name="setup_set_up_owntv">Konfigurer ZenPlay</string>
+    <string name="setup_sync_device_description">Kopiér alt fra din anden ZenPlay-enhed over Wi-Fi</string>
+    <string name="setup_byo_source_description">ZenPlay er en afspiller — tilføj din egen Xtream-, M3U- eller Stalker-kilde.</string>
+    <string name="companion_pin_page_title">ZenPlay — Indtast PIN</string>
+    <string name="companion_add_page_title">ZenPlay — Tilføj kilde</string>
+    <string name="companion_saved_page_title">ZenPlay — Sendt</string>
+    <string name="companion_backup_page_title">ZenPlay — Gendan sikkerhedskopi</string>
+    <string name="companion_image_page_title">ZenPlay — Baggrundsbillede</string>
+    <string name="companion_download_page_title">ZenPlay — Download sikkerhedskopi</string>
+    <string name="local_sync_browser_title">ZenPlay lokal synkronisering</string>
+    <string name="local_sync_browser_body">Denne adresse er til ZenPlay-appen på din anden enhed. Åbn Lokal synkronisering der, og vælg denne enhed på listen.</string>
+    <string name="common_own_tv_user">ZenPlay-bruger</string>
+</resources>

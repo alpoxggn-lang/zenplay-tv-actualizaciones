@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Product wording only; upstream credits, services, and licenses retain their attribution. -->
+    <string name="content_exit_owntv">要結束 ZenPlay 嗎？</string>
+    <string name="content_storage_folder_fallback">下載資料夾目前無法使用，因此在它恢復之前，下載內容會儲存到 ZenPlay 自己的資料夾。</string>
+    <string name="content_epg_own_player">ZenPlay 播放器</string>
+    <string name="recovery_title">ZenPlay 無法開啟其資料庫</string>
+    <string name="settings_recording_timers_inexact">本裝置不允許 ZenPlay 設定精確鬧鐘，因此錄影可能會晚幾分鐘開始。錄影會提早啟動以作彌補。</string>
+    <string name="recording_failed_drm">此頻道受 DRM 保護，可以觀看但無法錄製。此保護來自你的服務供應商，而非 ZenPlay。</string>
+    <string name="multiview_unknown_connections">ZenPlay 無法得知這份播放清單允許多少路串流。畫面失敗時，原因就在這裡。</string>
+    <string name="settings_proxy_description">透過 HTTP 代理伺服器傳送所有 ZenPlay 流量及播放內容。</string>
+    <string name="settings_app_startup_description">ZenPlay 啟動時開啟的內容</string>
+    <string name="settings_catchup_player_internal">ZenPlay 播放器</string>
+    <string name="settings_sources_probe_warning">許多供應商從不說明你可以同時觀看多少個頻道，因此 ZenPlay 會開啟幾個頻道，看看哪些能持續播放來判斷。目前正在播放的內容會停止，此過程最多需要兩分鐘。</string>
+    <string name="settings_sources_probe_unknown">ZenPlay 無法判斷此供應商允許多少個頻道。</string>
+    <string name="settings_dns_toggle_description">透過自訂 DNS 伺服器解析 ZenPlay 的所有網域查詢。</string>
+    <string name="settings_live_tune_timeout_description">若直播頻道在此時間內仍未出現畫面，ZenPlay 會停止嘗試並告知你，而不是一邊逐一試遍所有播放器、一邊留著黑畫面。選擇「永不」會一直嘗試，在供應商已下架的頻道上可能遠超過一分鐘。供應商自己要求的等待時間不計入其中。</string>
+    <string name="settings_surround_forced_description">環繞音效 — 將 Dolby/DTS 傳送至實體的 5.1/7.1 環繞擴大機。如果出現無聲或卡頓，ZenPlay 仍會自動切回立體聲並通知你。</string>
+    <string name="settings_auto_frame_rate_warning_description">此裝置執行的是 Android <xliff:g id="android_version">%1$s</xliff:g>。在 Android 12 以下，電視無法告知 ZenPlay 它可以順暢切換到哪些更新率，因此切換更新率可能會讓畫面變黑一兩秒——有時在節目播放期間還會發生不只一次。\n\n我們建議在此保持自動更新率關閉。如果你的電視切換得很順暢，不妨開啟試試看：你隨時都可以改回來。</string>
+    <string name="settings_auto_frame_rate_warning_description_mobile">此裝置執行的是 Android <xliff:g id="android_version">%1$s</xliff:g>。在 Android 12 以下，裝置無法告知 ZenPlay 它可以順暢切換到哪些更新率，因此切換更新率可能會讓畫面變黑一兩秒——有時在節目播放期間還會發生不只一次。\n\n我們建議在此保持自動更新率關閉。如果你的螢幕切換得很順暢，不妨開啟試試看：你隨時都可以改回來。</string>
+    <string name="local_sync_error_unreachable">無法連線到該裝置。請在那部裝置上開啟 ZenPlay → 設定 → 資料 → 本機同步，並開啟同步模式。兩部裝置必須連線同一個 Wi-Fi。</string>
+    <string name="settings_app_icon_summary">ZenPlay 圖示和標誌的顏色</string>
+    <string name="app_icon_restart_title">要重新啟動 ZenPlay 嗎？</string>
+    <string name="app_icon_restart_message">你選擇了新的圖示和標誌，重新啟動 ZenPlay 後生效。</string>
+    <string name="setup_disclaimer">ZenPlay 僅為媒體播放器，不包含任何頻道、播放清單或內容。您有責任自行新增可合法存取的 Xtream、M3U 或 Stalker 來源。</string>
+    <string name="setup_set_up_owntv">設定 ZenPlay</string>
+    <string name="setup_sync_device_description">透過 Wi-Fi 從你的另一部 ZenPlay 裝置複製所有內容</string>
+    <string name="setup_byo_source_description">ZenPlay 是一款播放器，請自行提供 Xtream、M3U 或 Stalker 來源。</string>
+    <string name="companion_pin_page_title">ZenPlay — 輸入 PIN</string>
+    <string name="companion_add_page_title">ZenPlay — 新增來源</string>
+    <string name="companion_saved_page_title">ZenPlay — 已傳送</string>
+    <string name="companion_backup_page_title">ZenPlay — 還原備份</string>
+    <string name="companion_image_page_title">ZenPlay — 背景圖片</string>
+    <string name="companion_download_page_title">ZenPlay — 下載備份</string>
+    <string name="local_sync_browser_title">ZenPlay 本機同步</string>
+    <string name="local_sync_browser_body">此位址供你另一部裝置上的 ZenPlay 應用程式使用。請在那裡開啟「本機同步」，並從清單中選擇本機。</string>
+    <string name="common_own_tv_user">ZenPlay 使用者</string>
+</resources>

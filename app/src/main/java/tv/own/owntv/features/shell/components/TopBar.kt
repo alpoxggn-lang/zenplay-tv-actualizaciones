@@ -39,6 +39,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -118,6 +119,7 @@ fun TopBar(
 
     BoxWithConstraints(
         modifier = modifier
+            .testTag("primary_navigation")
             .fillMaxWidth()
             .height(barHeight)
             .padding(horizontal = 22.dp, vertical = 6.dp)

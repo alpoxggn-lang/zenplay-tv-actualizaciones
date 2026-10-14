@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Product wording only; upstream credits, services, and licenses retain their attribution. -->
+    <string name="content_exit_owntv">Ukončit ZenPlay?</string>
+    <string name="content_storage_folder_fallback">Složka pro stahování teď není dostupná, takže se stahování ukládá do vlastní složky ZenPlay, dokud nebude zpět.</string>
+    <string name="content_epg_own_player">Přehrávač ZenPlay</string>
+    <string name="recovery_title">ZenPlay nemohla otevřít svou databázi</string>
+    <string name="settings_recording_timers_inexact">Toto zařízení nedovoluje aplikaci ZenPlay nastavovat přesné budíky, takže nahrávání může začít o pár minut později. Nahrávky proto začínají dříve.</string>
+    <string name="recording_failed_drm">Tento kanál je chráněný technologií DRM, takže jej lze sledovat, ale ne nahrávat. Ochranu uplatňuje váš poskytovatel, nikoli ZenPlay.</string>
+    <string name="multiview_unknown_connections">ZenPlay nezjistil, kolik streamů tento playlist povoluje. Pokud dlaždice selže, je to tím.</string>
+    <string name="settings_proxy_description">Odesílat veškerý provoz ZenPlay i přehrávání přes HTTP proxy.</string>
+    <string name="settings_app_startup_description">Co ZenPlay otevře při spuštění</string>
+    <string name="settings_catchup_player_internal">Přehrávač ZenPlay</string>
+    <string name="settings_sources_probe_warning">Mnozí poskytovatelé nikdy neuvedou, kolik kanálů můžete sledovat najednou, a tak to ZenPlay zjistí tím, že jich několik otevře a sleduje, které vydrží. Vše, co právě běží, se zastaví a může to trvat až dvě minuty.</string>
+    <string name="settings_sources_probe_unknown">ZenPlay nedokázal zjistit, kolik kanálů tento poskytovatel dovolí.</string>
+    <string name="settings_dns_toggle_description">Všechna vyhledávání domén ZenPlay provádět prostřednictvím vlastního serveru DNS.</string>
+    <string name="settings_live_tune_timeout_description">Pokud se u živého kanálu do této doby neobjeví obraz, ZenPlay to vzdá a dá vám vědět, místo aby nechal černou obrazovku, zatímco zkouší všechny své přehrávače. Volba „Nikdy“ zkouší dál, což u kanálu, který váš poskytovatel zrušil, může trvat výrazně přes minutu. Čekání, o které si řekne poskytovatel, se nezapočítává.</string>
+    <string name="settings_surround_forced_description">Prostorový zvuk – posílejte Dolby/DTS do skutečného přijímače 5.1/7.1. Pokud ztichne nebo se zadrhává, ZenPlay se i tak vrátí ke stereu a dá vám vědět.</string>
+    <string name="settings_auto_frame_rate_warning_description">Toto zařízení běží na Androidu <xliff:g id="android_version">%1$s</xliff:g>. Na Androidu nižším než 12 televizor nedokáže ZenPlay sdělit, které obnovovací frekvence umí plynule přepínat, takže změna frekvence může na vteřinu nebo dvě zhasnout obrazovku – někdy i vícekrát během jednoho pořadu.\n\nDoporučujeme zde nechat automatickou snímkovou frekvenci vypnutou. Pokud váš televizor přepíná bez problémů, zapněte ji a uvidíte: můžete to kdykoli změnit zpět.</string>
+    <string name="settings_auto_frame_rate_warning_description_mobile">Toto zařízení běží na Androidu <xliff:g id="android_version">%1$s</xliff:g>. Na Androidu nižším než 12 zařízení nedokáže ZenPlay sdělit, které obnovovací frekvence umí plynule přepínat, takže změna frekvence může na vteřinu nebo dvě zhasnout obrazovku – někdy i vícekrát během jednoho pořadu.\n\nDoporučujeme zde nechat automatickou snímkovou frekvenci vypnutou. Pokud vaše obrazovka přepíná bez problémů, zapněte ji a uvidíte: můžete to kdykoli změnit zpět.</string>
+    <string name="local_sync_error_unreachable">Toto zařízení se nepodařilo kontaktovat. Otevřete na něm ZenPlay → Nastavení → Data → Místní synchronizace a zapněte Režim synchronizace. Obě zařízení musí být na stejné Wi-Fi.</string>
+    <string name="settings_app_icon_summary">Barva ikony a loga ZenPlay</string>
+    <string name="app_icon_restart_title">Restartovat ZenPlay?</string>
+    <string name="app_icon_restart_message">Vybrali jste novou ikonu a logo. Projeví se po restartu ZenPlay.</string>
+    <string name="setup_disclaimer">ZenPlay je pouze přehrávač médií. Neobsahuje žádné kanály, playlisty ani obsah. Za přidání vlastních legálně dostupných zdrojů Xtream, M3U nebo Stalker odpovídáte vy.</string>
+    <string name="setup_set_up_owntv">Nastavení ZenPlay</string>
+    <string name="setup_sync_device_description">Zkopírujte vše z druhého zařízení ZenPlay přes Wi-Fi</string>
+    <string name="setup_byo_source_description">ZenPlay je přehrávač — přidejte vlastní zdroj Xtream, M3U nebo Stalker.</string>
+    <string name="companion_pin_page_title">ZenPlay — Zadat PIN</string>
+    <string name="companion_add_page_title">ZenPlay — Přidat zdroj</string>
+    <string name="companion_saved_page_title">ZenPlay — Odesláno</string>
+    <string name="companion_backup_page_title">ZenPlay — Obnovení ze zálohy</string>
+    <string name="companion_image_page_title">ZenPlay — Obrázek na pozadí</string>
+    <string name="companion_download_page_title">ZenPlay — Stáhnout zálohu</string>
+    <string name="local_sync_browser_title">Místní synchronizace ZenPlay</string>
+    <string name="local_sync_browser_body">Tato adresa je určená pro aplikaci ZenPlay na druhém zařízení. Otevřete tam Místní synchronizaci a vyberte ze seznamu toto zařízení.</string>
+    <string name="common_own_tv_user">Uživatel ZenPlay</string>
+</resources>

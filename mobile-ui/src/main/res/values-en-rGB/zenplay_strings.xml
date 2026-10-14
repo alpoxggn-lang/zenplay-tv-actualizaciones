@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Product wording only; upstream credits, services, and licenses retain their attribution. -->
+    <string name="local_sync_error_unreachable">This device could not be reached. On it, open ZenPlay → Settings → Data → Local sync and turn Sync mode on. Both devices must be on the same Wi-Fi.</string>
+    <string name="settings_app_icon_summary">Colour of the ZenPlay icon and logo</string>
+    <string name="app_icon_restart_title">Restart ZenPlay?</string>
+    <string name="app_icon_restart_message">You chose a new icon and logo. They take effect after ZenPlay restarts.</string>
+    <string name="local_sync_browser_title">ZenPlay local sync</string>
+    <string name="local_sync_browser_body">This address is for the ZenPlay app on your other device. Open Local sync there and pick this device from the list.</string>
+</resources>

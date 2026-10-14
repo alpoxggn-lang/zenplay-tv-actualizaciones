@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Product wording only; upstream credits, services, and licenses retain their attribution. -->
+    <string name="content_exit_owntv">ZenPlay\'den çıkılsın mı?</string>
+    <string name="content_storage_folder_fallback">İndirme klasörünüz şu anda kullanılamıyor; geri gelene kadar indirmeler ZenPlay\'nin kendi klasörüne kaydediliyor.</string>
+    <string name="content_epg_own_player">ZenPlay oynatıcısı</string>
+    <string name="recovery_title">ZenPlay veritabanını açamadı</string>
+    <string name="settings_recording_timers_inexact">Bu cihaz ZenPlay’nin tam zamanlı alarm kurmasına izin vermiyor, bu yüzden bir kayıt birkaç dakika geç başlayabilir. Kayıtlar bunu telafi etmek için erken başlar.</string>
+    <string name="recording_failed_drm">Bu kanal DRM korumalı olduğundan izlenebilir ancak kaydedilemez. Bu koruma ZenPlay\'den değil, sağlayıcınızdan geliyor.</string>
+    <string name="multiview_unknown_connections">ZenPlay bu oynatma listesinin kaç yayına izin verdiğini öğrenemedi. Bir karo açılmazsa nedeni budur.</string>
+    <string name="settings_proxy_description">Tüm ZenPlay trafiğini ve oynatmayı bir HTTP proxy üzerinden gönderin.</string>
+    <string name="settings_app_startup_description">ZenPlay başlatıldığında açılacak bölüm</string>
+    <string name="settings_catchup_player_internal">ZenPlay oynatıcı</string>
+    <string name="settings_sources_probe_warning">Birçok sağlayıcı aynı anda kaç kanal izleyebileceğinizi hiç belirtmez; bu yüzden ZenPlay birkaç kanal açıp hangilerinin devam ettiğine bakarak bunu kendisi bulur. Şu anda oynatılan her şey duracak ve bu işlem iki dakikaya kadar sürebilir.</string>
+    <string name="settings_sources_probe_unknown">ZenPlay bu sağlayıcının kaç kanala izin verdiğini belirleyemedi.</string>
+    <string name="settings_dns_toggle_description">Tüm ZenPlay alan adı sorguları özel bir DNS sunucusu üzerinden çözümlenir.</string>
+    <string name="settings_live_tune_timeout_description">Bir canlı kanal bu süre içinde görüntü vermediyse, ZenPlay tüm oynatıcılarını tek tek denerken siyah ekran bırakmak yerine denemeyi bırakır ve size söyler. “Asla” denemeyi sürdürür; sağlayıcınızın kaldırdığı bir kanalda bu bir dakikayı rahatça aşabilir. Sağlayıcınızın istediği bekleme süreleri sayılmaz.</string>
+    <string name="settings_surround_forced_description">Surround — Dolby/DTS\'yi gerçek bir 5.1/7.1 alıcıya gönderin. Ses kesilirse veya takılırsa ZenPlay yine de stereoya geri döner ve size bildirir.</string>
+    <string name="settings_auto_frame_rate_warning_description">Bu cihaz Android <xliff:g id="android_version">%1$s</xliff:g> sürümüyle çalışıyor. Android 12\'den önceki sürümlerde TV, ZenPlay\'ye hangi yenileme hızlarına sorunsuz geçebileceğini bildiremez; bu yüzden hızı değiştirmek ekranın bir iki saniyeliğine kararmasına neden olabilir — bazen bir program sırasında birden fazla kez.\n\nBurada otomatik yenileme hızını kapalı bırakmanızı öneririz. TV\'niz sorunsuz geçiş yapıyorsa açıp deneyin: istediğiniz zaman geri değiştirebilirsiniz.</string>
+    <string name="settings_auto_frame_rate_warning_description_mobile">Bu cihaz Android <xliff:g id="android_version">%1$s</xliff:g> sürümüyle çalışıyor. Android 12\'den önceki sürümlerde cihaz, ZenPlay\'ye hangi yenileme hızlarına sorunsuz geçebileceğini bildiremez; bu yüzden hızı değiştirmek ekranın bir iki saniyeliğine kararmasına neden olabilir — bazen bir program sırasında birden fazla kez.\n\nBurada otomatik yenileme hızını kapalı bırakmanızı öneririz. Ekranınız sorunsuz geçiş yapıyorsa açıp deneyin: istediğiniz zaman geri değiştirebilirsiniz.</string>
+    <string name="local_sync_error_unreachable">Bu cihaza ulaşılamadı. O cihazda ZenPlay → Ayarlar → Veriler → Yerel eşitleme yolunu açıp Eşitleme modunu açın. Her iki cihaz da aynı Wi-Fi ağında olmalıdır.</string>
+    <string name="settings_app_icon_summary">ZenPlay simgesinin ve logosunun rengi</string>
+    <string name="app_icon_restart_title">ZenPlay yeniden başlatılsın mı?</string>
+    <string name="app_icon_restart_message">Yeni bir simge ve logo seçtiniz. ZenPlay yeniden başlatıldığında geçerli olur.</string>
+    <string name="setup_disclaimer">ZenPlay yalnızca bir medya oynatıcısıdır. Hiçbir kanal, oynatma listesi veya içerik içermez. Yasal olarak erişebildiğiniz kendi Xtream, M3U veya Stalker kaynaklarınızı eklemek sizin sorumluluğunuzdadır.</string>
+    <string name="setup_set_up_owntv">ZenPlay\'yi kurun</string>
+    <string name="setup_sync_device_description">Diğer ZenPlay cihazınızdaki her şeyi Wi-Fi üzerinden kopyalayın</string>
+    <string name="setup_byo_source_description">ZenPlay bir oynatıcıdır — kendi Xtream, M3U veya Stalker kaynağınızı ekleyin.</string>
+    <string name="companion_pin_page_title">ZenPlay — PIN Girin</string>
+    <string name="companion_add_page_title">ZenPlay — Kaynak ekle</string>
+    <string name="companion_saved_page_title">ZenPlay — Gönderildi</string>
+    <string name="companion_backup_page_title">ZenPlay — Yedeklemeyi geri yükle</string>
+    <string name="companion_image_page_title">ZenPlay — Arka plan görseli</string>
+    <string name="companion_download_page_title">ZenPlay — Yedeklemeyi indir</string>
+    <string name="local_sync_browser_title">ZenPlay yerel eşitleme</string>
+    <string name="local_sync_browser_body">Bu adres, diğer cihazınızdaki ZenPlay uygulaması içindir. Orada Yerel eşitlemeyi açın ve listeden bu cihazı seçin.</string>
+    <string name="common_own_tv_user">ZenPlay Kullanıcısı</string>
+</resources>

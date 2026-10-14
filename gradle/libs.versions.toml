@@ -17,6 +17,9 @@ lifecycle = "2.11.0"
 navigationCompose = "2.10.0"
 datastore = "1.2.1"
 work = "2.11.2"
+adaptive = "1.3.0"
+mediarouter = "1.8.1"
+camerax = "1.6.2"
 
 # --- Build tooling ---
 # KSP2 (decoupled versioning). Used by Room. Verified 2026-08-27.
@@ -28,6 +31,7 @@ ksp = "2.3.11"
 # --- Database / paging ---
 room = "2.8.5"
 paging = "3.5.1"
+graphicsShapes = "1.1.0"
 
 # --- Media playback ---
 # Bumped to 1.11.0: AudioTrack init + HLS live timestamp/refresh fixes, TTML timing, MPEG-TS DTS-HD.
@@ -56,6 +60,7 @@ coroutines = "1.11.0"
 # --- Third party ---
 coil = "3.6.0"
 koin = "4.2.2"
+playServicesCast = "22.3.1"
 # OkHttp 5 is a KMP module: Android consumers resolve to `okhttp-android`, which carries the
 # Android platform support (TLS socket adapter, cert chain cleaner) and consumer R8 rules.
 # Brings Happy Eyeballs (fastFallback) on by default — parallel IPv4/IPv6 connect.
@@ -103,6 +108,9 @@ androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "u
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
 androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-compose-adaptive = { group = "androidx.compose.material3.adaptive", name = "adaptive", version.ref = "adaptive" }
+androidx-graphics-shapes = { group = "androidx.graphics", name = "graphics-shapes", version.ref = "graphicsShapes" }
 
 # Compose for TV
 androidx-tv-material = { group = "androidx.tv", name = "tv-material", version.ref = "tvMaterial" }
@@ -138,6 +146,13 @@ kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 # Image loading
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
+
+# Touch-device integrations used by the staged phone/tablet UI.
+play-services-cast-framework = { group = "com.google.android.gms", name = "play-services-cast-framework", version.ref = "playServicesCast" }
+androidx-mediarouter = { group = "androidx.mediarouter", name = "mediarouter", version.ref = "mediarouter" }
+androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "camerax" }
+androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
+androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
 
 # QR code generation (Remote companion add-source) — encodes the LAN URL into a scannable bitmap.
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }

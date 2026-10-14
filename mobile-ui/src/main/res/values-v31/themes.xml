@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+: all compatible launcher components display the original ZenPlay logo. -->
+    <style name="Theme.OwnTVMobile.Starting.Petrol">
+        <item name="windowSplashScreenAnimatedIcon">@drawable/zenplay_splash</item>
+    </style>
+    <style name="Theme.OwnTVMobile.Starting.Sunflower">
+        <item name="windowSplashScreenAnimatedIcon">@drawable/zenplay_splash</item>
+    </style>
+    <style name="Theme.OwnTVMobile.Starting.Cobalt">
+        <item name="windowSplashScreenAnimatedIcon">@drawable/zenplay_splash</item>
+    </style>
+    <style name="Theme.OwnTVMobile.Starting.Tomato">
+        <item name="windowSplashScreenAnimatedIcon">@drawable/zenplay_splash</item>
+    </style>
+    <style name="Theme.OwnTVMobile.Starting.Board">
+        <item name="windowSplashScreenAnimatedIcon">@drawable/zenplay_splash</item>
+    </style>
+    <style name="Theme.OwnTVMobile.Starting.Eggshell">
+        <item name="windowSplashScreenAnimatedIcon">@drawable/zenplay_splash</item>
+    </style>
+    <style name="Theme.OwnTVMobile.Starting.Olive">
+        <item name="windowSplashScreenAnimatedIcon">@drawable/zenplay_splash</item>
+    </style>
+    <style name="Theme.OwnTVMobile.Starting.OliveCream">
+        <item name="windowSplashScreenAnimatedIcon">@drawable/zenplay_splash</item>
+    </style>
+</resources>

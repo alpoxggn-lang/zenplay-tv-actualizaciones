@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Product wording only; upstream credits, services, and licenses retain their attribution. -->
+    <string name="content_exit_owntv">Выйти из ZenPlay?</string>
+    <string name="content_storage_folder_fallback">Папка загрузок сейчас недоступна, поэтому загрузки сохраняются в собственную папку ZenPlay, пока она не вернётся.</string>
+    <string name="content_epg_own_player">Плеер ZenPlay</string>
+    <string name="recovery_title">ZenPlay не удалось открыть базу данных</string>
+    <string name="settings_recording_timers_inexact">Это устройство не разрешает ZenPlay ставить точные будильники, поэтому запись может начаться на несколько минут позже. Записи стартуют раньше, чтобы это компенсировать.</string>
+    <string name="recording_failed_drm">Этот канал защищён технологией DRM, поэтому его можно смотреть, но нельзя записывать. Защиту устанавливает ваш провайдер, а не ZenPlay.</string>
+    <string name="multiview_unknown_connections">ZenPlay не смог узнать, сколько потоков разрешает этот плейлист. Если плитка не запустится, причина в этом.</string>
+    <string name="settings_proxy_description">Направлять весь трафик ZenPlay и воспроизведение через HTTP-прокси.</string>
+    <string name="settings_app_startup_description">Какой экран ZenPlay открывает при запуске</string>
+    <string name="settings_catchup_player_internal">Плеер ZenPlay</string>
+    <string name="settings_sources_probe_warning">Многие провайдеры не сообщают, сколько каналов можно смотреть одновременно, поэтому ZenPlay выясняет это, открывая несколько каналов и наблюдая, какие из них продолжают работать. Всё, что сейчас воспроизводится, остановится, и это может занять до двух минут.</string>
+    <string name="settings_sources_probe_unknown">ZenPlay не смог определить, сколько каналов разрешает этот провайдер.</string>
+    <string name="settings_dns_toggle_description">Обрабатывать все запросы ZenPlay на разрешение доменных имён через пользовательский DNS-сервер.</string>
+    <string name="settings_live_tune_timeout_description">Если за это время на прямом канале не появилось изображение, ZenPlay прекращает попытки и сообщает вам об этом, вместо того чтобы держать чёрный экран, перебирая все свои плееры. «Никогда» продолжает попытки, а на канале, удалённом провайдером, это может занять заметно больше минуты. Ожидание, о котором просит сам провайдер, не учитывается.</string>
+    <string name="settings_surround_forced_description">Объёмный звук — передавать Dolby/DTS на настоящий ресивер 5.1/7.1. Если звук пропадает или прерывается, ZenPlay всё равно переключится на стерео и сообщит вам.</string>
+    <string name="settings_auto_frame_rate_warning_description">На этом устройстве установлен Android <xliff:g id="android_version">%1$s</xliff:g>. На Android ниже 12 телевизор не может сообщить ZenPlay, между какими частотами обновления он может переключаться плавно, поэтому смена частоты может погасить экран на секунду-другую — иногда не один раз за время передачи.\n\nМы рекомендуем оставить автоподбор частоты кадров выключенным здесь. Если ваш телевизор переключается без проблем, включите его и проверьте: вы сможете вернуть всё обратно в любой момент.</string>
+    <string name="settings_auto_frame_rate_warning_description_mobile">На этом устройстве установлен Android <xliff:g id="android_version">%1$s</xliff:g>. На Android ниже 12 устройство не может сообщить ZenPlay, между какими частотами обновления оно может переключаться плавно, поэтому смена частоты может погасить экран на секунду-другую — иногда не один раз за время передачи.\n\nМы рекомендуем оставить автоподбор частоты кадров выключенным здесь. Если ваш экран переключается без проблем, включите его и проверьте: вы сможете вернуть всё обратно в любой момент.</string>
+    <string name="local_sync_error_unreachable">Не удалось связаться с этим устройством. Откройте на нём ZenPlay → Настройки → Данные → Локальная синхронизация и включите режим синхронизации. Оба устройства должны быть в одной сети Wi-Fi.</string>
+    <string name="settings_app_icon_summary">Цвет значка и логотипа ZenPlay</string>
+    <string name="app_icon_restart_title">Перезапустить ZenPlay?</string>
+    <string name="app_icon_restart_message">Вы выбрали новый значок и логотип. Они вступят в силу после перезапуска ZenPlay.</string>
+    <string name="setup_disclaimer">ZenPlay — это только медиаплеер. В нём нет каналов, плейлистов или контента. Вы самостоятельно добавляете собственные легально доступные источники Xtream, M3U или Stalker и несёте за них ответственность.</string>
+    <string name="setup_set_up_owntv">Настройка ZenPlay</string>
+    <string name="setup_sync_device_description">Скопируйте всё с другого устройства ZenPlay по Wi-Fi</string>
+    <string name="setup_byo_source_description">ZenPlay — это плеер: добавьте собственный источник Xtream, M3U или Stalker.</string>
+    <string name="companion_pin_page_title">ZenPlay — ввод PIN</string>
+    <string name="companion_add_page_title">ZenPlay — добавить источник</string>
+    <string name="companion_saved_page_title">ZenPlay — отправлено</string>
+    <string name="companion_backup_page_title">ZenPlay — восстановление резервной копии</string>
+    <string name="companion_image_page_title">ZenPlay — фоновое изображение</string>
+    <string name="companion_download_page_title">ZenPlay — скачать резервную копию</string>
+    <string name="local_sync_browser_title">Локальная синхронизация ZenPlay</string>
+    <string name="local_sync_browser_body">Этот адрес предназначен для приложения ZenPlay на другом устройстве. Откройте там локальную синхронизацию и выберите это устройство из списка.</string>
+    <string name="common_own_tv_user">Пользователь ZenPlay</string>
+</resources>

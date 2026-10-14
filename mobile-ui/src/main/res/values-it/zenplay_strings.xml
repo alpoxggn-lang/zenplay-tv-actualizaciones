@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Product wording only; upstream credits, services, and licenses retain their attribution. -->
+    <string name="content_exit_owntv">Uscire da ZenPlay?</string>
+    <string name="content_storage_folder_fallback">La cartella dei download non è disponibile al momento, quindi i download vengono salvati nella cartella di ZenPlay finché non torna disponibile.</string>
+    <string name="content_epg_own_player">Player ZenPlay</string>
+    <string name="recovery_title">ZenPlay non ha potuto aprire il proprio database</string>
+    <string name="settings_recording_timers_inexact">Questo dispositivo non permette a ZenPlay di impostare sveglie esatte, quindi una registrazione può partire con qualche minuto di ritardo. Le registrazioni iniziano prima per compensare.</string>
+    <string name="recording_failed_drm">Questo canale è protetto da DRM, quindi può essere guardato ma non registrato. La protezione è del tuo provider, non di ZenPlay.</string>
+    <string name="multiview_unknown_connections">ZenPlay non è riuscito a sapere quanti flussi consente questa playlist. Se un riquadro non parte, è per questo.</string>
+    <string name="settings_proxy_description">Instrada tutto il traffico e la riproduzione di ZenPlay attraverso un proxy HTTP.</string>
+    <string name="settings_app_startup_description">Cosa apre ZenPlay all\'avvio</string>
+    <string name="settings_catchup_player_internal">Player di ZenPlay</string>
+    <string name="settings_sources_probe_warning">Molti provider non dicono mai quanti canali puoi guardare contemporaneamente, così ZenPlay lo scopre aprendone alcuni e vedendo quali resistono. Tutto ciò che è in riproduzione si fermerà e l’operazione può richiedere fino a due minuti.</string>
+    <string name="settings_sources_probe_unknown">ZenPlay non è riuscito a stabilire quanti canali consente questo provider.</string>
+    <string name="settings_dns_toggle_description">Risolvi tutte le ricerche dei domini di ZenPlay tramite un server DNS personalizzato.</string>
+    <string name="settings_live_tune_timeout_description">Se entro questo tempo un canale in diretta non ha mostrato immagini, ZenPlay smette di provare e te lo dice, invece di lasciare uno schermo nero mentre passa in rassegna tutti i suoi lettori. «Mai» continua a provare, cosa che su un canale rimosso dal tuo provider può richiedere ben oltre un minuto. Le attese richieste dal provider non vengono conteggiate.</string>
+    <string name="settings_surround_forced_description">Surround — invia Dolby/DTS a un vero ricevitore 5.1/7.1. Se l\'audio va in muto o ha degli intoppi, ZenPlay torna comunque allo stereo e te lo segnala.</string>
+    <string name="settings_auto_frame_rate_warning_description">Questo dispositivo esegue Android <xliff:g id="android_version">%1$s</xliff:g>. Sotto Android 12 il TV non può comunicare a ZenPlay a quali frequenze di aggiornamento può passare senza problemi, quindi cambiare la frequenza potrebbe far andare in nero lo schermo per un secondo o due — a volte più di una volta durante un programma.\n\nTi consigliamo di lasciare disattivata qui la frequenza di aggiornamento automatica. Se il tuo TV cambia frequenza senza intoppi, attivala e prova: puoi disattivarla di nuovo in qualsiasi momento.</string>
+    <string name="settings_auto_frame_rate_warning_description_mobile">Questo dispositivo esegue Android <xliff:g id="android_version">%1$s</xliff:g>. Sotto Android 12 il dispositivo non può comunicare a ZenPlay a quali frequenze di aggiornamento può passare senza problemi, quindi cambiare la frequenza potrebbe far andare in nero lo schermo per un secondo o due — a volte più di una volta durante un programma.\n\nTi consigliamo di lasciare disattivata qui la frequenza di aggiornamento automatica. Se il tuo schermo cambia frequenza senza intoppi, attivala e prova: puoi disattivarla di nuovo in qualsiasi momento.</string>
+    <string name="local_sync_error_unreachable">Impossibile raggiungere questo dispositivo. Su di esso apri ZenPlay → Impostazioni → Dati → Sincronizzazione locale e attiva la Modalità sincronizzazione. Entrambi devono essere sulla stessa rete Wi-Fi.</string>
+    <string name="settings_app_icon_summary">Colore dell\'icona e del logo di ZenPlay</string>
+    <string name="app_icon_restart_title">Riavviare ZenPlay?</string>
+    <string name="app_icon_restart_message">Hai scelto una nuova icona e un nuovo logo. Verranno applicati al riavvio di ZenPlay.</string>
+    <string name="setup_disclaimer">ZenPlay è solo un player multimediale. Non include canali, playlist né contenuti. Sei responsabile dell\'aggiunta delle tue fonti Xtream, M3U o Stalker accessibili legalmente.</string>
+    <string name="setup_set_up_owntv">Configura ZenPlay</string>
+    <string name="setup_sync_device_description">Copia tutto dall’altro dispositivo ZenPlay tramite Wi-Fi</string>
+    <string name="setup_byo_source_description">ZenPlay è un player: aggiungi la tua fonte Xtream, M3U o Stalker.</string>
+    <string name="companion_pin_page_title">ZenPlay — Inserisci PIN</string>
+    <string name="companion_add_page_title">ZenPlay — Aggiungi fonte</string>
+    <string name="companion_saved_page_title">ZenPlay — Inviato</string>
+    <string name="companion_backup_page_title">ZenPlay — Ripristina backup</string>
+    <string name="companion_image_page_title">ZenPlay — Immagine di sfondo</string>
+    <string name="companion_download_page_title">ZenPlay — Scarica backup</string>
+    <string name="local_sync_browser_title">Sincronizzazione locale ZenPlay</string>
+    <string name="local_sync_browser_body">Questo indirizzo è per l\'app ZenPlay sull\'altro dispositivo. Apri lì Sincronizzazione locale e scegli questo dispositivo dall\'elenco.</string>
+    <string name="common_own_tv_user">Utente ZenPlay</string>
+</resources>

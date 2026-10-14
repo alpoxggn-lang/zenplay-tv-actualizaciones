@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ZenPlay's custom Live navigation is supplied in Spanish, also as the fallback for other locales. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="zenplay_live_categories">Categorías</string>
+    <string name="zenplay_live_choose_category">Elige una categoría para ver sus canales.</string>
+    <string name="zenplay_live_back_categories">Volver a categorías</string>
+    <string name="zenplay_live_load_failed">No se pudieron cargar los canales. Inténtalo de nuevo.</string>
+</resources>

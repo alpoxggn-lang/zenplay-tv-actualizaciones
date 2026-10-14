@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Product wording only; upstream credits, services, and licenses retain their attribution. -->
+    <string name="content_exit_owntv">ZenPlay beenden?</string>
+    <string name="content_storage_folder_fallback">Dein Download-Ordner ist gerade nicht verfügbar. Downloads werden deshalb im eigenen Ordner von ZenPlay gespeichert, bis er wieder da ist.</string>
+    <string name="content_epg_own_player">ZenPlay-Player</string>
+    <string name="recovery_title">ZenPlay konnte seine Datenbank nicht öffnen</string>
+    <string name="settings_recording_timers_inexact">Dieses Gerät erlaubt ZenPlay keine exakten Wecker, daher kann eine Aufnahme einige Minuten später beginnen. Aufnahmen starten früher, um das auszugleichen.</string>
+    <string name="recording_failed_drm">Dieser Sender ist DRM-geschützt und kann daher angesehen, aber nicht aufgenommen werden. Der Schutz stammt von Ihrem Anbieter, nicht von ZenPlay.</string>
+    <string name="multiview_unknown_connections">ZenPlay konnte nicht feststellen, wie viele Streams diese Playlist erlaubt. Wenn eine Kachel fehlschlägt, liegt es daran.</string>
+    <string name="settings_proxy_description">Den gesamten Datenverkehr und die gesamte Wiedergabe von ZenPlay über einen HTTP-Proxy leiten.</string>
+    <string name="settings_app_startup_description">Was ZenPlay beim Start öffnet</string>
+    <string name="settings_catchup_player_internal">ZenPlay-Player</string>
+    <string name="settings_sources_probe_warning">Viele Anbieter verraten nie, wie viele Kanäle Sie gleichzeitig sehen dürfen. ZenPlay findet es deshalb heraus, indem es einige öffnet und beobachtet, welche bestehen bleiben. Alles, was gerade läuft, wird beendet, und das kann bis zu zwei Minuten dauern.</string>
+    <string name="settings_sources_probe_unknown">ZenPlay konnte nicht ermitteln, wie viele Kanäle dieser Anbieter erlaubt.</string>
+    <string name="settings_dns_toggle_description">Alle Domainabfragen von ZenPlay über einen benutzerdefinierten DNS-Server auflösen.</string>
+    <string name="settings_live_tune_timeout_description">Zeigt ein Live-Sender bis dahin kein Bild, hört ZenPlay auf und sagt Ihnen Bescheid, statt einen schwarzen Bildschirm stehen zu lassen, während nacheinander alle Player durchprobiert werden. „Nie“ probiert weiter, was bei einem vom Anbieter entfernten Sender deutlich über eine Minute dauern kann. Wartezeiten, die Ihr Anbieter selbst verlangt, zählen nicht mit.</string>
+    <string name="settings_surround_forced_description">Surround — Dolby/DTS an einen echten 5.1/7.1-Receiver ausgeben. Wenn der Ton ausfällt oder ruckelt, wechselt ZenPlay trotzdem zu Stereo und informiert dich.</string>
+    <string name="settings_auto_frame_rate_warning_description">Auf diesem Gerät läuft Android <xliff:g id="android_version">%1$s</xliff:g>. Vor Android 12 kann der Fernseher ZenPlay nicht mitteilen, zu welchen Bildwiederholraten er fließend wechseln kann. Daher kann der Bildschirm beim Wechsel der Bildwiederholrate für ein oder zwei Sekunden schwarz werden – manchmal mehr als einmal während einer Sendung.\n\nWir empfehlen, die automatische Bildwiederholrate hier deaktiviert zu lassen. Wenn Ihr Fernseher sauber umschaltet, aktivieren Sie sie und sehen Sie selbst: Sie können die Einstellung jederzeit wieder ändern.</string>
+    <string name="settings_auto_frame_rate_warning_description_mobile">Auf diesem Gerät läuft Android <xliff:g id="android_version">%1$s</xliff:g>. Vor Android 12 kann das Gerät ZenPlay nicht mitteilen, zu welchen Bildwiederholraten es fließend wechseln kann. Daher kann der Bildschirm beim Wechsel der Bildwiederholrate für ein oder zwei Sekunden schwarz werden – manchmal mehr als einmal während einer Sendung.\n\nWir empfehlen, die automatische Bildwiederholrate hier deaktiviert zu lassen. Wenn Ihr Bildschirm sauber umschaltet, aktivieren Sie sie und sehen Sie selbst: Sie können die Einstellung jederzeit wieder ändern.</string>
+    <string name="local_sync_error_unreachable">Dieses Gerät war nicht erreichbar. Öffne dort ZenPlay → Einstellungen → Daten → Lokale Synchronisierung und schalte den Synchronisierungsmodus ein. Beide Geräte müssen im selben WLAN sein.</string>
+    <string name="settings_app_icon_summary">Farbe des ZenPlay-Symbols und -Logos</string>
+    <string name="app_icon_restart_title">ZenPlay neu starten?</string>
+    <string name="app_icon_restart_message">Sie haben ein neues Symbol und Logo gewählt. Die Änderung wird nach einem Neustart von ZenPlay wirksam.</string>
+    <string name="setup_disclaimer">ZenPlay ist ausschließlich ein Medienplayer. Die App enthält keine Sender, Wiedergabelisten oder Inhalte. Du bist selbst dafür verantwortlich, deine eigenen legal zugänglichen Xtream-, M3U- oder Stalker-Quellen hinzuzufügen.</string>
+    <string name="setup_set_up_owntv">ZenPlay einrichten</string>
+    <string name="setup_sync_device_description">Kopieren Sie alles über WLAN von Ihrem anderen ZenPlay-Gerät</string>
+    <string name="setup_byo_source_description">ZenPlay ist ein Player — füge deine eigene Xtream-, M3U- oder Stalker-Quelle hinzu.</string>
+    <string name="companion_pin_page_title">ZenPlay — PIN eingeben</string>
+    <string name="companion_add_page_title">ZenPlay — Quelle hinzufügen</string>
+    <string name="companion_saved_page_title">ZenPlay — Gesendet</string>
+    <string name="companion_backup_page_title">ZenPlay — Sicherung wiederherstellen</string>
+    <string name="companion_image_page_title">ZenPlay — Hintergrundbild</string>
+    <string name="companion_download_page_title">ZenPlay — Sicherung herunterladen</string>
+    <string name="local_sync_browser_title">ZenPlay lokale Synchronisierung</string>
+    <string name="local_sync_browser_body">Diese Adresse ist für die ZenPlay-App auf deinem anderen Gerät. Öffne dort die lokale Synchronisierung und wähle dieses Gerät aus der Liste.</string>
+    <string name="common_own_tv_user">ZenPlay-Nutzer</string>
+</resources>

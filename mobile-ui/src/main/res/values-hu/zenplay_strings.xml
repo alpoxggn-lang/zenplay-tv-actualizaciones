@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Product wording only; upstream credits, services, and licenses retain their attribution. -->
+    <string name="content_exit_owntv">Kilépsz az ZenPlay-ből?</string>
+    <string name="content_storage_folder_fallback">A letöltési mappa most nem érhető el, ezért a letöltések az ZenPlay saját mappájába kerülnek, amíg vissza nem tér.</string>
+    <string name="content_epg_own_player">ZenPlay-lejátszó</string>
+    <string name="recovery_title">Az ZenPlay nem tudta megnyitni az adatbázisát</string>
+    <string name="settings_recording_timers_inexact">Ez az eszköz nem engedi az ZenPlay-nek a pontos ébresztők beállítását, ezért egy felvétel néhány perccel később indulhat. A felvételek emiatt korábban kezdődnek.</string>
+    <string name="recording_failed_drm">Ez a csatorna DRM-védett, ezért megnézhető, de nem rögzíthető. A védelmet a szolgáltatója alkalmazza, nem az ZenPlay.</string>
+    <string name="multiview_unknown_connections">Az ZenPlay nem tudta megállapítani, hány adást enged ez a lejátszási lista. Ha egy csempe nem indul, ez az oka.</string>
+    <string name="settings_proxy_description">Az ZenPlay teljes forgalmát és lejátszását HTTP-proxyn keresztül küldi.</string>
+    <string name="settings_auto_frame_rate_warning_description">Ezen az eszközön Android <xliff:g id="android_version">%1$s</xliff:g> fut. Android 12 alatt a TV nem tudja megmondani az ZenPlay-nek, mely frissítési frekvenciákra tud zökkenőmentesen váltani, ezért a frekvenciaváltás egy-két másodpercre elsötétítheti a képet — néha egy műsor alatt többször is.\n\nAzt javasoljuk, hagyd itt kikapcsolva az automatikus képkockasebességet. Ha a TV-d tisztán vált, kapcsold be, és próbáld ki: bármikor visszaállíthatod.</string>
+    <string name="settings_auto_frame_rate_warning_description_mobile">Ezen az eszközön Android <xliff:g id="android_version">%1$s</xliff:g> fut. Android 12 alatt az eszköz nem tudja megmondani az ZenPlay-nek, mely frissítési frekvenciákra tud zökkenőmentesen váltani, ezért a frekvenciaváltás egy-két másodpercre elsötétítheti a képet — néha egy műsor alatt többször is.\n\nAzt javasoljuk, hagyd itt kikapcsolva az automatikus képkockasebességet. Ha a kijelződ tisztán vált, kapcsold be, és próbáld ki: bármikor visszaállíthatod.</string>
+    <string name="settings_app_startup_description">Mit nyit meg az ZenPlay induláskor</string>
+    <string name="settings_catchup_player_internal">ZenPlay lejátszó</string>
+    <string name="settings_sources_probe_warning">Sok szolgáltató soha nem árulja el, hány csatornát nézhet egyszerre, ezért az ZenPlay úgy deríti ki, hogy megnyit néhányat, és megnézi, melyik marad életben. Minden, ami most szól, le fog állni, és ez akár két percig is eltarthat.</string>
+    <string name="settings_sources_probe_unknown">Az ZenPlay nem tudta megállapítani, hány csatornát enged ez a szolgáltató.</string>
+    <string name="settings_dns_toggle_description">Az ZenPlay összes domainfeloldása egyéni DNS-kiszolgálón keresztül történjen.</string>
+    <string name="settings_live_tune_timeout_description">Ha egy élő csatorna eddig sem mutatott képet, az ZenPlay abbahagyja a próbálkozást és szól, ahelyett hogy fekete képernyőt hagyna, miközben végigmegy az összes lejátszóján. A Soha tovább próbálkozik, ami jóval egy percnél is tovább tarthat egy olyan csatornánál, amit a szolgáltatód eltávolított. A szolgáltatód által kért várakozások nem számítanak bele.</string>
+    <string name="settings_surround_forced_description">Térhangzás — Dolby/DTS küldése valódi 5.1/7.1 erősítőnek. Ha elnémul vagy akadozik, az ZenPlay akkor is sztereóra vált, és szól róla.</string>
+    <string name="settings_glass_master_description">Áttetsző, mattított felületek használata az egész ZenPlay-ben.</string>
+    <string name="local_sync_error_unreachable">Ez az eszköz nem érhető el. Nyissa meg rajta az ZenPlay → Beállítások → Adatok → Helyi szinkronizálás menüpontot, és kapcsolja be a Szinkronizálási módot. Mindkét eszköznek ugyanazon a Wi-Fi-n kell lennie.</string>
+    <string name="settings_app_icon_summary">Az ZenPlay ikonjának és logójának színe</string>
+    <string name="app_icon_restart_title">Újraindítja az ZenPlay-t?</string>
+    <string name="app_icon_restart_message">Új ikont és logót választott. Az ZenPlay újraindítása után lépnek életbe.</string>
+    <string name="setup_disclaimer">Az ZenPlay kizárólag médialejátszó. Nem tartalmaz csatornákat, lejátszási listákat vagy tartalmat. A saját, legálisan elérhető Xtream-, M3U- vagy Stalker-forrásaid hozzáadása a te felelősséged.</string>
+    <string name="setup_set_up_owntv">Az ZenPlay beállítása</string>
+    <string name="setup_sync_device_description">Másolj át mindent a másik ZenPlay-eszközödről Wi-Fin keresztül</string>
+    <string name="setup_byo_source_description">Az ZenPlay egy lejátszó — hozd a saját Xtream-, M3U- vagy Stalker-forrásodat.</string>
+    <string name="companion_pin_page_title">ZenPlay — PIN-kód megadása</string>
+    <string name="companion_add_page_title">ZenPlay — Forrás hozzáadása</string>
+    <string name="companion_saved_page_title">ZenPlay — Elküldve</string>
+    <string name="companion_backup_page_title">ZenPlay — Mentés visszaállítása</string>
+    <string name="companion_image_page_title">ZenPlay — Háttérkép</string>
+    <string name="companion_download_page_title">ZenPlay — Mentés letöltése</string>
+    <string name="local_sync_browser_title">ZenPlay helyi szinkronizálás</string>
+    <string name="local_sync_browser_body">Ez a cím a másik eszközén futó ZenPlay alkalmazásnak szól. Nyissa meg ott a Helyi szinkronizálást, és válassza ki ezt az eszközt a listából.</string>
+    <string name="common_own_tv_user">ZenPlay-felhasználó</string>
+</resources>

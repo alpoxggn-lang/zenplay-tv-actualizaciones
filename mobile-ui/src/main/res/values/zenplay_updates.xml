@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ZenPlay supplies this notice in Spanish and English; other locales fall back to English. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="zenplay_updates_manual">To update ZenPlay, install the new APK provided by your administrator.</string>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Product identity overrides; original notices and license attribution stay intact. -->
+    <string name="app_name" translatable="false">ZenPlay</string>
+    <string name="brand_own" translatable="false">Zen</string>
+    <string name="brand_tv" translatable="false">Play</string>
+</resources>

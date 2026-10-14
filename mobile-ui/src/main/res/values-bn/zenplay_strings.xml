@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Product wording only; upstream credits, services, and licenses retain their attribution. -->
+    <string name="content_exit_owntv">ZenPlay থেকে বের হবেন?</string>
+    <string name="content_storage_folder_fallback">আপনার ডাউনলোড ফোল্ডার এখন উপলব্ধ নেই, তাই সেটি ফিরে না আসা পর্যন্ত ডাউনলোডগুলো ZenPlay-এর নিজস্ব ফোল্ডারে সংরক্ষিত হচ্ছে।</string>
+    <string name="content_epg_own_player">ZenPlay প্লেয়ার</string>
+    <string name="recovery_title">ZenPlay এর ডেটাবেস খুলতে পারেনি</string>
+    <string name="settings_recording_timers_inexact">এই ডিভাইস ZenPlay-কে নির্ভুল অ্যালার্ম সেট করতে দেয় না, তাই রেকর্ডিং কয়েক মিনিট দেরিতে শুরু হতে পারে। তা পুষিয়ে নিতে রেকর্ডিং আগেই শুরু হয়।</string>
+    <string name="recording_failed_drm">এই চ্যানেলটি DRM দ্বারা সুরক্ষিত, তাই এটি দেখা যায় কিন্তু রেকর্ড করা যায় না। এই সুরক্ষা আপনার প্রোভাইডারের দেওয়া, ZenPlay-র নয়।</string>
+    <string name="multiview_unknown_connections">এই প্লেলিস্ট কতগুলো স্ট্রিম দেয় ZenPlay তা জানতে পারেনি। কোনো টাইল ব্যর্থ হলে কারণ এটাই।</string>
+    <string name="settings_proxy_description">ZenPlay-এর সব ট্রাফিক ও প্লেব্যাক একটি HTTP প্রক্সির মাধ্যমে পাঠান।</string>
+    <string name="settings_app_startup_description">ZenPlay চালু হলে কী খুলবে</string>
+    <string name="settings_catchup_player_internal">ZenPlay প্লেয়ার</string>
+    <string name="settings_sources_probe_warning">অনেক সরবরাহকারী কখনোই জানায় না আপনি একসঙ্গে কতগুলি চ্যানেল দেখতে পারবেন, তাই ZenPlay কয়েকটি চ্যানেল খুলে কোনগুলি টিকে থাকে তা দেখে এটি নির্ণয় করে। এখন যা চলছে সব বন্ধ হয়ে যাবে, এবং এতে দুই মিনিট পর্যন্ত লাগতে পারে।</string>
+    <string name="settings_sources_probe_unknown">এই সরবরাহকারী কতগুলি চ্যানেল অনুমোদন করে ZenPlay তা নির্ণয় করতে পারেনি।</string>
+    <string name="settings_dns_toggle_description">ZenPlay-এর সব ডোমেইন লুকআপ একটি কাস্টম DNS সার্ভারের মাধ্যমে রিজলভ করুন।</string>
+    <string name="settings_live_tune_timeout_description">এই সময়ের মধ্যে কোনও লাইভ চ্যানেলে ছবি না এলে ZenPlay চেষ্টা থামিয়ে আপনাকে জানাবে, তার সব প্লেয়ার একে একে চেষ্টা করতে করতে কালো পর্দা দেখিয়ে যাওয়ার বদলে। “কখনও নয়” বেছে নিলে চেষ্টা চলতেই থাকে, আর আপনার প্রদানকারী সরিয়ে ফেলা চ্যানেলে সেটি এক মিনিটেরও বেশি সময় নিতে পারে। প্রদানকারী নিজে যে অপেক্ষা চায়, তা এই সময়ে ধরা হয় না।</string>
+    <string name="settings_surround_forced_description">সারাউন্ড — Dolby/DTS একটি সত্যিকারের 5.1/7.1 রিসিভারে পাঠায়। যদি শব্দ নিঃশব্দ হয়ে যায় বা ঝিমিয়ে পড়ে, ZenPlay তবুও স্টেরিওতে ফিরে আসে এবং আপনাকে জানায়।</string>
+    <string name="settings_auto_frame_rate_warning_description">এই ডিভাইসে Android <xliff:g id="android_version">%1$s</xliff:g> চলছে। Android 12-এর নিচে টিভি ZenPlay-কে জানাতে পারে না কোন রিফ্রেশ রেটগুলোতে এটি মসৃণভাবে সুইচ করতে পারে, তাই রেট পরিবর্তন করলে স্ক্রিন এক বা দুই সেকেন্ডের জন্য কালো হয়ে যেতে পারে — কখনও কখনও একটি অনুষ্ঠানের সময় একাধিকবারও।\n\nআমরা এখানে অটো ফ্রেম রেট বন্ধ রাখার পরামর্শ দিই। আপনার টিভি যদি নির্বিঘ্নে সুইচ করে, তবে এটি চালু করে দেখুন: আপনি যেকোনো সময় আবার বন্ধ করে দিতে পারবেন।</string>
+    <string name="settings_auto_frame_rate_warning_description_mobile">এই ডিভাইসে Android <xliff:g id="android_version">%1$s</xliff:g> চলছে। Android 12-এর নিচে ডিভাইসটি ZenPlay-কে জানাতে পারে না কোন রিফ্রেশ রেটগুলোতে এটি মসৃণভাবে সুইচ করতে পারে, তাই রেট পরিবর্তন করলে স্ক্রিন এক বা দুই সেকেন্ডের জন্য কালো হয়ে যেতে পারে — কখনও কখনও একটি অনুষ্ঠানের সময় একাধিকবারও।\n\nআমরা এখানে অটো ফ্রেম রেট বন্ধ রাখার পরামর্শ দিই। আপনার স্ক্রিন যদি নির্বিঘ্নে সুইচ করে, তবে এটি চালু করে দেখুন: আপনি যেকোনো সময় আবার বন্ধ করে দিতে পারবেন।</string>
+    <string name="local_sync_error_unreachable">এই ডিভাইসে পৌঁছানো যায়নি। সেটিতে ZenPlay → সেটিংস → ডেটা → লোকাল সিঙ্ক খুলে সিঙ্ক মোড চালু করুন। দুটি ডিভাইসই একই ওয়াই-ফাইতে থাকতে হবে।</string>
+    <string name="settings_app_icon_summary">ZenPlay আইকন ও লোগোর রং</string>
+    <string name="app_icon_restart_title">ZenPlay রিস্টার্ট করবেন?</string>
+    <string name="app_icon_restart_message">আপনি নতুন আইকন ও লোগো বেছে নিয়েছেন। ZenPlay রিস্টার্ট হলে এগুলো কার্যকর হবে।</string>
+    <string name="setup_disclaimer">ZenPlay শুধু একটি মিডিয়া প্লেয়ার। এতে কোনো চ্যানেল, প্লেলিস্ট বা কনটেন্ট অন্তর্ভুক্ত নেই। আইনসম্মতভাবে ব্যবহারযোগ্য আপনার নিজস্ব Xtream, M3U বা Stalker উৎস যোগ করার দায়িত্ব আপনার।</string>
+    <string name="setup_set_up_owntv">ZenPlay সেটআপ করুন</string>
+    <string name="setup_sync_device_description">ওয়াই-ফাইয়ের মাধ্যমে আপনার অন্য ZenPlay ডিভাইস থেকে সবকিছু কপি করুন</string>
+    <string name="setup_byo_source_description">ZenPlay একটি প্লেয়ার — আপনার নিজস্ব Xtream, M3U বা Stalker উৎস যোগ করুন।</string>
+    <string name="companion_pin_page_title">ZenPlay — PIN লিখুন</string>
+    <string name="companion_add_page_title">ZenPlay — উৎস যোগ করুন</string>
+    <string name="companion_saved_page_title">ZenPlay — পাঠানো হয়েছে</string>
+    <string name="companion_backup_page_title">ZenPlay — ব্যাকআপ পুনরুদ্ধার করুন</string>
+    <string name="companion_image_page_title">ZenPlay — পটভূমির ছবি</string>
+    <string name="companion_download_page_title">ZenPlay — ব্যাকআপ ডাউনলোড করুন</string>
+    <string name="local_sync_browser_title">ZenPlay লোকাল সিঙ্ক</string>
+    <string name="local_sync_browser_body">এই ঠিকানাটি আপনার অন্য ডিভাইসের ZenPlay অ্যাপের জন্য। সেখানে লোকাল সিঙ্ক খুলে তালিকা থেকে এই ডিভাইসটি বেছে নিন।</string>
+    <string name="common_own_tv_user">ZenPlay ব্যবহারকারী</string>
+</resources>

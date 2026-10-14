@@ -16,7 +16,7 @@ and a surprise regression (a library locale folder that slipped past the filter)
 
 ```
 AAPT2=~/Library/Android/sdk/build-tools/<version>/aapt2   # or $ANDROID_HOME/build-tools/<v>/aapt2
-APK=app/build/outputs/apk/standard/release/app-standard-release-unsigned.apk
+APK=app/build/outputs/apk/normal/release/app-normal-release-unsigned.apk
 
 stat -f "%z" "$APK"                         # total APK bytes (macOS; `stat -c %s` on Linux)
 unzip -l "$APK" | grep resources.arsc       # resources.arsc stored size + compression
@@ -36,7 +36,7 @@ the locale-filtered string table only.
 | `resources.arsc` stored (compressed) | 40,008 bytes, stored uncompressed |
 | Packaged locale configs | `en`, `en-rGB` (verified via `aapt2 dump configurations` + `check_pseudo_locales.py --mode release`) |
 | Pseudolocales in release | none (verified) |
-| Build | `assembleStandardRelease`, arm64-v8a + armeabi-v7a ABI split, R8 optimization on |
+| Build | `assembleNormalRelease`, arm64-v8a + armeabi-v7a, R8 optimization on |
 
 ## Phase 4e comparison template
 

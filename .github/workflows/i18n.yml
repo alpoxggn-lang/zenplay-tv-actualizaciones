@@ -86,7 +86,7 @@ jobs:
         run: python3 tools/i18n/check_text_overflow.py
 
   pseudo:
-    # Builds the debug + release standard APKs and inspects their resource tables. Heavier than the
+    # Builds the debug + release Normal APKs and inspects their resource tables. Heavier than the
     # other two jobs, so it is its own job rather than piggy-backed on android.yml — and skipped on
     # push, where android.yml already assembles main.
     if: ${{ github.event_name != 'push' && !(github.event_name == 'pull_request' && startsWith(github.head_ref, 'bump/core-')) }}
@@ -104,13 +104,13 @@ jobs:
           # 'tools' is obsolete and Google removed it from the SDK repository; the
           # action still asks for it by default, which fails the whole setup step.
           packages: 'platform-tools'
-      - name: Assemble standard debug + release APKs
-        run: ./gradlew :app:assembleStandardDebug :app:assembleStandardRelease --console=plain
+      - name: Assemble Normal debug + release APKs
+        run: ./gradlew :app:assembleNormalDebug :app:assembleNormalRelease --console=plain
       - name: Verify pseudolocale packaging
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
         run: |
-          DBG=$(ls app/build/outputs/apk/standard/debug/*.apk | head -1)
-          REL=$(ls app/build/outputs/apk/standard/release/*.apk | head -1)
+          DBG=$(ls app/build/outputs/apk/normal/debug/*.apk | head -1)
+          REL=$(ls app/build/outputs/apk/normal/release/*.apk | head -1)
           python3 tools/i18n/check_pseudo_locales.py --apk "$DBG" --mode debug
           python3 tools/i18n/check_pseudo_locales.py --apk "$REL" --mode release

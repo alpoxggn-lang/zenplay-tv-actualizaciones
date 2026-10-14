@@ -36,7 +36,7 @@ dependencyResolutionManagement {
 // owntv.corePath unset and resolves the pinned version instead.
 // Set it in ~/.gradle/gradle.properties, never here:  owntv.corePath=E:/MEGA/CODE/AI/OwnTV_Core
 val configuredCorePath = providers.gradleProperty("owntv.corePath").orNull?.takeIf { it.isNotBlank() }
-val bundledCorePath = file("../OwnTV_Core").takeIf {
+val bundledCorePath = file("OwnTV_Core").takeIf {
     it.resolve("settings.gradle.kts").isFile
 }
 when {

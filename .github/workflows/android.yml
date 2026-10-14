@@ -109,17 +109,16 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      # One variant, not `test`/`lint` across every flavor: standard+debug is the variant the JVM
-      # tests are written against, and the ABI flavors differ only in the packaged native libs.
+      # Exercise both compatibility profiles: they share features, but Legacy changes runtime limits.
       - name: Unit tests
         run: |
           chmod +x ./gradlew
-          ./gradlew testStandardDebugUnitTest --stacktrace
+          ./gradlew testNormalDebugUnitTest testLegacyDebugUnitTest --stacktrace
 
       # abortOnError = true in app/build.gradle.kts, so this fails the job on a lint error.
       - name: Lint
         if: always()   # report both verdicts in one run instead of one failure at a time
-        run: ./gradlew lintStandardDebug --stacktrace
+        run: ./gradlew lintNormalDebug lintLegacyDebug --stacktrace
 
       - name: Upload test and lint reports
         if: always()   # the reports matter most when the step above failed
@@ -139,9 +138,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       IS_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
-      # Set at runtime via $GITHUB_ENV in the "Name the APK" step. Declared here (empty) so static
-      # linters don't flag the later ${{ env.APK_OUT }} references as "context access might be invalid".
-      APK_OUT: ""
+      # Set at runtime via $GITHUB_ENV in the naming step. Declared here so workflow linters know
+      # both versioned asset variables exist before the release step evaluates them.
+      NORMAL_OUT: ""
+      LEGACY_OUT: ""
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -256,16 +256,17 @@ jobs:
           # it as the env var it always did.
         run: |
           chmod +x ./gradlew
+          if [ "$IS_TAG" = "true" ] && [ -z "$KEYSTORE_FILE" ]; then
+            echo "::error::A tagged ZenPlay release requires the production signing secrets."
+            exit 1
+          fi
           if [ -n "$KEYSTORE_FILE" ]; then
-            echo "Building signed release APKs (both ABI flavors)"
-            ./gradlew assembleRelease --stacktrace
-            # Product flavors split the output by flavor subfolder:
-            #   standard/release  -> arm (arm64-v8a + armeabi-v7a) — the main download
-            #   x86_64/release    -> x86_64 — emulator / rare x86 box
-            ARM_SRC=$(ls app/build/outputs/apk/standard/release/*.apk | head -n1)
-            X86_SRC=$(ls app/build/outputs/apk/x86_64/release/*.apk | head -n1)
-            echo "Built arm:    $ARM_SRC"
-            echo "Built x86_64: $X86_SRC"
+            echo "Building the two signed ZenPlay compatibility APKs"
+            ./gradlew :app:assembleNormalRelease :app:assembleLegacyRelease --stacktrace
+            NORMAL_SRC=$(ls app/build/outputs/apk/normal/release/*.apk | head -n1)
+            LEGACY_SRC=$(ls app/build/outputs/apk/legacy/release/*.apk | head -n1)
+            echo "Built Normal: $NORMAL_SRC"
+            echo "Built Legacy: $LEGACY_SRC"
 
             # Every public update must keep the signer used by ZenPlay TV 2.1.8. A different key
             # produces Android's generic "App not installed"/signature-conflict error on every
@@ -276,7 +277,7 @@ jobs:
               exit 1
             fi
             EXPECTED_SIGNER="956cde3e1d4d96e3367a28860614e9a26998faa39bb2a94363fbf10a7b4c2f2c"
-            for APK in "$ARM_SRC" "$X86_SRC"; do
+            for APK in "$NORMAL_SRC" "$LEGACY_SRC"; do
               "$APKSIGNER" verify --verbose "$APK"
               ACTUAL_SIGNER=$("$APKSIGNER" verify --print-certs "$APK" \
                 | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
@@ -285,48 +286,49 @@ jobs:
                 echo "::error::$APK is signed by $ACTUAL_SIGNER, not the ZenPlay update key."
                 exit 1
               fi
+              if unzip -l "$APK" | grep -q 'lib/x86_64/'; then
+                echo "::error::$APK contains development-only x86_64 libraries."
+                exit 1
+              fi
             done
-            echo "ARM_SRC=$ARM_SRC" >> "$GITHUB_ENV"
-            echo "X86_SRC=$X86_SRC" >> "$GITHUB_ENV"
+            echo "NORMAL_SRC=$NORMAL_SRC" >> "$GITHUB_ENV"
+            echo "LEGACY_SRC=$LEGACY_SRC" >> "$GITHUB_ENV"
           else
-            echo "Building debug APK"
-            ./gradlew assembleDebug
-            # Debug also builds both flavors; standard (arm) is the one most likely to be tested on a
-            # real device. Surface it as the primary artifact; x86_64 debug is still in its folder.
-            SRC=$(ls app/build/outputs/apk/standard/debug/*.apk | head -n1)
-            echo "Built: $SRC"
-            echo "ARM_SRC=$SRC" >> "$GITHUB_ENV"
+            echo "Building unsigned/debug Normal and Legacy APKs"
+            ./gradlew :app:assembleNormalDebug :app:assembleLegacyDebug
+            NORMAL_SRC=$(ls app/build/outputs/apk/normal/debug/*.apk | head -n1)
+            LEGACY_SRC=$(ls app/build/outputs/apk/legacy/debug/*.apk | head -n1)
+            echo "Built Normal: $NORMAL_SRC"
+            echo "Built Legacy: $LEGACY_SRC"
+            echo "NORMAL_SRC=$NORMAL_SRC" >> "$GITHUB_ENV"
+            echo "LEGACY_SRC=$LEGACY_SRC" >> "$GITHUB_ENV"
           fi
 
-      - name: Name the ZenPlay TV APKs
+      - name: Name the ZenPlay Universal APKs
         run: |
           mkdir -p dist
           if [ "$IS_TAG" = "true" ]; then
-            OUT="ZenPlay-TV-v${{ steps.ver.outputs.name }}.apk"
+            NORMAL_OUT="ZenPlay-v${{ steps.ver.outputs.name }}.apk"
+            LEGACY_OUT="ZenPlayLegacy-v${{ steps.ver.outputs.name }}.apk"
           else
-            OUT="ZenPlay-TV-dev-${GITHUB_SHA::7}.apk"
+            NORMAL_OUT="ZenPlay-dev-${GITHUB_SHA::7}.apk"
+            LEGACY_OUT="ZenPlayLegacy-dev-${GITHUB_SHA::7}.apk"
           fi
-          cp "$ARM_SRC" "dist/$OUT"
-          echo "APK_OUT=$OUT" >> "$GITHUB_ENV"
-          echo "Packaged dist/$OUT (arm: arm64-v8a + armeabi-v7a)"
-          # Tag builds also ship a stable-named copy so a fixed URL always serves the latest signed
-          # release: https://github.com/<repo>/releases/latest/download/ZenPlay-TV.apk
-          # (used by the Fire TV Downloader code and any "always-latest" sideload link).
+          cp "$NORMAL_SRC" "dist/$NORMAL_OUT"
+          cp "$LEGACY_SRC" "dist/$LEGACY_OUT"
+          echo "NORMAL_OUT=$NORMAL_OUT" >> "$GITHUB_ENV"
+          echo "LEGACY_OUT=$LEGACY_OUT" >> "$GITHUB_ENV"
+          echo "Packaged Normal and Legacy (arm64-v8a + armeabi-v7a)"
+          # Stable aliases keep Downloader and customer links unchanged across every future version.
           if [ "$IS_TAG" = "true" ]; then
-            cp "$ARM_SRC" "dist/ZenPlay-TV.apk"
-            # Separate x86_64 build for emulators / rare Intel boxes. Pinned to the version only —
-            # no always-latest copy, since real devices (the Downloader audience) don't need it.
-            if [ -n "$X86_SRC" ]; then
-              cp "$X86_SRC" "dist/ZenPlay-TV-x86_64-v${{ steps.ver.outputs.name }}.apk"
-              echo "Packaged dist/ZenPlay-TV-x86_64-v${{ steps.ver.outputs.name }}.apk"
-            fi
+            cp "$NORMAL_SRC" "dist/ZenPlay.apk"
+            cp "$LEGACY_SRC" "dist/ZenPlayLegacy.apk"
           fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          # Upload the whole dist/ so both the arm APK and the x86_64 APK are captured.
-          name: ${{ env.APK_OUT }}
+          name: ZenPlay-Android-${{ github.sha }}
           path: dist/*
           if-no-files-found: error
 
@@ -368,11 +370,12 @@ jobs:
         if: env.IS_TAG == 'true'
         uses: softprops/action-gh-release@v3
         with:
-          name: ZenPlay TV ${{ github.ref_name }}
+          name: ZenPlay Universal ${{ github.ref_name }}
           files: |
-            dist/${{ env.APK_OUT }}
-            dist/ZenPlay-TV.apk
-            dist/ZenPlay-TV-x86_64-v${{ steps.ver.outputs.name }}.apk
+            dist/${{ env.NORMAL_OUT }}
+            dist/${{ env.LEGACY_OUT }}
+            dist/ZenPlay.apk
+            dist/ZenPlayLegacy.apk
           body_path: dist/RELEASE_NOTES.md
           # Must stay false: it appends GitHub's auto commit/PR list under the body, which buries the
           # short in-app notes the updater dialog shows.

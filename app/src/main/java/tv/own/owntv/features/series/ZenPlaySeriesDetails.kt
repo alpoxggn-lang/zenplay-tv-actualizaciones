@@ -38,6 +38,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -395,7 +396,11 @@ internal fun ZenPlaySeriesDetails(
                                 modifier = Modifier.weight(1f),
                             )
                             Text(
-                                stringResource(R.string.zenplay_details_episode_count, eps.size),
+                                pluralStringResource(
+                                    R.plurals.zenplay_details_episode_count,
+                                    eps.size,
+                                    eps.size,
+                                ),
                                 fontSize = 13.sp,
                                 color = fg.copy(alpha = 0.7f),
                             )

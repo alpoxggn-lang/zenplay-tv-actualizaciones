@@ -100,7 +100,7 @@ private enum class Step { ZENPLAY_LOGIN, WELCOME, DISPLAY_SIZE, DISCLAIMER, SETU
 @Composable
 fun Onboarding(firstRun: Boolean, onDone: (Long?) -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     val vm: SetupViewModel = koinViewModel()
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val resources = androidx.compose.ui.platform.LocalResources.current
     val defaultProfileName = stringResource(R.string.setup_default_profile)
     val defaultIptvName = stringResource(R.string.setup_default_iptv)
     val defaultPlaylistName = stringResource(R.string.setup_name_default_playlist)
@@ -119,7 +119,7 @@ fun Onboarding(firstRun: Boolean, onDone: (Long?) -> Unit, onCancel: () -> Unit,
     var importOrigin by remember { mutableStateOf(Step.ADD_SOURCE) }
     val startZenImport: (ZenPlayLogin) -> Unit = { login ->
         vm.startXtream(
-            name = context.getString(login.plan.labelRes),
+            name = resources.getString(login.plan.labelRes),
             server = login.plan.server,
             username = login.username,
             password = login.password,

@@ -132,7 +132,7 @@ More in **[extras/screenshots/](extras/screenshots/)**.
 | Database | Room 2.8.5 + Paging 3.5.1 + FTS4 |
 | DI · Network · Images | Koin 4.2.2 · OkHttp 5 · Coil 3.6.0 |
 
-`minSdk 26`, `targetSdk 36`, `compileSdk 37`, `applicationId tv.own.owntv`.
+`minSdk 26`, `targetSdk 36`, `compileSdk 37`, `applicationId tv.zenplay.universal`.
 
 > **Build note:** there is no `kotlin-android` plugin. AGP 9 ships its own Kotlin, but the Compose
 > compiler plugin pulls the Kotlin Gradle plugin up to the `kotlin` version in
@@ -185,40 +185,40 @@ OwnTV_Mobile/  (separate repo, the phone and tablet app on the same core)
   architecture reference.
 - 📺 **[Player design reference](extras/player.html)** — an interactive mockup of the player UI.
 
-## 📥 Installing (Fire TV / Android TV)
+## 📥 Installing ZenPlay
 
-Grab the signed APK from the [**latest release**](https://github.com/ahXN00/OwnTV/releases/latest).
-This link always points at the newest build:
+The release pipeline publishes exactly two stable links whose names never change:
 
 ```
-https://github.com/ahXN00/OwnTV/releases/latest/download/OwnTV.apk
+https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/latest/download/ZenPlay.apk
+https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/latest/download/ZenPlayLegacy.apk
 ```
 
-- **Fire TV** — install **Downloader** (by AFTVnews), then enter code **`4308278`**. Enable *Apps from
-  Unknown Sources* if prompted.
-- **Android TV / Google TV** — Downloader is on Google Play too, so the same code works. Or sideload
-  with *Send files to TV*, a USB drive, or `adb install OwnTV.apk`.
+- **ZenPlay.apk** — Normal, recommended for modern Android/Google/Fire TV, phones and tablets.
+- **ZenPlayLegacy.apk** — the same app and account data, with conservative effects and decoder
+  limits for lower-memory hardware.
 
-> Install only from this repository's Releases. Each release ships **two APKs**:
-> `OwnTV.apk` (arm — every real TV box, and what the Downloader code fetches) and
-> `OwnTV-x86_64-vX.X.X.apk` (emulators and rare Intel boxes).
+Both editions currently require Android 8.0/API 26 or Fire OS 7+. They share package id and signer,
+so install only one Universal edition on a device. The Universal package is intentionally different
+from the previous TV-only and mobile apps, so it does not replace them. Public APKs contain ARM64
+and ARMv7; x86_64 is development only and is never uploaded to Releases.
 
 ## 🛠️ Building & running
 
 > Only if you want to build from source — otherwise just
 > **[install the APK](#-installing-fire-tv--android-tv)**.
 
-Half the app lives in the separate [OwnTV_Core](https://github.com/ahXN00/OwnTV_Core) repository;
-Gradle downloads it from OwnTV's public Maven repository by itself — **no account or token needed**.
+The audited OwnTV Core source used by this build is bundled under `OwnTV_Core/`, so a checkout builds
+the exact updater, database and player contracts shipped by ZenPlay.
 
-1. **Get the code** — `git clone https://github.com/ahXN00/OwnTV.git` (or download the ZIP).
+1. **Get the ZenPlay Universal source** from its configured repository or archive.
 2. **Open it** in [Android Studio](https://developer.android.com/studio) and let Gradle sync.
-3. **Pick the build variant** — `standard` for real devices and arm emulators, `x86_64` for x86_64
-   emulators. This matters: the native player only loads on a matching ABI.
+3. **Pick the build variant** — `normalDebug` or `legacyDebug`. For an x86_64 emulator only, add
+   `-Pzenplay.devX86=true`; that flag is rejected by public Release builds.
 4. **Run** ▶. Minimum **Android 8.0 / API 26**.
 
-Command line: `./gradlew assembleDebug` (`gradlew.bat` on Windows). The APK lands in
-`app/build/outputs/apk/`.
+Command line: `./gradlew :app:assembleNormalDebug :app:assembleLegacyDebug` (`gradlew.bat` on
+Windows). APKs land in `app/build/outputs/apk/normal/` and `app/build/outputs/apk/legacy/`.
 
 **Tested on** a real TCL Google TV and the Android Studio emulator (Android TV and Google TV images).
 

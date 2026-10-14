@@ -77,6 +77,7 @@ import tv.own.owntv.core.settings.RemoteShortcutBindings
 import tv.own.owntv.player.MiniPlayer
 import tv.own.owntv.player.MpvVideoSurface
 import tv.own.owntv.player.OwnTVPlayer
+import tv.own.owntv.platform.AdaptiveDeviceProfile
 import tv.own.owntv.player.PlayerHud
 import tv.own.owntv.features.shell.components.AvatarPickerDialog
 import tv.own.owntv.features.shell.components.ExitDialog
@@ -112,6 +113,7 @@ private enum class PlayerMode { NONE, FULLSCREEN, MINI, AUDIO }
  */
 @Composable
 fun OwnTVShell(
+    deviceProfile: AdaptiveDeviceProfile,
     selectedSection: MainSection,
     visibleSections: Set<MainSection>,
     onSelectSection: (MainSection) -> Unit,
@@ -298,9 +300,11 @@ fun OwnTVShell(
     val multiviewEnabled by settingsRepo.multiviewEnabled.collectAsStateWithLifecycle(false)
     val recordWatchingEnabled by settingsRepo.recordWhatImWatching.collectAsStateWithLifecycle(false)
     val liveLeftRightRewinds by settingsRepo.liveLeftRightRewinds.collectAsStateWithLifecycle(false)
-    val multiviewTileCount by settingsRepo.multiviewTiles.collectAsStateWithLifecycle(
+    val requestedMultiviewTileCount by settingsRepo.multiviewTiles.collectAsStateWithLifecycle(
         tv.own.owntv.core.live.DEFAULT_MULTIVIEW_TILES,
     )
+    val multiviewTileCount = requestedMultiviewTileCount.coerceAtMost(deviceProfile.maxMultiviewTiles)
+    val multiviewAvailable = multiviewEnabled && deviceProfile.maxMultiviewTiles > 1
     val enginePool = koinInject<tv.own.owntv.player.LiveEnginePool>()
     val streamRegistry = koinInject<tv.own.owntv.core.live.OpenStreamRegistry>()
     var multiview by remember { mutableStateOf<tv.own.owntv.features.multiview.MultiviewState?>(null) }
@@ -578,7 +582,7 @@ fun OwnTVShell(
     // The kept selection is spent the moment a channel actually starts playing full screen: that
     // press is the "and now open it" the plan describes, and nothing else in the app claims it.
     LaunchedEffect(playerMode, previewChannel?.id, multiviewSelection.size) {
-        if (multiviewEnabled &&
+        if (multiviewAvailable &&
             multiview == null &&
             multiviewSelection.isNotEmpty() &&
             playerMode == PlayerMode.FULLSCREEN &&
@@ -1520,7 +1524,7 @@ fun OwnTVShell(
                     onOpenChannelList = if (isTunedLive && liveCanZap) { { showChannelList = true } } else null,
                     // Live channels only, and only once Multiview is switched on: the channel on screen
                     // becomes tile 1 and the grid takes over. Everything it needs is already tuned.
-                    onMultiview = if (multiviewEnabled && isTunedLive && previewChannel != null) {
+                    onMultiview = if (multiviewAvailable && isTunedLive && previewChannel != null) {
                         { multiview = openMultiview(previewChannel, emptyList()) }
                     } else {
                         null

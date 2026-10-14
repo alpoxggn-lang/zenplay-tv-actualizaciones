@@ -44,13 +44,16 @@ android {
     }
 
     defaultConfig {
-        applicationId = "tv.zenplay.app"
+        // ZenPlay Universal is a new product line. It intentionally uses a different package from
+        // the previous TV-only and mobile applications so installing it never replaces either one.
+        // Keep this id stable after the first public build: Normal and Legacy are two editions of
+        // this same universal application and therefore share this id and the signing key.
+        applicationId = "tv.zenplay.universal"
         minSdk = 26
         targetSdk = 36
         // CI injects both values from the release tag (see .github/workflows/android.yml). v2.1.8 was
-        // published with versionCode 100011, so every later build must stay above that installed
-        // floor. The local fallback uses the corrected semantic mapping for 2.1.8; the next tagged
-        // release (2.1.9) becomes 120109 and can update either existing 2.1.8 package in place.
+        // published with versionCode 100011. The universal line keeps a monotonically increasing
+        // value from the outset so every future Universal release can update both of its editions.
         versionCode = (System.getenv("VERSION_CODE") ?: "120108").toInt()
         // Keep the fallback name honest. Local release candidates may be installed over the public
         // 2.1.8 because their versionCode is newer, but the updater still compares the visible name.
@@ -92,24 +95,40 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // ABI split via product flavors: real Android TV / Fire TV hardware is arm (arm64-v8a covers
-    // everything modern; armeabi-v7a keeps the original 32-bit Nvidia Shield TV 2015/2017, which runs
-    // Android 9+ but is 32-bit). x86_64 is emulator-only — no real TV box uses it. Shipping them as
-    // separate flavors halves the download users get via the Downloader code (~49MB vs the old 104MB
-    // universal APK that bundled all 4 ABIs), which fixes the "parse error on install" reports caused
-    // by truncated downloads. x86 (32-bit Intel) is dropped entirely — even emulators use x86_64.
+    // ZenPlay publishes exactly two APKs from one adaptive codebase: Normal and Legacy. Both APKs
+    // support the ARM ABIs used by Android TV, Google TV, Fire TV, phones and tablets; they keep the
+    // same Universal applicationId/signing identity so a customer installs one or the other, never
+    // two Universal copies. Neither edition replaces the previous TV-only or mobile applications.
+    // Legacy is a capability profile (lower effects, conservative buffers and fewer simultaneous
+    // decoders), not a second application. Its API floor remains 26 until OwnTV Core/player-core and
+    // every native dependency have passed the older-API audit — lowering only this module would make
+    // an APK that builds but crashes at runtime.
     //
-    // Local dev: pick a flavor in Android Studio's "Build Variants" panel before Run (standard for
-    // real devices / arm emulators, x86_64 for an x86_64 emulator). `assembleRelease` builds BOTH.
-    flavorDimensions += "abi"
+    // x86_64 is development-only. Pass -Pzenplay.devX86=true when a local emulator or baseline-profile
+    // recording needs it; release CI does not set the property, so public APKs stay small.
+    val devX86Enabled = providers.gradleProperty("zenplay.devX86").orNull == "true"
+    val releaseTaskRequested = gradle.startParameter.taskNames.any { task ->
+        task.contains("release", ignoreCase = true) && !task.contains("benchmark", ignoreCase = true)
+    }
+    if (devX86Enabled && releaseTaskRequested) {
+        throw GradleException("zenplay.devX86 is development-only and cannot be used for a public Release APK")
+    }
+    val publishedAbis = mutableListOf("arm64-v8a", "armeabi-v7a").apply {
+        if (devX86Enabled) add("x86_64")
+    }
+    flavorDimensions += "compatibility"
     productFlavors {
-        create("standard") {
-            dimension = "abi"
-            ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+        create("normal") {
+            dimension = "compatibility"
+            buildConfigField("boolean", "LEGACY_BUILD", "false")
+            buildConfigField("String", "UPDATE_ASSET_NAME", "\"ZenPlay.apk\"")
+            ndk { abiFilters += publishedAbis }
         }
-        create("x86_64") {
-            dimension = "abi"
-            ndk { abiFilters += listOf("x86_64") }
+        create("legacy") {
+            dimension = "compatibility"
+            buildConfigField("boolean", "LEGACY_BUILD", "true")
+            buildConfigField("String", "UPDATE_ASSET_NAME", "\"ZenPlayLegacy.apk\"")
+            ndk { abiFilters += publishedAbis }
         }
     }
 
@@ -122,7 +141,7 @@ android {
     //     owntv.keyAlias=...
     //     owntv.keyPassword=...
     //
-    // With those set, `./gradlew :app:assembleStandardRelease` produces a release-signed APK in any
+    // With those set, `./gradlew :app:assembleNormalRelease` produces a release-signed APK in any
     // terminal with no env-var dance, so a local dev build installs straight over a published
     // release (`adb install -r`) and upgrade/migration testing works with real data.
     // When neither source is configured — fork CI, or a fresh clone — nothing here applies and
@@ -144,8 +163,7 @@ android {
             }
         }
         // API 26+ understands v2, while v1 also helps a few old OEM TV file managers inspect the
-        // package before handing it to Android. v3 future-proofs the same-key update chain. All three
-        // cover the same APK and remain compatible with the v2-only ZenPlay 2.1.8 already installed.
+        // package before handing it to Android. v3 future-proofs the Universal same-key update chain.
         configureEach {
             enableV1Signing = true
             enableV2Signing = true
@@ -177,8 +195,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // ZenPlay: without a release keystore, sign with this computer's debug key so the APK
-            // installs over the earlier ZenPlay builds (which were debug-signed on the same machine).
+            // Local unsigned environments use the debug key only for installable test builds. Public
+            // Universal releases still require the configured production keystore in CI.
             signingConfig = if (releaseKeystore != null) {
                 signingConfigs.getByName("release")
             } else {
@@ -257,11 +275,10 @@ androidComponents {
     }
 }
 
-// The profile is a list of code paths, not machine code, so one recording serves every ABI flavor.
-// mergeIntoMain writes it to `src/main/generated/baselineProfiles/` instead of the recording flavor's
-// own source set — required here because it has to be recorded on an x86_64 emulator (baseline
-// profile collection needs API 33+, and the arm TV boxes this app targets are older) yet shipped in
-// the `standard` arm APK.
+// The profile is a list of code paths, not machine code, so one recording serves both compatibility
+// flavors. mergeIntoMain writes it to `src/main/generated/baselineProfiles/`. Record the Normal
+// variant on a connected API 33+ device; for an x86_64 emulator pass -Pzenplay.devX86=true so that
+// development-only ABI is included without bloating either public APK.
 baselineProfile {
     mergeIntoMain = true
 }
@@ -402,8 +419,8 @@ dependencies {
 
     // The recorded startup journey (audit ST1). Regenerate with
     // `./gradlew :app:generateBaselineProfile` whenever the startup path changes. `mergeIntoMain`
-    // collapses the per-variant tasks into that single one; it records against :app's x86_64 flavor
-    // (see baselineprofile/build.gradle.kts) because collection needs an API 33+ device.
+    // collapses them into one generated profile; recording targets :app's Normal flavor on an
+    // API 33+ device (see baselineprofile/build.gradle.kts).
     baselineProfile(project(":baselineprofile"))
 
     // Database (Room, via KSP) + Paging

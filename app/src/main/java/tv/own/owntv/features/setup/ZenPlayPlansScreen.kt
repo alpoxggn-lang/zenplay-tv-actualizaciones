@@ -27,7 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -56,7 +56,7 @@ import tv.own.owntv.ui.theme.OwnTVTheme
 @Composable
 fun ZenPlayPlansScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val colors = OwnTVTheme.colors
-    val context = LocalContext.current
+    val resources = LocalResources.current
     val shellVm: ShellViewModel = koinViewModel()
     val setupVm: SetupViewModel = koinViewModel()
     val settings = koinInject<tv.own.owntv.core.settings.SettingsRepository>()
@@ -79,10 +79,10 @@ fun ZenPlayPlansScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 setupVm.reset()
                 importing = false
                 loginPlan = null
-                message = context.getString(R.string.zenplay_plans_added)
+                message = resources.getString(R.string.zenplay_plans_added)
             }
             is SourceImporter.ImportState.Failed -> {
-                loginError = st.failure.displayText(context.resources)
+                loginError = st.failure.displayText(resources)
                 setupVm.reset()
                 importing = false
             }
@@ -104,7 +104,7 @@ fun ZenPlayPlansScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                     val pid = settings.activeProfileId.first()
                     setupVm.addZenPlan(
                         profileId = pid,
-                        name = context.getString(chosen.labelRes),
+                        name = resources.getString(chosen.labelRes),
                         server = chosen.server,
                         username = username,
                         password = password,
@@ -209,7 +209,10 @@ fun ZenPlayPlansScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                             label = stringResource(R.string.zenplay_plans_use),
                             onClick = {
                                 shellVm.setActivePlaylist(source.id)
-                                message = context.getString(R.string.zenplay_plans_switched, context.getString(p.labelRes))
+                                message = resources.getString(
+                                    R.string.zenplay_plans_switched,
+                                    resources.getString(p.labelRes),
+                                )
                             },
                             icon = OwnTVIcon.SWAP,
                             modifier = buttonModifier,

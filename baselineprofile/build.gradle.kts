@@ -27,14 +27,12 @@ android {
         minSdk = 28
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        missingDimensionStrategy("abi", "x86_64")
+        missingDimensionStrategy("compatibility", "normal")
     }
 
-    // :app is multi-flavor (abi), but recording only ever happens on an x86_64 emulator: collection
-    // needs API 33+ and the arm TV boxes this app targets are older, while the arm `standard` APK
-    // can't install on an x86_64 emulator. So this module always drives :app's x86_64 flavor.
-    // `mergeIntoMain = true` in :app writes the result to src/main, so the arm APK still ships it —
-    // the profile is a list of code paths, not machine code, so one recording serves every ABI.
+    // :app has Normal and Legacy compatibility flavors. Profiles are recorded against Normal and
+    // merged into main, so the same code-path profile ships in both APKs. Use a connected ARM64
+    // API 33+ device, or pass -Pzenplay.devX86=true for an x86_64 emulator.
     targetProjectPath = ":app"
 }
 

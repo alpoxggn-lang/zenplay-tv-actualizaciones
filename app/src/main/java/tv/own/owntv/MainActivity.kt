@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -49,6 +50,8 @@ import tv.own.owntv.features.profiles.ProfilesViewModel
 import tv.own.owntv.features.setup.Onboarding
 import tv.own.owntv.features.shell.OwnTVShell
 import tv.own.owntv.features.shell.ShellViewModel
+import tv.own.owntv.platform.resolveDeviceCapabilities
+import tv.own.owntv.platform.toAdaptiveDeviceProfile
 import tv.own.owntv.ui.theme.BlurredBackdrop
 import tv.own.owntv.ui.theme.BackdropLuminanceMap
 import tv.own.owntv.core.theme.GlassConfig
@@ -240,6 +243,18 @@ open class MainActivity : ComponentActivity() {
             val visibleSections by viewModel.visibleSections.collectAsStateWithLifecycle()
             val activeProfileId by viewModel.activeProfileId.collectAsStateWithLifecycle()
             val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
+            val configuration = LocalConfiguration.current
+            val deviceProfile = remember(
+                configuration.screenWidthDp,
+                configuration.screenHeightDp,
+                BuildConfig.LEGACY_BUILD,
+            ) {
+                applicationContext.resolveDeviceCapabilities(
+                    widthDp = configuration.screenWidthDp,
+                    heightDp = configuration.screenHeightDp,
+                    legacyBuild = BuildConfig.LEGACY_BUILD,
+                ).toAdaptiveDeviceProfile()
+            }
 
             val profilesVm: ProfilesViewModel = koinViewModel()
             val profileState by profilesVm.profileState.collectAsStateWithLifecycle()
@@ -324,6 +339,9 @@ open class MainActivity : ComponentActivity() {
                 val glassActive = glassConfig.enabled
                 val effectiveGlass = glassConfig.copy(
                     scope = if (glassActive) glassConfig.scope else emptySet(),
+                    blurStrength = if (deviceProfile.reducedEffects) 0f else glassConfig.blurStrength,
+                    depthEffects = glassConfig.depthEffects && !deviceProfile.reducedEffects,
+                    glint = glassConfig.glint && !deviceProfile.reducedEffects,
                     hasBackdrop = bgImagePath.isNotBlank(),
                 )
                 // Root viewport size in px — the area the background image fills and that the blurred
@@ -422,6 +440,7 @@ open class MainActivity : ComponentActivity() {
                                 modifier = Modifier.fillMaxSize(),
                             )
                             shellReady -> OwnTVShell(
+                                deviceProfile = deviceProfile,
                                 selectedSection = selectedSection,
                                 visibleSections = visibleSections,
                                 onSelectSection = viewModel::selectSection,

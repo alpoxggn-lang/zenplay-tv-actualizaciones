@@ -15,20 +15,21 @@ import org.junit.runner.RunWith
  *
  * **Must be recorded on an API 33+ device** — below that the benchmark library refuses to collect
  * without root, and the arm TV boxes this app targets are typically API 31/32. In practice that
- * means an Android TV **emulator** (API 33+, x86_64 image), with exactly one device attached:
+ * means an ARM64 device, or an Android TV **emulator** (API 33+, x86_64 image), with exactly one
+ * device attached. For the emulator, opt in to the development-only ABI:
  *
  * ```powershell
- * ./gradlew :app:generateBaselineProfile
+ * ./gradlew :app:generateBaselineProfile -Pzenplay.devX86=true
  * ```
  *
  * There is no per-variant `generate<Flavor>ReleaseBaselineProfile` task here — `mergeIntoMain = true`
- * collapses them into that one. It records against :app's **x86_64** flavor, which this module pins
- * with `missingDimensionStrategy("abi", "x86_64")`: the arm `standard` APK cannot install on an
- * x86_64 emulator, and the emulator is the only place recording can happen.
+ * collapses them into that one. It records against :app's **Normal** compatibility flavor, which
+ * this module pins with `missingDimensionStrategy("compatibility", "normal")`.
  *
  * `mergeIntoMain = true` in `app/build.gradle.kts` puts the result in
- * `app/src/main/generated/baselineProfiles/` so the emulator-recorded profile also ships in the
- * `standard` (arm) APK — the profile is a list of code paths, not machine code, so this is correct. **Regenerate it whenever the startup path changes materially** —
+ * `app/src/main/generated/baselineProfiles/` so the recorded profile ships in both the Normal and
+ * Legacy ARM APKs — the profile is a list of code paths, not machine code, so this is correct.
+ * **Regenerate it whenever the startup path changes materially** —
  * a stale profile silently stops helping, it does not fail the build.
  *
  * The journey is deliberately input-driven (D-pad only, no text/resource matching) so it records
@@ -39,7 +40,7 @@ import org.junit.runner.RunWith
  * opens the setup wizard, and a blind D-pad walk never escapes it — the profile then records the
  * wizard instead of the app, which is exactly what happened to the first recorded profile (555
  * entries for settings, 79 for setup, *one* each for home/movies/series/live/search). So: install
- * `:app:assembleX86_64BenchmarkRelease` by hand, complete the wizard, import a playlist, and only
+ * `:app:assembleNormalBenchmarkRelease -Pzenplay.devX86=true` by hand, complete the wizard, import a playlist, and only
  * then run the Gradle task — it reinstalls the same APK with `install -r`, which keeps that data.
  * A synthetic M3U served over `http://10.0.2.2:<port>/` from the host is enough and needs no real
  * credentials.

@@ -44,12 +44,12 @@ python3 tools/i18n/gen_supported_locales.py check
 python3 tools/i18n/test_i18n_tools.py
 
 ./gradlew \
-  :app:testStandardDebugUnitTest \
-  :app:lintStandardDebug
+  :app:testNormalDebugUnitTest \
+  :app:lintNormalDebug
 
 ./gradlew \
-  :app:assembleStandardDebug \
-  :app:assembleStandardRelease
+  :app:assembleNormalDebug \
+  :app:assembleNormalRelease
 ```
 
 After Phase 4a lands, use `python3 tools/i18n/validate_strings.py --report text` so the same

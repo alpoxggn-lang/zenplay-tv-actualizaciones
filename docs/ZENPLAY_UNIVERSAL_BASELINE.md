@@ -22,6 +22,15 @@ Fecha de inicio: 2026-10-13
 4. Series actualizadas y agregadas.
 5. TV en vivo.
 
+## Navegación adaptable
+
+- Android TV, Google TV y Fire TV muestran una sola navegación principal superior.
+- Las columnas izquierdas de TV en vivo, Películas y Series son navegadores contextuales de
+  categorías/contenido; nunca repiten el menú principal.
+- Teléfonos usan una sola barra inferior.
+- Tabletas usan barra inferior, rail o navegación superior según el ancho y la orientación, pero
+  nunca dos menús principales simultáneos.
+
 ## Reutilización
 
 La aplicación no se reescribe desde cero. La base inicial procede de ZenPlay TV, ZenPlay Mobile y
@@ -35,9 +44,15 @@ como referencia para una implementación propia.
 
 ## Línea base comprobada
 
-- La copia original de ZenPlay Mobile compila en `standardDebug`.
+- La copia original de ZenPlay Mobile compiló en su antiguo sabor `standardDebug`.
 - La copia original de ZenPlay TV tenía dos imports incompatibles en `TopBar.kt`.
-- La nueva base `ZenPlayUniversal` corrige esos imports y compila en `standardDebug`.
+- La nueva base `ZenPlayUniversal` corrige esos imports y compila/prueba en `normalDebug` y
+  `legacyDebug`.
+- Legacy ya activa un perfil conservador: reduce efectos de vidrio y limita multiview a dos ventanas
+  (una en equipos declarados de poca memoria). Su piso comprobado continúa siendo Android 8/API 26
+  y Fire OS 7 hasta auditar y reconstruir Core, player-core y libmpv para una API menor.
+- El actualizador distingue de forma exacta `ZenPlay.apk` y `ZenPlayLegacy.apk`; no selecciona el
+  primer APK ARM encontrado.
 - Las carpetas originales `ZenPlayTV` y `ZenPlayMobile` permanecen sin cambios.
 - Los tres originales gráficos entregados por el propietario se conservan en `brand/source/`.
 

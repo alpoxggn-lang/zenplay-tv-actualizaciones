@@ -1559,10 +1559,10 @@ These are covered by JVM/i18n regression tests and Android-test compilation/inst
 Build and static checks (commands to run, not run automatically):
 
 ```bash
-./gradlew :app:assembleStandardDebug
+./gradlew :app:assembleNormalDebug
 python3 tools/i18n/validate_strings.py --report text  # structural checks + informational coverage
 python3 tools/i18n/check_hardcoded_strings.py  # literal baseline, may only shrink
-./gradlew :app:lintStandardDebug               # MissingTranslation remains informational
+./gradlew :app:lintNormalDebug                 # MissingTranslation remains informational
 ```
 
 End-to-end on a real device or TV emulator, per the reproduce-before-you-believe rule.
@@ -1663,8 +1663,8 @@ Also add a second occurrence of an already-baselined literal in the same file an
 Size and memory for the explicitly packaged build (catalogue-only entries are excluded):
 
 ```bash
-unzip -v app/build/outputs/apk/standard/release/*.apk | grep resources.arsc   # expect Stored, 0%
-ls -l app/build/outputs/apk/standard/release/*.apk                           # track against the filtered Phase 0 baseline
+unzip -v app/build/outputs/apk/normal/release/*.apk | grep resources.arsc   # expect Stored, 0%
+ls -l app/build/outputs/apk/normal/release/*.apk                           # track against the filtered Phase 0 baseline
 adb shell dumpsys meminfo tv.own.owntv                                       # on a 1GB box, post-switch
 ```
 

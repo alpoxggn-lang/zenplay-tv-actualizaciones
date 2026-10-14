@@ -50,7 +50,10 @@
     <string name="zenplay_details_play_episode">Reproducir T%1$d:E%2$d</string>
     <string name="zenplay_details_continue_episode">Continuar T%1$d:E%2$d</string>
     <string name="zenplay_details_season">Temporada %1$d</string>
-    <string name="zenplay_details_episode_count">%1$d episodios</string>
+    <plurals name="zenplay_details_episode_count">
+        <item quantity="one">%1$d episodio</item>
+        <item quantity="other">%1$d episodios</item>
+    </plurals>
     <string name="zenplay_nav_favorites">Favoritos</string>
     <string name="zenplay_record_title">¿Cuánto tiempo quieres grabar?</string>
     <string name="zenplay_record_until_end">Hasta que termine el programa (%1$s)</string>

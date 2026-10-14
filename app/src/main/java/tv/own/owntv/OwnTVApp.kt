@@ -91,6 +91,9 @@ class OwnTVApp : Application(), SingletonImageLoader.Factory, androidx.work.Conf
         tv.own.owntv.core.CoreBuildInfo.devTools = BuildConfig.DEV_TOOLS
         tv.own.owntv.core.CoreBuildInfo.debug = BuildConfig.DEBUG
         tv.own.owntv.core.CoreBuildInfo.diagnosticBuild = BuildConfig.DIAGNOSTIC_BUILD
+        // Each compatibility edition follows only its own stable GitHub asset. Exact matching is
+        // essential because Normal and Legacy share the same package, signer and ARM ABIs.
+        tv.own.owntv.core.CoreBuildInfo.releaseAssetName = BuildConfig.UPDATE_ASSET_NAME
         // This app's own releases, which the in-app updater asks about. Core defaults to exactly
         // this value, so the line changes nothing today — it is here so the television names its own
         // repository instead of relying on core to guess it, the same as the phone app does. A

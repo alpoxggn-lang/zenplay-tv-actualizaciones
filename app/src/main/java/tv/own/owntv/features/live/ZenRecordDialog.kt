@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -40,7 +41,6 @@ import tv.own.owntv.ui.components.OwnTVPopup
 import tv.own.owntv.ui.theme.OwnTVTheme
 import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 
 /** ZenPlay's red "record" dot. */
 @Composable
@@ -73,6 +73,7 @@ internal fun ZenRecordDurationDialog(
     onDismiss: () -> Unit,
 ) {
     val colors = OwnTVTheme.colors
+    val locale = LocalLocale.current.platformLocale
     val first = remember { FocusRequester() }
     var custom by remember { mutableIntStateOf(60) }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
@@ -108,7 +109,7 @@ internal fun ZenRecordDurationDialog(
             Spacer(Modifier.height(20.dp))
 
             if (untilEnd != null) {
-                val endLabel = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(programmeEndMs!!))
+                val endLabel = SimpleDateFormat("HH:mm", locale).format(Date(programmeEndMs))
                 ZenRecordChoice(
                     label = stringResource(R.string.zenplay_record_until_end, endLabel),
                     modifier = Modifier.fillMaxWidth().focusRequester(first),

@@ -40,7 +40,7 @@ import tv.own.owntv.core.companion.CompanionLink
 import tv.own.owntv.core.i18n.LocaleStore
 import tv.own.owntv.core.i18n.SupportedLocales
 import tv.own.owntv.core.settings.StartupMode
-import tv.own.owntv.mobile.BuildConfig
+import tv.own.owntv.mobile.MobileHostInfo
 import tv.own.owntv.mobile.R
 import tv.own.owntv.mobile.ui.components.MobileBottomSheet
 import tv.own.owntv.mobile.ui.components.MobileButton
@@ -165,7 +165,7 @@ fun AboutPage(modifier: Modifier = Modifier) {
                     modifier = Modifier.padding(bottom = MobileDimens.GapSmall),
                 )
                 Text(
-                    text = stringResource(R.string.settings_about_version, BuildConfig.VERSION_NAME),
+                    text = stringResource(R.string.settings_about_version, MobileHostInfo.versionName),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                 )

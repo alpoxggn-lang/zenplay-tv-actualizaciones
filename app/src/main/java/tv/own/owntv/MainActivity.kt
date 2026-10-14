@@ -50,6 +50,11 @@ import tv.own.owntv.features.profiles.ProfilesViewModel
 import tv.own.owntv.features.setup.Onboarding
 import tv.own.owntv.features.shell.OwnTVShell
 import tv.own.owntv.features.shell.ShellViewModel
+import tv.own.owntv.mobile.ui.components.MobileSheetHost
+import tv.own.owntv.mobile.ui.shell.MobileShell
+import tv.own.owntv.mobile.ui.theme.MobileTheme
+import tv.own.owntv.platform.ZenShell
+import tv.own.owntv.platform.shell
 import tv.own.owntv.platform.resolveDeviceCapabilities
 import tv.own.owntv.platform.toAdaptiveDeviceProfile
 import tv.own.owntv.ui.theme.BlurredBackdrop
@@ -439,7 +444,7 @@ open class MainActivity : ComponentActivity() {
                                 onAddProfile = { gateSession.startAddingProfile() },
                                 modifier = Modifier.fillMaxSize(),
                             )
-                            shellReady -> OwnTVShell(
+                            shellReady && deviceProfile.shell == ZenShell.REMOTE -> OwnTVShell(
                                 deviceProfile = deviceProfile,
                                 selectedSection = selectedSection,
                                 visibleSections = visibleSections,
@@ -476,6 +481,16 @@ open class MainActivity : ComponentActivity() {
                                 },
                                 modifier = Modifier.fillMaxSize(),
                             )
+                            shellReady -> MobileTheme(applyDensityScaling = false) {
+                                MobileSheetHost {
+                                    MobileShell(
+                                        windowWidthDp = configuration.screenWidthDp,
+                                        hostManagesAccess = true,
+                                        onRefreshContent = { viewModel.refreshAllNow() },
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+                            }
                             // No unexpected combination of asynchronous state may fall through to
                             // the shell. The known loading/onboarding/gate cases are above; a blank
                             // frame is safer than rendering protected content if a new state is added.

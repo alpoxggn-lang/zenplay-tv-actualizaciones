@@ -135,16 +135,33 @@ fun MobileShell(
     windowWidthDp: Int,
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
+    hostManagesAccess: Boolean = false,
+    onRefreshContent: (() -> Unit)? = null,
 ) {
     val shellViewModel: ShellViewModel = koinViewModel()
     val sections by shellViewModel.visibleSections.collectAsStateWithLifecycle()
 
-    val profilesViewModel: ProfilesViewModel = koinViewModel()
-    val gateSession: ProfileGateSession = koinViewModel()
-    val loginViewModel: ZenPlayLoginViewModel = koinViewModel()
-    val loginCompletedProfileId by loginViewModel.completedProfileId.collectAsStateWithLifecycle()
-    val profiles by profilesViewModel.profiles.collectAsStateWithLifecycle()
-    val activeProfileId by profilesViewModel.activeProfileId.collectAsStateWithLifecycle()
+    // The universal host already owns onboarding, profile selection and the PIN gate. Re-running
+    // that flow here would display two different access UIs one after the other. The legacy mobile
+    // entry point can still own the flow by leaving [hostManagesAccess] false.
+    val profilesViewModel: ProfilesViewModel? = if (hostManagesAccess) null else koinViewModel()
+    val gateSession: ProfileGateSession? = if (hostManagesAccess) null else koinViewModel()
+    val loginViewModel: ZenPlayLoginViewModel? = if (hostManagesAccess) null else koinViewModel()
+    val loginCompletedProfileId by if (loginViewModel != null) {
+        loginViewModel.completedProfileId.collectAsStateWithLifecycle()
+    } else {
+        remember { mutableStateOf<Long?>(null) }
+    }
+    val profiles by if (profilesViewModel != null) {
+        profilesViewModel.profiles.collectAsStateWithLifecycle()
+    } else {
+        remember { mutableStateOf<List<tv.own.owntv.core.database.entity.ProfileEntity>?>(emptyList()) }
+    }
+    val activeProfileId by if (profilesViewModel != null) {
+        profilesViewModel.activeProfileId.collectAsStateWithLifecycle()
+    } else {
+        remember { mutableStateOf<Long?>(0L) }
+    }
     // Authentication is profile-bound: invalidate an old unlock before a changed active id can turn
     // into a shell destination, whether it changed by a deletion, a restore, or another writer.
     // Observe completion above every early return: activation can remove the login screen before
@@ -152,10 +169,10 @@ fun MobileShell(
     LaunchedEffect(activeProfileId, loginCompletedProfileId) {
         val completed = loginCompletedProfileId
         if (completed != null && completed == activeProfileId) {
-            gateSession.unlock(completed)
-            loginViewModel.consumeCompletion()
+            gateSession?.unlock(completed)
+            loginViewModel?.consumeCompletion()
         } else {
-            gateSession.invalidateIfNotProfile(activeProfileId)
+            gateSession?.invalidateIfNotProfile(activeProfileId)
         }
     }
 
@@ -179,30 +196,30 @@ fun MobileShell(
      */
     val loadedProfiles = profiles ?: return
     val activeId = activeProfileId ?: return
-    if (activeId < 0L || loadedProfiles.none { it.id == activeId }) {
+    if (!hostManagesAccess && (activeId < 0L || loadedProfiles.none { it.id == activeId })) {
         // The wizard reports the profile it activated, and that is the unlock — the same handover the
         // television does. Without it the shell would have a valid active profile and no session for
         // it, which is the one state that shows the chooser.
         ZenPlayLoginScreen(
             modifier = modifier,
-            vm = loginViewModel,
+            vm = requireNotNull(loginViewModel),
         )
         return
     }
-    val gateRequired = profileGateRequired(loadedProfiles)
-    if (!shellMayCompose(
+    val gateRequired = !hostManagesAccess && profileGateRequired(loadedProfiles)
+    if (!hostManagesAccess && !shellMayCompose(
             profiles = loadedProfiles,
             activeProfileId = activeId,
             authenticatedProfileId = loginCompletedProfileId?.takeIf { it == activeId }
-                ?: gateSession.unlockedProfileId,
+                ?: gateSession?.unlockedProfileId,
             gateRequired = gateRequired,
         )
     ) {
         ProfileGate(
             profiles = loadedProfiles,
-            onEntered = { gateSession.unlock(it.id) },
+            onEntered = { gateSession?.unlock(it.id) },
             modifier = modifier,
-            vm = profilesViewModel,
+            vm = requireNotNull(profilesViewModel),
         )
         return
     }
@@ -322,8 +339,16 @@ fun MobileShell(
     val activePlaylistId by shellViewModel.activePlaylistId.collectAsStateWithLifecycle()
     var playlistSheet by remember { mutableStateOf(false) }
 
-    val catalogRefresh = (context.applicationContext as OwnTVMobileApp).catalogRefresh
-    val enqueuingRefresh by catalogRefresh.isEnqueuing.collectAsStateWithLifecycle()
+    val catalogRefresh = if (onRefreshContent == null) {
+        (context.applicationContext as? OwnTVMobileApp)?.catalogRefresh
+    } else {
+        null
+    }
+    val enqueuingRefresh by if (catalogRefresh != null) {
+        catalogRefresh.isEnqueuing.collectAsStateWithLifecycle()
+    } else {
+        remember { mutableStateOf(false) }
+    }
     val syncTracker: SyncActivityTracker = koinInject()
     val activeSyncs by syncTracker.active.collectAsStateWithLifecycle()
     val refreshing = enqueuingRefresh || playlists.any { source ->
@@ -331,20 +356,25 @@ fun MobileShell(
             (activePlaylistId < 0 || playlists.none { it.id == activePlaylistId } || source.id == activePlaylistId)
     }
     val refreshScope = rememberCoroutineScope()
-    val zenEpg: tv.own.owntv.mobile.zenplay.ZenPlayEpg = koinInject()
+    val zenEpg: tv.own.owntv.mobile.zenplay.ZenPlayEpg? =
+        if (onRefreshContent == null) koinInject() else null
     val requestRefresh: () -> Unit = {
         // ZenPlay "Actualizar": choose Tendencias again and refresh the TV guide too.
         tv.own.owntv.mobile.ui.screens.home.ZenPlayFeaturedCache.invalidate(context)
-        refreshScope.launch { runCatching { zenEpg.ensureAll(force = true) } }
-        refreshScope.launch {
-            val message = when (catalogRefresh.refreshNow()) {
-                ZenPlayRefreshRequestResult.QUEUED -> R.string.zenplay_refresh_requested
-                ZenPlayRefreshRequestResult.IN_PROGRESS -> R.string.zenplay_refresh_preparing
-                ZenPlayRefreshRequestResult.NO_SOURCES -> R.string.zenplay_refresh_no_sources
-                ZenPlayRefreshRequestResult.FAILED -> R.string.zenplay_refresh_failed
-                ZenPlayRefreshRequestResult.PARTIAL -> R.string.zenplay_refresh_partial
+        if (onRefreshContent != null) {
+            onRefreshContent()
+        } else {
+            refreshScope.launch { runCatching { zenEpg?.ensureAll(force = true) } }
+            refreshScope.launch {
+                val message = when (catalogRefresh?.refreshNow() ?: ZenPlayRefreshRequestResult.FAILED) {
+                    ZenPlayRefreshRequestResult.QUEUED -> R.string.zenplay_refresh_requested
+                    ZenPlayRefreshRequestResult.IN_PROGRESS -> R.string.zenplay_refresh_preparing
+                    ZenPlayRefreshRequestResult.NO_SOURCES -> R.string.zenplay_refresh_no_sources
+                    ZenPlayRefreshRequestResult.FAILED -> R.string.zenplay_refresh_failed
+                    ZenPlayRefreshRequestResult.PARTIAL -> R.string.zenplay_refresh_partial
+                }
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
             }
-            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         }
     }
 

@@ -373,11 +373,9 @@ val verifyI18nLiterals = tasks.register<VerifyI18nLiterals>("verifyI18nLiterals"
 // tasks.named("preBuild") { dependsOn(verifyI18nLiterals) }
 
 dependencies {
-    // Phase 1: keep the existing phone/tablet UI on the host's compile graph while it is inert.
-    // `compileOnly` is intentional: until MobileShell is mounted, Cast/Camera integrations and
-    // mobile resources must not silently enter the current TV/Fire TV APK. Phase 2 switches this
-    // to `implementation` together with the explicit adaptive host boundary.
-    compileOnly(project(":mobile-ui"))
+    // Phase 2: the host selects exactly one shell from the capability profile. The library has no
+    // Application or launcher Activity of its own, so adding it cannot create a second entry point.
+    implementation(project(":mobile-ui"))
 
     // The shared data/settings/sync module. It lives in its own repository now — see
     // https://github.com/ahXN00/OwnTV_Core. Set owntv.corePath in ~/.gradle/gradle.properties to

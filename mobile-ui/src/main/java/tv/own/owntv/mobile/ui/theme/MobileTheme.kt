@@ -30,7 +30,10 @@ import tv.own.owntv.core.theme.UiZoom
  * restore. ZenPlay supplies its own blue-purple surface palette for both light and dark themes.
  */
 @Composable
-fun MobileTheme(content: @Composable () -> Unit) {
+fun MobileTheme(
+    applyDensityScaling: Boolean = true,
+    content: @Composable () -> Unit,
+) {
     val settings: SettingsRepository = koinInject()
     val themeMode by settings.themeMode.collectAsStateWithLifecycle(ThemeMode.DARK)
     val accent by settings.accent.collectAsStateWithLifecycle(AccentColor.BLUE)
@@ -48,6 +51,7 @@ fun MobileTheme(content: @Composable () -> Unit) {
         fonts = fonts,
         glass = glass,
         animations = animations,
+        applyDensityScaling = applyDensityScaling,
         content = content,
     )
 }
@@ -62,6 +66,7 @@ fun MobileTheme(
     fonts: FontCustomization = FontCustomization(),
     glass: GlassConfig = GlassConfig(),
     animations: AnimationLevel = AnimationLevel.FULL,
+    applyDensityScaling: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val isDark = when (themeMode) {
@@ -74,10 +79,16 @@ fun MobileTheme(
     CompositionLocalProvider(
         // UI Zoom scales every dp and the font setting scales every sp, so a layout keeps its
         // proportions at any setting instead of text outgrowing the box it sits in.
-        LocalDensity provides Density(
-            density = base.density * UiZoom.factor(uiZoomPercent),
-            fontScale = base.fontScale * UiFontScale.factor(fonts.sizePercent),
-        ),
+        LocalDensity provides if (applyDensityScaling) {
+            Density(
+                density = base.density * UiZoom.factor(uiZoomPercent),
+                fontScale = base.fontScale * UiFontScale.factor(fonts.sizePercent),
+            )
+        } else {
+            // The universal Activity already applied the same persisted zoom/font factors around
+            // both shells. Applying them again here would make touch layouts grow twice.
+            base
+        },
         LocalGlass provides glass,
         LocalAnimations provides animations,
         LocalAccentOnVideo provides accentOnVideo(accent, customAccent),

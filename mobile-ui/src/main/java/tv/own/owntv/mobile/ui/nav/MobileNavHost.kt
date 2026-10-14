@@ -15,7 +15,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import kotlinx.coroutines.flow.SharedFlow
-import tv.own.owntv.mobile.BuildConfig
+import tv.own.owntv.mobile.MobileHostInfo
 import tv.own.owntv.mobile.dev.ThemeGalleryScreen
 import tv.own.owntv.mobile.ui.screens.DevRoute
 import tv.own.owntv.mobile.ui.screens.FavoritesScreen
@@ -265,7 +265,7 @@ fun MobileNavHost(
                 onCancel = { navController.popBackStack() },
             )
         }
-        if (BuildConfig.DEV_TOOLS) {
+        if (MobileHostInfo.devTools) {
             composable(DevRoute.GALLERY.route) { ThemeGalleryScreen() }
         }
     }

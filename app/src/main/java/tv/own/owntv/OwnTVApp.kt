@@ -95,6 +95,8 @@ class OwnTVApp : Application(), SingletonImageLoader.Factory, androidx.work.Conf
         // Each compatibility edition follows only its own stable GitHub asset. Exact matching is
         // essential because Normal and Legacy share the same package, signer and ARM ABIs.
         tv.own.owntv.core.CoreBuildInfo.releaseAssetName = BuildConfig.UPDATE_ASSET_NAME
+        tv.own.owntv.mobile.MobileHostInfo.versionName = BuildConfig.VERSION_NAME
+        tv.own.owntv.mobile.MobileHostInfo.devTools = BuildConfig.DEV_TOOLS
         // This app's own releases, which the in-app updater asks about. Core defaults to exactly
         // this value, so the line changes nothing today — it is here so the television names its own
         // repository instead of relying on core to guess it, the same as the phone app does. A
@@ -117,6 +119,9 @@ class OwnTVApp : Application(), SingletonImageLoader.Factory, androidx.work.Conf
             androidLogger(if (BuildConfig.DEBUG) Level.ERROR else Level.NONE)
             androidContext(this@OwnTVApp)
             modules(coreModule, appModule, databaseModule, dataModule, playerModule)
+            // Mobile-only types are additive: shared readers/player/session remain the exact same
+            // instances above, so switching layout never creates a second playback or data graph.
+            modules(tv.own.owntv.mobile.di.universalHostModules)
         }
         Perf.stamp("koin-started")
         // Offline movie/episode downloads were removed from the TV product. Cancel work persisted by

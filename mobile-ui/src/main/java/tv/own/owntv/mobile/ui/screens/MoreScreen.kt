@@ -26,7 +26,7 @@ import org.koin.compose.koinInject
 import tv.own.owntv.core.database.dao.SourceDao
 import tv.own.owntv.core.settings.SettingsRepository
 import tv.own.owntv.core.sync.work.CatalogSyncScheduler
-import tv.own.owntv.mobile.BuildConfig
+import tv.own.owntv.mobile.MobileHostInfo
 import tv.own.owntv.mobile.R
 import tv.own.owntv.mobile.ui.components.MobileGroup
 import tv.own.owntv.mobile.ui.components.MobileListRow
@@ -122,7 +122,7 @@ fun MoreScreen(
 
             // Dev-only, and English-only by the same rule the harness itself lives under: R8 removes
             // both rows and both screens from a published build.
-            if (BuildConfig.DEV_TOOLS) {
+            if (MobileHostInfo.devTools) {
                 MobileGroup {
                     MobileListRow(
                         title = "Theme gallery",
@@ -145,7 +145,7 @@ fun MoreScreen(
  * every playlist on the active profile, right now, ignoring the timer.
  *
  * Deliberately unthrottled beyond its own two-second chip, for the reason the television's is:
- * `BuildConfig.DEV_TOOLS` is false in every published APK, so R8 deletes this function and the row
+ * `MobileHostInfo.devTools` is false in every published APK, so R8 deletes this function and the row
  * that calls it, and a maintainer chasing a bug needs to press it as often as the bug requires.
  *
  * English-only, like the two rows above it and by the same exception — it never reaches a user. The

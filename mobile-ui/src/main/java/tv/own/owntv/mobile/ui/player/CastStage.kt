@@ -161,7 +161,7 @@ fun CastStage(
             // archive the receiver can reach, so it gets no bar rather than a bar that lies.
             if (!live && duration > 0L) {
                 CastProgress(position = position, duration = duration, onSeekTo = { target ->
-                    engine.seekBy(target - engine.position.value)
+                    engine.seekTo(target)
                 })
             }
 

@@ -22,9 +22,12 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import tv.own.owntv.core.database.dao.CategoryDao
+import tv.own.owntv.core.content.ContentAccessPolicy
+import tv.own.owntv.core.customize.CustomizeKeys
+import tv.own.owntv.core.database.dao.ChannelDao
 import tv.own.owntv.core.database.dao.FavoriteDao
 import tv.own.owntv.core.database.dao.HistoryDao
+import tv.own.owntv.core.database.dao.MovieDao
 import tv.own.owntv.core.database.dao.ProfileDao
 import tv.own.owntv.core.database.dao.SourceDao
 import tv.own.owntv.core.database.dao.resolveExistingProfileId
@@ -51,7 +54,6 @@ import tv.own.owntv.player.OwnTVPlayer
  * debouncing, the recents list, favourites, and how a result is played.
  */
 class SearchViewModel(
-    private val categoryDao: CategoryDao,
     private val historyDao: HistoryDao,
     private val profileDao: ProfileDao,
     private val sourceDao: SourceDao,
@@ -62,6 +64,9 @@ class SearchViewModel(
     val player: OwnTVPlayer,
     private val externalPlayerLauncher: tv.own.owntv.core.player.ExternalPlayerLauncher,
     private val streamUrlResolver: tv.own.owntv.core.stalker.StreamUrlResolver,
+    private val channelDao: ChannelDao,
+    private val movieDao: MovieDao,
+    private val contentAccess: ContentAccessPolicy,
 ) : ViewModel() {
 
     /** Global "External player" toggle — the screen must NOT open the fullscreen in-app player when on. */
@@ -151,8 +156,20 @@ class SearchViewModel(
      *  The shell calls this and then hands playback to LiveViewModel's shared path (F05), so a channel
      *  opened from Search gets the same engine routing as one opened from Live TV. */
     fun noteChannelPlayed(channel: ChannelEntity) {
-        record(MediaType.LIVE, channel.id)
-        rememberCurrentQuery()
+        viewModelScope.launch {
+            val pid = currentProfileId() ?: return@launch
+            val stored = channelDao.getById(channel.id)?.takeIf { it.sourceId == channel.sourceId } ?: return@launch
+            if (!contentAccess.allows(
+                    pid,
+                    MediaType.LIVE,
+                    CustomizeKeys.channel(stored),
+                    stored.categoryId,
+                    stored.sourceId,
+                )
+            ) return@launch
+            record(pid, MediaType.LIVE, stored.id)
+            rememberCurrentQuery()
+        }
     }
 
     // A second live-start path used to live here as a "standalone host" fallback: mpv straight away, no
@@ -163,7 +180,15 @@ class SearchViewModel(
     fun playMovie(movie: MovieEntity) {
         viewModelScope.launch {
             val pid = currentProfileId() ?: return@launch
-            if (!tv.own.owntv.core.content.AdultCategoryClassifier.allows(pid, movie.categoryId, profileDao, categoryDao)) return@launch
+            val stored = movieDao.getById(movie.id)?.takeIf { it.sourceId == movie.sourceId } ?: return@launch
+            if (!contentAccess.allows(
+                    pid,
+                    MediaType.MOVIE,
+                    CustomizeKeys.movie(stored),
+                    stored.categoryId,
+                    stored.sourceId,
+                )
+            ) return@launch
             val source = sourceDao.getById(movie.sourceId)
             // Stalker: resolve the stored cmd before EITHER branch — the external player must never
             // receive a raw portal cmd (plan §7), and neither should the in-app engines.
@@ -185,6 +210,8 @@ class SearchViewModel(
                     userAgent = source?.userAgent,
                     httpHeaders = tv.own.owntv.core.settings.SourceOverrides.headersWithReferer(movie.httpHeaders, source),
                 )
+                record(pid, MediaType.MOVIE, stored.id)
+                rememberCurrentQuery()
                 return@launch
             }
             player.play(
@@ -198,19 +225,16 @@ class SearchViewModel(
                 // screen applies in the other.
                 contentKey = tv.own.owntv.core.player.enginePinKey(movie.sourceId, "MOVIE", movie.remoteId),
             )
+            record(pid, MediaType.MOVIE, stored.id)
+            rememberCurrentQuery()
         }
-        record(MediaType.MOVIE, movie.id)
-        rememberCurrentQuery()
     }
 
-    private fun record(type: MediaType, itemId: Long) {
-        viewModelScope.launch {
-            val pid = currentProfileId() ?: return@launch
-            runCatching {
-                historyDao.record(WatchHistoryEntity(profileId = pid, mediaType = type, itemId = itemId))
-            }.onFailure { t ->
-                Log.w(TAG, "record history failed profile=$pid type=$type itemId=$itemId", t)
-            }
+    private suspend fun record(profileId: Long, type: MediaType, itemId: Long) {
+        runCatching {
+            historyDao.record(WatchHistoryEntity(profileId = profileId, mediaType = type, itemId = itemId))
+        }.onFailure { t ->
+            Log.w(TAG, "record history failed profile=$profileId type=$type itemId=$itemId", t)
         }
     }
 

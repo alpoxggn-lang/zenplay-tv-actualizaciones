@@ -159,7 +159,7 @@ class LivePreviewEngine(
     private val settingsRepo = settings
     /** Device memory budget, resolved once and reused across player rebuilds (see [build]). */
     private var playerBudget: PlayerBudget? = null
-    private var surface: Surface? = null
+    private val surfaceHandoff = SurfaceHandoffLease<Surface>()
     private var muted: Boolean = true
     // Volume-0 is NOT a reliable mute. When the TV/AVR declares AC3/E-AC3/DTS support, MediaCodecAudioRenderer
     // picks the passthrough "decoder" and the compressed 5.1 bitstream is forwarded to HDMI untouched —
@@ -1232,10 +1232,15 @@ class LivePreviewEngine(
         }
     }
 
-    /** Attach the preview SurfaceView's surface, or null when it's destroyed. */
+    /** Attach the preview SurfaceView's surface, or clear it immediately for a real teardown. */
     fun setSurface(s: Surface?) {
-        surface = s
-        if (s != null) player?.setVideoSurface(s) else player?.clearVideoSurface()
+        if (s == null) {
+            surfaceHandoff.clear()
+            player?.clearVideoSurface()
+        } else {
+            surfaceHandoff.attach(s)
+            player?.setVideoSurface(s)
+        }
     }
 
     /** Enable/disable Media3's own Surface.setFrameRate mechanism. This is separate from the window-level
@@ -1252,12 +1257,18 @@ class LivePreviewEngine(
         if (turnedOn) ensureFpsMeasurement()
     }
 
-    /** Detach [s] only if it's still the surface in use. A surface-generation bump swaps one SurfaceView
-     *  for another, and the outgoing view's `surfaceDestroyed` can land after the incoming view's
-     *  `surfaceCreated` — a plain `setSurface(null)` would then throw away the good new surface. */
+    /**
+     * Detach [s] only if it is still current and no replacement arrives during the short view handoff.
+     *
+     * Besides the old-after-new ordering, some navigation stacks deliver old-destroyed one frame before
+     * new-created. Clearing MediaCodec's output in that gap can strand it buffering forever; the lease
+     * keeps the decoder on its existing output until the replacement surface is ready.
+     */
     fun detachSurface(s: Surface) {
-        if (surface !== s) return
-        setSurface(null)
+        val ticket = surfaceHandoff.requestDetach(s) ?: return
+        mainHandler.postDelayed({
+            if (surfaceHandoff.commit(ticket)) player?.clearVideoSurface()
+        }, SurfaceHandoffLease.DETACH_GRACE_MS)
     }
 
     /** Start (or switch to) [url] as a muted/unmuted preview. Never throws — a stream ExoPlayer can't set
@@ -1404,7 +1415,7 @@ class LivePreviewEngine(
             }
             val p = player ?: build().also { player = it }
             // May be null right after a surface-generation bump — setSurface attaches it a frame later.
-            surface?.let { p.setVideoSurface(it) }
+            surfaceHandoff.current?.let { p.setVideoSurface(it) }
             // Assume video until the tracks arrive, so a muted preview never leaks a frame of audio while
             // the stream is still being sniffed; rebuildTracks() relaxes this for audio-only streams.
             tune.hasVideoTrack = true
@@ -1683,7 +1694,7 @@ class LivePreviewEngine(
         player?.run { removeListener(listener); release() }
         player = null
         videoRenderer = null
-        surface = null
+        surfaceHandoff.clear()
         currentUrl = null
         sawUhd = false
         _state.value = State.IDLE
@@ -2237,7 +2248,7 @@ class LivePreviewEngine(
             if (currentUrl != url) return@postDelayed // zapped away / stopped while we waited
             runCatching {
                 val p = build().also { player = it }
-                surface?.let { p.setVideoSurface(it) }
+                surfaceHandoff.current?.let { p.setVideoSurface(it) }
                 applyMute(force = true)
                 // A rebuilt player is a blank player: it knows nothing of the user's audio/subtitle
                 // language preferences, and nothing of Audio Mode being on. Without these two the retry
@@ -2273,7 +2284,7 @@ class LivePreviewEngine(
         if (!_audioOnly.value) return
         _audioOnly.value = false
         setVideoTrackDisabled(false)
-        surface?.let { player?.setVideoSurface(it) }
+        surfaceHandoff.current?.let { player?.setVideoSurface(it) }
     }
 
     /**

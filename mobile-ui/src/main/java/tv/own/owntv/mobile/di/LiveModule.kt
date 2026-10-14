@@ -40,6 +40,7 @@ val liveModule = module {
             userDataWriter = get(),
             cast = get(),
             recordings = get(),
+            contentAccess = get(),
             // L2 - live's second engine, its own instance for the whole session. See PlayerModule
             // for why it is not one of Multiview's pooled tiles.
             exo = get(),

@@ -83,17 +83,20 @@ fun ChannelDetailScreen(
     // it: opening the full screen player, and the player's own mini-player button, which pops this
     // screen on its way past and says through [LocalMiniRequested] that the stream was asked for.
     val miniRequested = LocalMiniRequested.current
-    var toFullscreen by remember { mutableStateOf(false) }
+    // A stable state holder is read at disposal time. Navigation may dispose this destination in the
+    // same frame as the tap, and capturing a plain composition value can stop the stream being handed
+    // to the full-screen route.
+    val preservePlaybackOnDispose = remember { mutableStateOf(false) }
     DisposableEffect(Unit) {
         onDispose {
-            if (!toFullscreen && !miniRequested.value) {
+            if (!preservePlaybackOnDispose.value && !miniRequested.value) {
                 tuner.stop()
                 vodTuner.stop()
             }
         }
     }
     val openFullscreen = {
-        toFullscreen = true
+        preservePlaybackOnDispose.value = true
         onFullscreen()
     }
 

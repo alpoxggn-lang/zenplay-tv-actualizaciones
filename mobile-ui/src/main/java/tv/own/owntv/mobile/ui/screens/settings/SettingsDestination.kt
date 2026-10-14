@@ -29,13 +29,17 @@ fun SettingsGroupPage(group: SettingsGroup, onOpenRoute: (String) -> Unit) {
 }
 
 /**
- * One leaf page. [onAddSource] is the setup flow, which is a route outside settings altogether and
- * so stays the caller's business in both layouts.
+ * One leaf page. ZenPlay keeps the historical playlist route only so restored navigation state can
+ * recover safely; opening it returns to the source settings page and never exposes source editing.
  */
 @Composable
 fun SettingsLeafPage(leaf: SettingsLeaf, onOpenRoute: (String) -> Unit, onAddSource: () -> Unit) {
     when (leaf) {
-        SettingsLeaf.PLAYLISTS -> SettingsPlaylistsPage(onAddSource = onAddSource)
+        SettingsLeaf.PLAYLISTS -> SettingsSourcesPage(
+            onOpenLeaf = { target ->
+                if (target != SettingsLeaf.PLAYLISTS) onOpenRoute(target.route)
+            },
+        )
         SettingsLeaf.EPG_SOURCES -> SettingsEpgSourcesPage()
         SettingsLeaf.GLASS_EFFECT -> SettingsGlassPage()
         SettingsLeaf.FONTS -> SettingsFontsPage()

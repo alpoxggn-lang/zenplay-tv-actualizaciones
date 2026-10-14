@@ -13,8 +13,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import tv.own.owntv.core.content.ContentAccessPolicy
+import tv.own.owntv.core.database.dao.ChannelDao
 import tv.own.owntv.core.database.dao.RecordingDao
 import tv.own.owntv.core.database.dao.SourceDao
+import tv.own.owntv.core.database.entity.ChannelEntity
 import tv.own.owntv.core.database.entity.RecordingEntity
 import tv.own.owntv.core.live.OpenStreamRegistry
 import tv.own.owntv.core.live.StreamGrant
@@ -55,8 +58,8 @@ class RecordingEngine(
     /** Only to resolve a stored `filePath` into something writable — a document needs a resolver. */
     private val context: Context,
     private val recordingDao: RecordingDao,
-    /** Only to read the channel's declared DRM — see the refusal at the top of [attemptRecord]. */
-    private val channelDao: tv.own.owntv.core.database.dao.ChannelDao,
+    /** Re-reads the persisted channel for the execution gate and its current DRM declaration. */
+    private val channelDao: ChannelDao,
     private val client: OkHttpClient,
     private val sourceDao: SourceDao,
     private val streamUrlResolver: StreamUrlResolver,
@@ -64,6 +67,8 @@ class RecordingEngine(
     private val settings: SettingsRepository,
     private val connectivity: ConnectivityObserver,
     private val activityTracker: RecordingActivityTracker,
+    /** Final authorization gate, re-run when a scheduled row becomes due rather than only at UI time. */
+    private val contentAccess: ContentAccessPolicy,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     /** Recordings currently running, so one can be stopped precisely without touching the others. */
@@ -118,6 +123,17 @@ class RecordingEngine(
                 // stream (D3, mode b). Touching it would open a second connection, which is the one
                 // thing that mode exists to avoid.
                 if (row.streamUrl.isBlank()) continue
+                // A timer can fire hours or days after it was created. In that time its profile may
+                // have lost this source, the channel may have been replaced during sync, or parental
+                // and manual visibility rules may have changed. Re-read the persisted ChannelEntity
+                // and run the shared final policy immediately before spending a provider connection,
+                // creating a file or opening the network. CHANNEL_GONE is intentionally also used for
+                // a newly hidden/restricted channel so a kids profile is not told blocked content
+                // still exists.
+                if (!recordingExecutionAllowed(row, channelDao, contentAccess)) {
+                    markMissed(row, RecordingFailure.CHANNEL_GONE)
+                    continue
+                }
                 // Said as a MISSED row with a reason rather than by deferring the work. A download
                 // waits for Wi-Fi because the film is there tomorrow; a live programme is not.
                 if (meteredRefused) {
@@ -844,3 +860,31 @@ class RecordingEngine(
         const val POLL_MS = 2_000L
     }
 }
+
+/**
+ * Re-authorize a persisted scheduled row at its execution boundary.
+ *
+ * The row's source is checked against the channel as well as [ContentAccessPolicy]: a stale local
+ * channel id must never let a recording migrate silently to a different playlist after a catalogue
+ * replacement. Every uncertainty is a denial; callers must not open a stream or output file when
+ * this returns false.
+ */
+internal suspend fun recordingExecutionAllowed(
+    row: RecordingEntity,
+    channelById: suspend (Long) -> ChannelEntity?,
+    authorize: suspend (Long, ChannelEntity) -> Boolean,
+): Boolean {
+    val channel = channelById(row.channelId) ?: return false
+    if (channel.sourceId != row.sourceId) return false
+    return authorize(row.profileId, channel)
+}
+
+private suspend fun recordingExecutionAllowed(
+    row: RecordingEntity,
+    channelDao: ChannelDao,
+    contentAccess: ContentAccessPolicy,
+): Boolean = recordingExecutionAllowed(
+    row = row,
+    channelById = channelDao::getById,
+    authorize = { profileId, channel -> contentAccess.allows(profileId, channel) },
+)

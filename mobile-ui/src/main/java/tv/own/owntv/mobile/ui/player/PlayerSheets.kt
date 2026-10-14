@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,6 +42,7 @@ import tv.own.owntv.mobile.R
 import tv.own.owntv.mobile.ui.components.MobileSlider
 import tv.own.owntv.mobile.ui.components.MobileBottomSheet
 import tv.own.owntv.mobile.ui.components.MobileListRow
+import tv.own.owntv.mobile.ui.components.MobileIcons
 import tv.own.owntv.mobile.ui.components.SheetScroll
 import tv.own.owntv.mobile.ui.components.sheetListHeight
 import tv.own.owntv.mobile.ui.theme.MobileDimens
@@ -60,12 +62,18 @@ fun PlayerSheetHost(
      * they must come from that engine, not from a stopped mpv with no tracks to list.
      */
     player: PlaybackEngine,
+    /** Live has no playback speed, so the grouped settings sheet omits that row. */
+    isLive: Boolean = false,
+    /** Switches this one channel, film or episode between MPV and ExoPlayer. */
+    onToggleEngine: (() -> Unit)? = null,
     channels: List<ChannelEntity>,
     brightness: Float,
     onBrightness: (Float) -> Unit,
     onPickChannel: (ChannelEntity) -> Unit,
     /** Opens another sheet from inside this one — the subtitle sheet's way to the search. */
     onOpenSheet: (PlayerSheet) -> Unit,
+    /** Channel-list header. Null outside the live channel browser. */
+    onShowChannelCategories: (() -> Unit)? = null,
     /** True for a film or an episode: only those can have a subtitle searched or attached. */
     canAddSubtitles: Boolean,
     /** Opens the phone's document picker for a subtitle file already on the device. */
@@ -81,6 +89,13 @@ fun PlayerSheetHost(
     when (sheet) {
         PlayerSheet.VOLUME -> VolumeSheet(player, onDismiss)
         PlayerSheet.BRIGHTNESS -> BrightnessSheet(brightness, onBrightness, onDismiss)
+        PlayerSheet.PLAYBACK_SETTINGS -> PlaybackSettingsSheet(
+            player = player,
+            isLive = isLive,
+            onToggleEngine = onToggleEngine,
+            onOpenSheet = onOpenSheet,
+            onDismiss = onDismiss,
+        )
         PlayerSheet.SUBTITLES -> SubtitleSheet(
             player = player,
             canAddSubtitles = canAddSubtitles,
@@ -94,7 +109,13 @@ fun PlayerSheetHost(
         PlayerSheet.QUALITY -> QualitySheet(player, onDismiss)
         PlayerSheet.SPEED -> SpeedSheet(player, onDismiss)
         PlayerSheet.INFO -> StreamInfoSheet(player, onDismiss)
-        PlayerSheet.CHANNELS -> ChannelSheet(channels, onTuneToNumber, onPickChannel, onDismiss)
+        PlayerSheet.CHANNELS -> ChannelSheet(
+            channels = channels,
+            onTuneToNumber = onTuneToNumber,
+            onPick = onPickChannel,
+            onShowCategories = onShowChannelCategories,
+            onDismiss = onDismiss,
+        )
         PlayerSheet.CATCHUP -> catchup?.let { CatchupSheet(it, onDismiss) } ?: onDismiss()
         PlayerSheet.SLEEP_TIMER -> SleepTimerSheet(programmeEndMs = programmeEndMs, onDismiss = onDismiss)
     }
@@ -127,6 +148,89 @@ private fun BrightnessSheet(brightness: Float, onBrightness: (Float) -> Unit, on
             onChange = onBrightness,
         )
     }
+}
+
+/**
+ * One deliberate entry point for the controls that used to occupy five separate toolbar slots.
+ * Values remain live while the video plays behind this glass sheet. Quality lists only the real
+ * variants published by the engine; Auto keeps the existing maximum-first adaptive rule.
+ */
+@Composable
+private fun PlaybackSettingsSheet(
+    player: PlaybackEngine,
+    isLive: Boolean,
+    onToggleEngine: (() -> Unit)?,
+    onOpenSheet: (PlayerSheet) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val qualities by player.videoQualities.collectAsStateWithLifecycle()
+    val quality by player.videoQualityPick.collectAsStateWithLifecycle()
+    val speed by player.speed.collectAsStateWithLifecycle()
+    val aspect by player.zoomMode.collectAsStateWithLifecycle()
+    val engine by player.engineChip.collectAsStateWithLifecycle()
+    val qualityValue = when (quality) {
+        null -> stringResource(R.string.settings_auto)
+        else -> qualityLabel(quality!!)
+    }
+    val qualityLabels = mutableListOf<String>()
+    for (height in qualities.distinct().sortedDescending()) {
+        qualityLabels += qualityLabel(height)
+    }
+    val availableQuality = if (qualities.isEmpty()) {
+        qualityValue
+    } else {
+        stringResource(R.string.zenplay_player_quality_available, qualityValue, qualityLabels.joinToString(" · "))
+    }
+
+    MobileBottomSheet(
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.zenplay_player_playback_settings),
+    ) {
+        SheetScroll {
+            if (onToggleEngine != null) {
+                MobileListRow(
+                    title = stringResource(R.string.player_tool_engine),
+                    subtitle = engine,
+                    onClick = {
+                        onToggleEngine()
+                        onDismiss()
+                    },
+                )
+            }
+            MobileListRow(
+                title = stringResource(R.string.player_tool_quality),
+                subtitle = availableQuality,
+                onClick = { onOpenSheet(PlayerSheet.QUALITY) },
+            )
+            MobileListRow(
+                title = stringResource(R.string.player_tool_audio),
+                onClick = { onOpenSheet(PlayerSheet.AUDIO) },
+            )
+            MobileListRow(
+                title = stringResource(R.string.player_tool_subtitles),
+                onClick = { onOpenSheet(PlayerSheet.SUBTITLES) },
+            )
+            if (!isLive) {
+                MobileListRow(
+                    title = stringResource(R.string.player_tool_speed),
+                    subtitle = formatSpeed(speed),
+                    onClick = { onOpenSheet(PlayerSheet.SPEED) },
+                )
+            }
+            MobileListRow(
+                title = stringResource(R.string.player_tool_aspect),
+                subtitle = stringResource(aspect.labelRes),
+                onClick = { onOpenSheet(PlayerSheet.ASPECT) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun qualityLabel(height: Int): String = if (height >= 2_160) {
+    stringResource(R.string.zenplay_player_quality_4k)
+} else {
+    stringResource(R.string.settings_video_quality_lines, height)
 }
 
 @Composable
@@ -346,7 +450,7 @@ private fun QualitySheet(player: PlaybackEngine, onDismiss: () -> Unit) {
         SheetScroll {
             (listOf<Int?>(null) + heights).forEach { height ->
                 MobileListRow(
-                    title = if (height == null) stringResource(R.string.settings_auto) else stringResource(R.string.settings_video_quality_lines, height),
+                    title = if (height == null) stringResource(R.string.settings_auto) else qualityLabel(height),
                     subtitle = if (height == current) stringResource(R.string.common_on) else null,
                     onClick = { player.selectVideoQuality(height); onDismiss() },
                 )
@@ -432,12 +536,20 @@ private fun ChannelSheet(
     channels: List<ChannelEntity>,
     onTuneToNumber: (suspend (Int) -> DirectTune)?,
     onPick: (ChannelEntity) -> Unit,
+    onShowCategories: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
     MobileBottomSheet(
         onDismissRequest = onDismiss,
         title = stringResource(R.string.content_channel_overlay_title),
     ) {
+        if (onShowCategories != null) {
+            MobileListRow(
+                title = stringResource(R.string.zenplay_player_back_categories),
+                leading = { Icon(MobileIcons.ArrowBack, contentDescription = null) },
+                onClick = onShowCategories,
+            )
+        }
         if (onTuneToNumber != null) DirectTuneField(onTuneToNumber, onDismiss)
         LazyColumn(Modifier.heightIn(max = sheetListHeight())) {
             items(channels, key = { it.id }) { channel ->

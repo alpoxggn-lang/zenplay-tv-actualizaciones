@@ -339,10 +339,9 @@ class SettingsRepository(private val context: Context, private val localeStore: 
     private fun <T> positionFlow(key: Preferences.Key<T>): Flow<T?> =
         context.positionStore.data.map { it[key] }.distinctUntilChanged()
 
-    // Glass effect defaults: OFF (empty scope) — the glass look is strictly opt-in, the app looks
-    // unchanged until the user enables it in Settings → Glass Effect. Alpha/blur defaults are the
-    // "nice preset" applied once glass is turned on.
-    private val GLASS_SCOPE_DEFAULT_BITS: Int = 0
+    // ZenPlay's interface ships with subtle Balanced glass on its seven main UI surfaces. The two
+    // playback-only roles stay opt-in, keeping controls inexpensive on legacy/low-RAM hardware.
+    private val GLASS_SCOPE_DEFAULT_BITS: Int = 0b111_1111
     private val GLASS_ALPHA_DEFAULT_PCT: Int = 56
     private val GLASS_BLUR_DEFAULT_PCT: Int = 78
     private val GLASS_HIGHLIGHT_DEFAULT_PCT: Int = 55
@@ -2116,7 +2115,8 @@ class SettingsRepository(private val context: Context, private val localeStore: 
     private val lowSpecDevice: Boolean by lazy { tv.own.owntv.core.player.PlayerBudget.of(context).lowSpec }
 
     /** Whether the Live preview plays audio (off by default so browsing stays quiet). */
-    val livePreviewAudio: Flow<Boolean> = prefsFlow { it[Keys.LIVE_PREVIEW_AUDIO] ?: false }
+    /** ZenPlay previews are real channel playback: picture and sound are enabled on first install. */
+    val livePreviewAudio: Flow<Boolean> = prefsFlow { it[Keys.LIVE_PREVIEW_AUDIO] ?: true }
 
     suspend fun setLivePreviewAudio(enabled: Boolean) {
         context.dataStore.edit { it[Keys.LIVE_PREVIEW_AUDIO] = enabled }

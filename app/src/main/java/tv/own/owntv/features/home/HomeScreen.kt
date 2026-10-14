@@ -4,6 +4,8 @@ import android.content.Context
 import tv.own.owntv.core.home.GuideSliceState
 import tv.own.owntv.core.home.HeroItem
 import tv.own.owntv.core.home.TrendingHomeItem
+import tv.own.owntv.core.home.shouldAutoAdvanceTrending
+import tv.own.owntv.core.home.wrappedTrendingIndex
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -22,6 +24,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.absoluteOffset
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -103,7 +106,6 @@ import tv.own.owntv.ui.components.OwnTVButtonStyle
 import tv.own.owntv.ui.components.OwnTVIcon
 import tv.own.owntv.ui.components.OwnTVSpinner
 import tv.own.owntv.ui.components.InAppToast
-import tv.own.owntv.ui.components.TrailerPlayerScreen
 import tv.own.owntv.ui.components.rememberInAppToast
 import tv.own.owntv.ui.components.PosterCard
 import tv.own.owntv.ui.components.ContentPanelFill
@@ -163,13 +165,8 @@ fun HomeScreen(
     val heroFocus = remember { FocusRequester() }
     val fallbackFocus = remember { FocusRequester() }
     val trendingPrimaryFocus = remember { FocusRequester() }
-    val trendingTrailerFocus = remember { FocusRequester() }
     val trendingDetailsFocus = remember { FocusRequester() }
-    val trendingVersionsFocus = remember { FocusRequester() }
-    val zenRecentMoviesFocus = remember { FocusRequester() }
-    val zenRecentSeriesFocus = remember { FocusRequester() }
     val trendingToast = rememberInAppToast()
-    var trailerVideoKey by remember { mutableStateOf<String?>(null) }
     var detailsItem by remember { mutableStateOf<TrendingHomeItem?>(null) }
     var detailsMetadata by remember { mutableStateOf<MetadataCacheEntity?>(null) }
     var detailsTmdbWins by remember { mutableStateOf(false) }
@@ -265,7 +262,7 @@ fun HomeScreen(
         if (restoreFocus || restoreTrendingSearchFocus) {
             kotlinx.coroutines.delay(60)
             val focusTarget = when {
-                restoreTrendingSearchFocus && state.trendingItems.isNotEmpty() -> trendingVersionsFocus
+                restoreTrendingSearchFocus && state.trendingItems.isNotEmpty() -> trendingDetailsFocus
                 heroVisible && state.heroItems.isNotEmpty() -> rowFocusRequester(HomeRow.HERO)
                 showHeroFallback -> rowFocusRequester(HomeRow.HERO)
                 firstDataRow != null -> rowFocusRequester(firstDataRow)
@@ -316,6 +313,15 @@ fun HomeScreen(
         }
     }
 
+    // ZenPlay catalogue rows all open the same local detail destination. Keeping this outside the
+    // row switch lets the hero and both recent rows stay separate, ordered Home sections.
+    val zenActivate: (TrendingHomeItem) -> Unit = { item ->
+        onOpenMovieDetails(item) {
+            trendingToast.show(trendingUnavailableMessage)
+            vm.refresh()
+        }
+    }
+
     CompositionLocalProvider(LocalBringIntoViewSpec provides homeBringIntoViewSpec) {
       LazyColumn(
         modifier = modifier
@@ -350,24 +356,10 @@ fun HomeScreen(
             when (row) {
                 // Two shapes, the user's choice: the full hero, or the plain strip of posters the
                 // rest of Home is made of. Same items, same order, either way.
-                HomeRow.TRENDING -> Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(Dimens.GapLarge),
-                ) {
-                // ZenPlay: Tendencias (the carousel) with the two "Recién agregado" rows under it.
+                HomeRow.TRENDING -> {
+                // ZenPlay: the cinematic hero is its own first section. Recent films and series are
+                // separate rows later, after Continue watching, rather than being nested here.
                 val zenHasTrending = state.trendingItems.size >= TrendingDao.MIN_ELIGIBLE_ITEMS
-                val zenAfterTrending: (() -> Unit)? = when {
-                    state.recentMovies.isNotEmpty() -> { { runCatching { zenRecentMoviesFocus.requestFocus() } } }
-                    state.recentSeries.isNotEmpty() -> { { runCatching { zenRecentSeriesFocus.requestFocus() } } }
-                    else -> onMoveToNextRow
-                }
-                // ZenPlay: a poster opens the film page (series open their episodes).
-                val zenActivate: (TrendingHomeItem) -> Unit = { item ->
-                    onOpenMovieDetails(item) {
-                        trendingToast.show(trendingUnavailableMessage)
-                        vm.refresh()
-                    }
-                }
                 if (!zenHasTrending) {
                     // Too few titles to be a "trending" row at all, so the row is not drawn. An empty
                     // block rather than a bare `Unit`: the compiler reads that one as an expression
@@ -385,22 +377,15 @@ fun HomeScreen(
                     TrendingHeroSection(
                         items = state.trendingItems,
                         activeIndex = state.activeTrendingIndex,
-                        preferredLanguage = state.trendingPreferredLanguage,
                         seasonCounts = state.trendingSeasonCounts,
                         primaryFocusRequester = firstItemFocusRequester ?: trendingPrimaryFocus,
-                        trailerFocusRequester = trendingTrailerFocus,
                         detailsFocusRequester = trendingDetailsFocus,
-                        versionsFocusRequester = trendingVersionsFocus,
                         onNavigate = vm::navigateTrending,
                         onActivate = { item ->
                             onActivateTrending(item) {
                                 trendingToast.show(trendingUnavailableMessage)
                                 vm.refresh()
                             }
-                        },
-                        onTrailer = { item ->
-                            vm.stopPreview()
-                            trailerVideoKey = item.snapshot.trailerKey
                         },
                         onDetails = { item ->
                             vm.stopPreview()
@@ -417,41 +402,9 @@ fun HomeScreen(
                                 }
                             }
                         },
-                        onAllVersions = { item ->
-                            vm.stopPreview()
-                            onOpenTrendingSearch(item.snapshot.canonicalTitle)
-                        },
                         onFocus = onNonHeroFocused,
                         onSectionFocusChanged = { trendingRowFocused.value = it },
-                        onContainerDown = zenAfterTrending,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                if (state.recentMovies.isNotEmpty()) {
-                    TrendingPosterRow(
-                        title = stringResource(R.string.zenplay_home_recent_movies),
-                        items = state.recentMovies,
-                        onItemClick = zenActivate,
-                        onFocus = onNonHeroFocused,
-                        firstItemFocusRequester = if (!zenHasTrending && firstItemFocusRequester != null) {
-                            firstItemFocusRequester
-                        } else {
-                            zenRecentMoviesFocus
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                if (state.recentSeries.isNotEmpty()) {
-                    TrendingPosterRow(
-                        title = stringResource(R.string.zenplay_home_recent_series),
-                        items = state.recentSeries,
-                        onItemClick = zenActivate,
-                        onFocus = onNonHeroFocused,
-                        firstItemFocusRequester = if (!zenHasTrending && state.recentMovies.isEmpty() && firstItemFocusRequester != null) {
-                            firstItemFocusRequester
-                        } else {
-                            zenRecentSeriesFocus
-                        },
+                        onContainerDown = onMoveToNextRow,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -497,6 +450,28 @@ fun HomeScreen(
                             onChildFocused = onNonHeroFocused,
                         )
                     }
+                }
+
+                HomeRow.RECENT_MOVIES -> if (state.recentMovies.isNotEmpty()) {
+                    TrendingPosterRow(
+                        title = stringResource(R.string.zenplay_home_recent_movies),
+                        items = state.recentMovies,
+                        onItemClick = zenActivate,
+                        onFocus = onNonHeroFocused,
+                        firstItemFocusRequester = firstItemFocusRequester,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+
+                HomeRow.RECENT_SERIES -> if (state.recentSeries.isNotEmpty()) {
+                    TrendingPosterRow(
+                        title = stringResource(R.string.zenplay_home_recent_series),
+                        items = state.recentSeries,
+                        onItemClick = zenActivate,
+                        onFocus = onNonHeroFocused,
+                        firstItemFocusRequester = firstItemFocusRequester,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
 
                 HomeRow.RECENT_CHANNELS -> if (state.recentLive.isNotEmpty()) {
@@ -559,12 +534,8 @@ fun HomeScreen(
 
     // Video preview starts after the expanded card has settled, so 4K decoder setup does not compete with
     // the width animation. Until then the expanded card stays on the poster.
-    // A trailer counts as "not previewing": the hero preview is hidden behind the trailer window, so
-    // leaving it decoding costs a second 4K video pipeline for a picture nobody can see — on a low-spec
-    // TV that is exactly the budget the trailer needs. The same reasoning as the 520ms delay below,
-    // applied to the one case that was missed.
-    LaunchedEffect(isPreviewActive, hero, expandedHeroIndex, focusedHeroIndex, lastInteractionMs, trailerVideoKey) {
-        if (!isPreviewActive || trailerVideoKey != null || hero == null || expandedHeroIndex < 0 ||
+    LaunchedEffect(isPreviewActive, hero, expandedHeroIndex, focusedHeroIndex, lastInteractionMs) {
+        if (!isPreviewActive || hero == null || expandedHeroIndex < 0 ||
             focusedHeroIndex != expandedHeroIndex
         ) {
             heroPreviewEngine.stop()
@@ -584,15 +555,6 @@ fun HomeScreen(
         vm.startPreview(scheduledHero)
     }
 
-    trailerVideoKey?.let { key ->
-        TrailerPlayerScreen(videoKey = key) {
-            trailerVideoKey = null
-            homeScope.launch {
-                kotlinx.coroutines.delay(60)
-                runCatching { trendingTrailerFocus.requestFocus() }
-            }
-        }
-    }
     detailsItem?.let { item ->
         MediaDetailsScreen(details = item.toDetailsUi(detailsMetadata, detailsTmdbWins), onExit = {
             detailsItem = null
@@ -607,9 +569,10 @@ fun HomeScreen(
 }
 
 private fun rowHasData(row: HomeRow, state: HomeUiState): Boolean = when (row) {
-    HomeRow.TRENDING -> state.trendingItems.size >= TrendingDao.MIN_ELIGIBLE_ITEMS ||
-        state.recentMovies.isNotEmpty() || state.recentSeries.isNotEmpty()
+    HomeRow.TRENDING -> state.trendingItems.size >= TrendingDao.MIN_ELIGIBLE_ITEMS
     HomeRow.HERO -> state.heroItems.isNotEmpty()
+    HomeRow.RECENT_MOVIES -> state.recentMovies.isNotEmpty()
+    HomeRow.RECENT_SERIES -> state.recentSeries.isNotEmpty()
     HomeRow.RECENT_CHANNELS -> when (state.config.recentLiveMode) {
         HomeLiveRowMode.CARDS -> state.recentLive.isNotEmpty()
         HomeLiveRowMode.ON_NOW -> state.recentGuide.hasContent
@@ -656,17 +619,12 @@ private fun expandedHeroPlot(item: HeroItem, metadata: HomeHeroMetadata?): Strin
 private fun TrendingHeroSection(
     items: List<TrendingHomeItem>,
     activeIndex: Int,
-    preferredLanguage: String,
     seasonCounts: Map<Long, Int>,
     primaryFocusRequester: FocusRequester,
-    trailerFocusRequester: FocusRequester,
     detailsFocusRequester: FocusRequester,
-    versionsFocusRequester: FocusRequester,
     onNavigate: (Int) -> Unit,
     onActivate: (TrendingHomeItem) -> Unit,
-    onTrailer: (TrendingHomeItem) -> Unit,
     onDetails: (TrendingHomeItem) -> Unit,
-    onAllVersions: (TrendingHomeItem) -> Unit,
     onFocus: () -> Unit,
     onSectionFocusChanged: (Boolean) -> Unit,
     onContainerDown: (() -> Unit)?,
@@ -677,33 +635,27 @@ private fun TrendingHeroSection(
     val movieLabel = stringResource(R.string.home_trending_movie)
     val seriesLabel = stringResource(R.string.home_trending_series)
     // ZenPlay: the carousel is the year's new releases from the user's own lists, not TMDB's chart.
-    val sectionLabel = stringResource(R.string.zenplay_home_trending).uppercase()
-    val providerMatchLabel = stringResource(R.string.home_trending_provider_match)
-    val whyLabel = stringResource(R.string.home_trending_why_label)
+    val sectionLabel = stringResource(R.string.zenplay_home_trending)
     val playLabel = stringResource(R.string.home_trending_play)
     val openEpisodesLabel = stringResource(R.string.home_trending_open_episodes)
-    val trailerLabel = stringResource(R.string.home_trending_trailer)
     val detailsLabel = stringResource(R.string.home_trending_more_details)
-    val versionsLabel = stringResource(R.string.home_trending_all_versions)
-    val previousLabel = stringResource(R.string.home_trending_previous)
-    val pauseLabel = stringResource(R.string.home_trending_pause)
-    val resumeLabel = stringResource(R.string.home_trending_resume)
-    val nextLabel = stringResource(R.string.home_trending_next)
-    var manuallyPaused by remember { mutableStateOf(false) }
     var actionButtonsFocused by remember { mutableStateOf(false) }
+    var focusedActionIndex by remember { mutableIntStateOf(0) }
     var resetClock by remember { mutableIntStateOf(0) }
     var progress by remember { mutableFloatStateOf(0f) }
     val intervalMs = 10_000L
 
     fun navigate(delta: Int) {
         if (items.isEmpty()) return
-        onNavigate((activeIndex + delta + items.size) % items.size)
+        onNavigate(wrappedTrendingIndex(activeIndex, delta, items.size))
         progress = 0f
         resetClock++
     }
 
-    LaunchedEffect(activeIndex, manuallyPaused, actionButtonsFocused, resetClock, items.size) {
-        if (manuallyPaused || actionButtonsFocused || items.size < 2) return@LaunchedEffect
+    LaunchedEffect(activeIndex, actionButtonsFocused, resetClock, items.size) {
+        // Focus is the television's interaction signal. Freeze the current progress while the user
+        // reads or operates Play/Details, then resume from the same point after focus leaves.
+        if (!shouldAutoAdvanceTrending(items.size, actionButtonsFocused)) return@LaunchedEffect
         val startProgress = progress.coerceIn(0f, 1f)
         val duration = (intervalMs * (1f - startProgress)).toLong().coerceAtLeast(1L)
         val startedAt = System.nanoTime()
@@ -714,7 +666,7 @@ private fun TrendingHeroSection(
             kotlinx.coroutines.delay(80L)
         }
         progress = 0f
-        onNavigate((activeIndex + 1) % items.size)
+        onNavigate(wrappedTrendingIndex(activeIndex, 1, items.size))
     }
 
     val snapshot = item.snapshot
@@ -723,121 +675,98 @@ private fun TrendingHeroSection(
             is TrendingHomeItem.Movie -> item.movie.backdropUrl ?: item.movie.posterUrl
             is TrendingHomeItem.Series -> item.series.backdropUrl ?: item.series.posterUrl
         }
-    val poster = MetadataImages.poster(snapshot.posterPath, size = "w500")
-        ?: when (item) {
-            is TrendingHomeItem.Movie -> item.movie.posterUrl
-            is TrendingHomeItem.Series -> item.series.posterUrl
-        }
     val displaySignals = ProviderVariantParser.displaySignals(snapshot.providerRawName)
     val typeLabel = if (item is TrendingHomeItem.Movie) movieLabel else seriesLabel
-    val providerLanguage = snapshot.providerLanguage
-    val languageBadge = when {
-        providerLanguage == preferredLanguage ->
-            stringResource(R.string.home_trending_language_choice, preferredLanguage)
-        providerLanguage == "EN" -> stringResource(R.string.home_trending_english_fallback)
-        providerLanguage == null -> stringResource(R.string.home_trending_untagged_fallback)
-        else -> stringResource(R.string.home_trending_other_fallback, providerLanguage)
-    }
-    val reasonTitle = stringResource(R.string.home_trending_reason_title, snapshot.trendingRank, typeLabel)
-    val reasonCopy = when {
-        snapshot.providerLanguage == preferredLanguage -> stringResource(
-            R.string.home_trending_reason_preferred,
-            preferredLanguage,
-        )
-        snapshot.providerLanguage == "EN" -> stringResource(R.string.home_trending_reason_english, preferredLanguage)
-        snapshot.providerLanguage == null -> stringResource(R.string.home_trending_reason_untagged, preferredLanguage)
-        else -> stringResource(R.string.home_trending_reason_other)
-    }
+    val trendRank = displayableTrendingRank(snapshot.trendingRank, snapshot.generationId)
     val seasonCount = (item as? TrendingHomeItem.Series)?.let { seasonCounts[it.series.id] }
 
-    Column(
-          modifier = modifier
-              .height(538.dp)
-              .clip(RoundedCornerShape(18.dp))
-              .background(colors.surfaceContainerLowest)
-              .onFocusChanged {
-                  onSectionFocusChanged(it.hasFocus)
-                  if (it.hasFocus) onFocus()
-              }
-              .focusGroup(),
-      ) {
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            if (!backdrop.isNullOrBlank()) {
-                AsyncImage(
-                    model = backdrop,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp
+    val heroHeight = tvTrendingHeroHeightDp(screenHeightDp).dp
+    val compactHero = screenHeightDp < 650
+
+    Column(modifier = modifier) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Box(
-                modifier = Modifier.fillMaxSize().gradientWash(
-                    vertical = false,
-                    0f to colors.surfaceContainerLowest.copy(alpha = 0.98f),
-                    0.58f to colors.surfaceContainerLowest.copy(alpha = 0.68f),
-                    1f to Color.Transparent,
+                Modifier.width(6.dp).height(34.dp).clip(CircleShape).background(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        listOf(ZenPlayHeroBlue, ZenPlayHeroPurple),
+                    ),
                 ),
             )
-            Box(
-                modifier = Modifier.fillMaxSize().gradientWash(vertical = true, 0.58f to Color.Transparent, 1f to colors.surfaceContainerLowest),
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = sectionLabel,
+                style = MaterialTheme.typography.headlineSmall,
+                color = ZenPlayHeroSilver,
+                fontWeight = FontWeight.ExtraBold,
             )
+        }
+        Spacer(Modifier.height(if (compactHero) 10.dp else 14.dp))
 
-            Row(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 34.dp, vertical = 28.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier.width(190.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(14.dp))
-                        .background(colors.surfaceContainerHigh)
-                        .border(1.dp, Color.White.copy(alpha = 0.20f), RoundedCornerShape(14.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (!poster.isNullOrBlank()) {
-                        AsyncImage(
-                            model = poster,
-                            contentDescription = snapshot.localizedTitle,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
-                        OwnTVIcon(
-                            if (item is TrendingHomeItem.Movie) OwnTVIcon.MOVIES else OwnTVIcon.SERIES,
-                            tint = colors.onSurfaceVariant,
-                            modifier = Modifier.size(42.dp),
-                        )
-                    }
-                    Text(
-                        text = "#${activeIndex + 1}",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        modifier = Modifier.align(Alignment.TopStart).padding(10.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(Color(0xDC030A08))
-                            .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(50))
-                            .padding(horizontal = 9.dp, vertical = 5.dp),
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(heroHeight)
+                .clip(RoundedCornerShape(18.dp))
+                .background(colors.surfaceContainerLowest)
+                .onFocusChanged {
+                    onSectionFocusChanged(it.hasFocus)
+                    if (it.hasFocus) onFocus()
+                }
+                .focusGroup(),
+        ) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                if (!backdrop.isNullOrBlank()) {
+                    AsyncImage(
+                        model = backdrop,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
                     )
                 }
-                Spacer(Modifier.width(28.dp))
-                Column(modifier = Modifier.weight(1.45f), verticalArrangement = Arrangement.Center) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(7.dp).clip(CircleShape).background(colors.primary))
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = sectionLabel,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = colors.primary,
-                            fontWeight = FontWeight.Bold,
-                        )
+                Box(
+                    modifier = Modifier.fillMaxSize().gradientWash(
+                        vertical = false,
+                        0f to colors.surfaceContainerLowest.copy(alpha = 0.98f),
+                        0.58f to colors.surfaceContainerLowest.copy(alpha = 0.68f),
+                        1f to Color.Transparent,
+                    ),
+                )
+                Box(
+                    modifier = Modifier.fillMaxSize().gradientWash(
+                        vertical = true,
+                        0.58f to Color.Transparent,
+                        1f to colors.surfaceContainerLowest,
+                    ),
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(if (compactHero) 0.74f else 0.64f)
+                        .padding(
+                            horizontal = if (compactHero) 26.dp else 38.dp,
+                            vertical = if (compactHero) 16.dp else 24.dp,
+                        ),
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    trendRank?.let { rank ->
+                        TrendingRankBadge(stringResource(R.string.zenplay_home_trending_rank, rank))
+                        Spacer(Modifier.height(if (compactHero) 7.dp else 10.dp))
                     }
-                    Spacer(Modifier.height(15.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(9.dp),
+                    ) {
                         TrendingTypeBadge(typeLabel)
                         snapshot.year?.let {
                             Text(it.toString(), style = MaterialTheme.typography.titleSmall, color = Color(0xFFD4DED9))
                         }
-                        Text("•", style = MaterialTheme.typography.titleSmall, color = Color(0xFFD4DED9))
                         snapshot.rating?.let {
+                            Text("•", style = MaterialTheme.typography.titleSmall, color = Color(0xFFD4DED9))
                             Text(
                                 text = stringResource(R.string.content_rating, it),
                                 style = MaterialTheme.typography.titleSmall,
@@ -846,38 +775,60 @@ private fun TrendingHeroSection(
                             )
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(if (compactHero) 5.dp else 8.dp))
                     Text(
                         text = snapshot.localizedTitle,
-                        style = MaterialTheme.typography.headlineLarge,
+                        style = if (compactHero) MaterialTheme.typography.headlineMedium
+                        else MaterialTheme.typography.headlineLarge,
                         color = colors.onSurface,
                         fontWeight = FontWeight.Bold,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                     snapshot.overview?.takeIf { it.isNotBlank() }?.let { overview ->
-                        Spacer(Modifier.height(11.dp))
+                        Spacer(Modifier.height(if (compactHero) 6.dp else 10.dp))
                         Text(
                             overview,
                             style = MaterialTheme.typography.bodyMedium,
                             color = colors.onSurfaceVariant,
-                            maxLines = 3,
+                            maxLines = if (compactHero) 2 else 3,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.widthIn(max = 680.dp),
                         )
                     }
-                    Spacer(Modifier.height(13.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TrendingBadge(typeLabel, primary = true)
-                        displaySignals.quality.label?.let { TrendingBadge(it) }
-                        displaySignals.capabilities.forEach { TrendingBadge(it) }
-                        seasonCount?.let {
-                            TrendingBadge(pluralStringResource(R.plurals.home_trending_seasons, it, it))
+                    if (displaySignals.quality.label != null || displaySignals.capabilities.isNotEmpty() || seasonCount != null) {
+                        Spacer(Modifier.height(if (compactHero) 7.dp else 11.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            displaySignals.quality.label?.let { TrendingBadge(it, primary = true) }
+                            displaySignals.capabilities.forEach { TrendingBadge(it) }
+                            seasonCount?.let {
+                                TrendingBadge(pluralStringResource(R.plurals.home_trending_seasons, it, it))
+                            }
                         }
                     }
-                    Spacer(Modifier.height(15.dp))
+                    Spacer(Modifier.height(if (compactHero) 8.dp else 13.dp))
                     Row(
-                        modifier = Modifier.onFocusChanged { actionButtonsFocused = it.hasFocus }.focusGroup(),
+                        modifier = Modifier
+                            .onFocusChanged { actionButtonsFocused = it.hasFocus }
+                            .onPreviewKeyEvent { event ->
+                                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                when {
+                                    event.key == Key.DirectionLeft && focusedActionIndex == 0 && items.size > 1 -> {
+                                        navigate(-1)
+                                        true
+                                    }
+                                    event.key == Key.DirectionRight && focusedActionIndex == 1 && items.size > 1 -> {
+                                        navigate(1)
+                                        true
+                                    }
+                                    event.key == Key.DirectionDown && onContainerDown != null -> {
+                                        onContainerDown()
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            }
+                            .focusGroup(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -886,56 +837,80 @@ private fun TrendingHeroSection(
                             onClick = { onActivate(item) },
                             icon = if (item is TrendingHomeItem.Movie) OwnTVIcon.PLAY else OwnTVIcon.SERIES,
                             primary = true,
-                            modifier = Modifier.focusRequester(primaryFocusRequester),
+                            modifier = Modifier
+                                .focusRequester(primaryFocusRequester)
+                                .onFocusChanged { if (it.hasFocus) focusedActionIndex = 0 },
                         )
-                        if (!snapshot.trailerKey.isNullOrBlank()) {
-                            TrendingActionButton(
-                                label = trailerLabel,
-                                onClick = { onTrailer(item) },
-                                icon = OwnTVIcon.PLAY,
-                                modifier = Modifier.focusRequester(trailerFocusRequester),
-                            )
-                        }
                         TrendingActionButton(
                             label = detailsLabel,
                             onClick = { onDetails(item) },
                             icon = OwnTVIcon.INFO,
-                            modifier = Modifier.focusRequester(detailsFocusRequester),
-                        )
-                        TrendingActionButton(
-                            label = versionsLabel,
-                            onClick = { onAllVersions(item) },
-                            icon = OwnTVIcon.SEARCH,
-                            modifier = Modifier.focusRequester(versionsFocusRequester),
+                            modifier = Modifier
+                                .focusRequester(detailsFocusRequester)
+                                .onFocusChanged { if (it.hasFocus) focusedActionIndex = 1 },
                         )
                     }
                 }
             }
-        }
 
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 7.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TrendingControlButton(OwnTVIcon.SKIP_PREVIOUS, previousLabel, onContainerDown) { navigate(-1) }
-            Spacer(Modifier.width(12.dp))
-            TrendingControlButton(if (manuallyPaused) OwnTVIcon.PLAY else OwnTVIcon.PAUSE, if (manuallyPaused) resumeLabel else pauseLabel, onContainerDown) {
-                manuallyPaused = !manuallyPaused
-                if (!manuallyPaused) {
-                    progress = 0f
-                    resetClock++
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 7.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                items.indices.forEach { index ->
+                    Box(
+                        Modifier
+                            .width(if (index == activeIndex) 22.dp else 7.dp)
+                            .height(6.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (index == activeIndex) {
+                                    androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                        listOf(ZenPlayHeroBlue, ZenPlayHeroPurple),
+                                    )
+                                } else {
+                                    androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                        listOf(
+                                            colors.onSurfaceVariant.copy(alpha = 0.32f),
+                                            colors.onSurfaceVariant.copy(alpha = 0.32f),
+                                        ),
+                                    )
+                                },
+                            ),
+                    )
+                    if (index != items.lastIndex) Spacer(Modifier.width(7.dp))
                 }
             }
-            Spacer(Modifier.width(12.dp))
-            TrendingControlButton(OwnTVIcon.SKIP_NEXT, nextLabel, onContainerDown) { navigate(1) }
-        }
-        Box(modifier = Modifier.fillMaxWidth().height(3.dp).background(colors.surfaceContainerHigh)) {
-            Box(
-                modifier = Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(3.dp).background(colors.primary),
-            )
+            Box(modifier = Modifier.fillMaxWidth().height(3.dp).background(colors.surfaceContainerHigh)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progress.coerceIn(0f, 1f))
+                        .height(3.dp)
+                        .background(
+                            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                listOf(ZenPlayHeroBlue, ZenPlayHeroPurple),
+                            ),
+                        ),
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun TrendingRankBadge(label: String) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelLarge,
+        color = Color.White,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color(0xB80A1123))
+            .border(1.dp, ZenPlayHeroBlue.copy(alpha = 0.58f), RoundedCornerShape(50))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    )
 }
 
 @Composable
@@ -943,7 +918,7 @@ private fun TrendingTypeBadge(label: String) {
     Text(
         text = label,
         style = MaterialTheme.typography.labelMedium,
-        color = Color(0xFFD4DED9),
+        color = ZenPlayHeroSilver,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.11f))
             .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(50))
@@ -970,12 +945,12 @@ private fun TrendingBadge(label: String, primary: Boolean = false) {
     Text(
         text = label,
         style = MaterialTheme.typography.labelSmall,
-        color = if (primary) Color(0xFFD5F4C5) else Color(0xFFDCE6E2),
+        color = if (primary) ZenPlayHeroBlue else ZenPlayHeroSilver,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.clip(RoundedCornerShape(7.dp)).background(Color(0x8C06100D))
             .border(
                 1.dp,
-                if (primary) Color(0x7A74CF42) else Color.White.copy(alpha = 0.16f),
+                if (primary) ZenPlayHeroPurple.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.16f),
                 RoundedCornerShape(7.dp),
             )
             .padding(horizontal = 10.dp, vertical = 6.dp),
@@ -1001,7 +976,7 @@ private fun TrendingActionButton(
         modifier = modifier
             .height(42.dp),
     ) { focused ->
-        val contentColor = if (primary && !focused) Color(0xFF081205) else colors.onSurface
+        val contentColor = if (primary && !focused) Color(0xFF071327) else colors.onSurface
         Row(
             modifier = Modifier.padding(horizontal = 15.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -1013,37 +988,9 @@ private fun TrendingActionButton(
     }
 }
 
-@Composable
-private fun TrendingControlButton(
-    icon: OwnTVIcon,
-    description: String,
-    onDown: (() -> Unit)?,
-    onClick: () -> Unit,
-) {
-    val colors = OwnTVTheme.colors
-    FocusableSurface(
-        onClick = onClick,
-        shape = CircleShape,
-        unfocusedContainerColor = colors.card,
-        focusedContainerColor = colors.primaryContainer,
-        modifier = Modifier
-            .size(40.dp)
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown && onDown != null) {
-                    onDown()
-                    true
-                } else false
-            },
-    ) { focused ->
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            OwnTVIcon(
-                icon,
-                tint = if (focused) colors.onPrimaryContainer else colors.onSurface,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
-}
+private val ZenPlayHeroSilver = Color(0xFFE8EDF7)
+private val ZenPlayHeroBlue = Color(0xFF62AAFF)
+private val ZenPlayHeroPurple = Color(0xFFB77CFF)
 
 @Composable
 private fun TrendingHomeItem.toDetailsUi(meta: MetadataCacheEntity?, tmdbWins: Boolean): MediaDetailsUi {

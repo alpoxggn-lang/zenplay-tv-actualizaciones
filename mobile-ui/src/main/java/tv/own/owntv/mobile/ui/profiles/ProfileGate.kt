@@ -34,9 +34,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tv.own.owntv.core.database.entity.ProfileEntity
+import tv.own.owntv.core.profile.ProfileAuthorization
+import tv.own.owntv.core.profile.ProfileManagementAction
+import tv.own.owntv.core.profile.ProfileManagementRequirement
+import tv.own.owntv.core.profile.ProfilePinPurpose
 import tv.own.owntv.mobile.R
 import tv.own.owntv.mobile.ui.components.MobileIcons
 import tv.own.owntv.mobile.ui.theme.MobileDimens
+import tv.own.owntv.mobile.ui.screens.settings.customize.ConfirmDialog
 
 /** Two columns on a phone, four once there is room — the tiles stay a thumb's width apart either way. */
 private val TILE_MIN_WIDTH = 140.dp
@@ -58,10 +63,44 @@ fun ProfileGate(
     vm: ProfilesViewModel,
 ) {
     var pinFor by remember { mutableStateOf<ProfileEntity?>(null) }
+    var pinPurpose by remember { mutableStateOf(ProfilePinPurpose.TARGET_PROFILE) }
+    var pendingAction by remember { mutableStateOf(ProfileManagementAction.SWITCH) }
+    var pendingTarget by remember { mutableStateOf<ProfileEntity?>(null) }
     var addProfile by remember { mutableStateOf(false) }
+    var addAuthorization by remember { mutableStateOf<ProfileAuthorization?>(null) }
+    var managementFailure by remember { mutableStateOf(false) }
+    var managementChanged by remember { mutableStateOf(false) }
     val fallbackName = stringResource(R.string.profiles_default_name)
 
-    fun enter(profile: ProfileEntity) = vm.switchTo(profile) { onEntered(profile) }
+    fun perform(action: ProfileManagementAction, profile: ProfileEntity?, authorization: ProfileAuthorization?) {
+        when (action) {
+            ProfileManagementAction.SWITCH -> profile?.let {
+                vm.switchTo(it, authorization) { switched ->
+                    if (switched) onEntered(it) else managementChanged = true
+                }
+            }
+            ProfileManagementAction.CREATE -> {
+                addAuthorization = authorization
+                addProfile = true
+            }
+            else -> Unit
+        }
+    }
+
+    fun request(action: ProfileManagementAction, profile: ProfileEntity? = null) {
+        vm.managementRequirement(action, profile) { requirement ->
+            when (requirement) {
+                ProfileManagementRequirement.Allowed -> perform(action, profile, null)
+                is ProfileManagementRequirement.PinRequired -> {
+                    pendingAction = action
+                    pendingTarget = profile
+                    pinPurpose = requirement.purpose
+                    pinFor = requirement.profile
+                }
+                is ProfileManagementRequirement.Blocked -> managementFailure = true
+            }
+        }
+    }
 
     Column(
         modifier = modifier
@@ -85,18 +124,26 @@ fun ProfileGate(
             items(profiles, key = { it.id }) { profile ->
                 ProfileTile(
                     profile = profile,
-                    onClick = { if (profile.pinHash == null) enter(profile) else pinFor = profile },
+                    onClick = { request(ProfileManagementAction.SWITCH, profile) },
                 )
             }
-            item(key = "add") { AddProfileTile(onClick = { addProfile = true }) }
+            item(key = "add") { AddProfileTile(onClick = { request(ProfileManagementAction.CREATE) }) }
         }
     }
 
     pinFor?.let { locked ->
         ProfilePinSheet(
             profileName = locked.name,
+            titleOverride = if (pinPurpose == ProfilePinPurpose.ADULT_ADMIN) {
+                stringResource(R.string.profiles_adult_pin_required, locked.name)
+            } else null,
             onSubmit = { pin ->
-                vm.verifyPin(locked, pin).also { if (it) { pinFor = null; enter(locked) } }
+                vm.verifyPin(locked, pin).also { valid ->
+                    if (valid) {
+                        pinFor = null
+                        perform(pendingAction, pendingTarget, ProfileAuthorization(locked.id, pin))
+                    }
+                }
             },
             onDismiss = { pinFor = null },
         )
@@ -106,9 +153,28 @@ fun ProfileGate(
             initial = null,
             takenNames = profiles.map { it.name.lowercase() }.toSet(),
             onConfirm = { name, avatarId, isKids, pin ->
-                vm.create(name, avatarId, isKids, pin, fallbackName)
+                vm.create(name, avatarId, isKids, pin, fallbackName, addAuthorization) { id ->
+                    if (id == null) {
+                        managementChanged = true
+                    } else {
+                        addProfile = false
+                        addAuthorization = null
+                    }
+                }
             },
-            onDismiss = { addProfile = false },
+            onDismiss = { addProfile = false; addAuthorization = null },
+        )
+    }
+    if (managementFailure || managementChanged) {
+        ConfirmDialog(
+            title = stringResource(R.string.profiles_management_locked_title),
+            message = stringResource(
+                if (managementChanged) R.string.profiles_management_changed_message
+                else R.string.profiles_management_locked_message,
+            ),
+            confirmLabel = stringResource(R.string.common_ok),
+            onConfirm = { managementFailure = false; managementChanged = false },
+            onDismiss = { managementFailure = false; managementChanged = false },
         )
     }
 }

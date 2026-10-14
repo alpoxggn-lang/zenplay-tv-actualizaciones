@@ -61,29 +61,7 @@ class ShellViewModel(
     private val weatherRepository: WeatherRepository,
     private val navVisibility: NavVisibility,
     private val profiles: tv.own.owntv.core.profile.ProfileManager,
-    private val xtreamClient: tv.own.owntv.core.parser.XtreamClient,
 ) : ViewModel() {
-
-    /**
-     * ZenPlay: the subscription's expiry for the active profile, read from the Xtream panel's
-     * `user_info.exp_date`. When several lists are linked, the soonest date wins. Null = unknown or
-     * unlimited. Refreshed whenever the profile's lists change and on "Actualizar".
-     */
-    private val _subscriptionExpiry = MutableStateFlow<Long?>(null)
-    val subscriptionExpiry: StateFlow<Long?> = _subscriptionExpiry.asStateFlow()
-
-    fun loadSubscriptionExpiry() {
-        viewModelScope.launch {
-            val pid = currentProfileId() ?: run { _subscriptionExpiry.value = null; return@launch }
-            val all = sourceRepository.observeSources(pid).first()
-                .filter { it.type == tv.own.owntv.core.model.SourceType.XTREAM }
-            // With several plans signed in, show the expiry of the plan in use.
-            val activeId = settings.defaultSourceId.first()
-            val sources = all.filter { it.id == activeId }.ifEmpty { all }
-            val dates = sources.mapNotNull { runCatching { xtreamClient.accountExpiryMs(it) }.getOrNull() }
-            _subscriptionExpiry.value = dates.minOrNull()
-        }
-    }
 
     companion object {
         private const val TAG = "OwnTVHome"
@@ -138,7 +116,6 @@ class ShellViewModel(
                     )
                 }
                 onQueued(sources.size)
-                loadSubscriptionExpiry()
             } finally {
                 kotlinx.coroutines.delay(3_000)
                 _manualRefreshing.value = false
@@ -163,18 +140,6 @@ class ShellViewModel(
     private var lastResumeCheckAtElapsed = 0L
 
     init {
-        // ZenPlay: re-read the subscription expiry whenever the active profile or its lists change
-        // (a sync also updates the source row, which re-emits here — cheap, one request per list).
-        viewModelScope.launch {
-            settings.activeProfileId
-                .flatMapLatest { pid ->
-                    if (pid < 0) flowOf(emptyList<tv.own.owntv.core.database.entity.SourceEntity>()) else sourceRepository.observeSources(pid)
-                }
-                .map { list -> list.map { it.id to it.lastSyncAt } }
-                .combine(settings.defaultSourceId) { list, active -> list to active }
-                .distinctUntilChanged()
-                .collect { loadSubscriptionExpiry() }
-        }
         // One-time: move any existing playlist EPG into the new standalone EPG sources (v2.2.0).
         viewModelScope.launch { runCatching { epgMigration.run() } }
         // The one-shot settings migrations run from core at process start (PlaybackStartup).

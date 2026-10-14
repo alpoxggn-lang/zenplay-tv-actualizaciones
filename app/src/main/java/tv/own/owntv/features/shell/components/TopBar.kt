@@ -38,9 +38,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -48,15 +51,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.layout.layout
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import kotlinx.coroutines.delay
 import tv.own.owntv.R
 import tv.own.owntv.core.nav.MainSection
 import tv.own.owntv.core.weather.WeatherInfo
-import tv.own.owntv.ui.components.BrandMark
 import tv.own.owntv.ui.components.FocusableSurface
 import tv.own.owntv.ui.components.OwnTVAvatar
 import tv.own.owntv.ui.components.OwnTVIcon
-import tv.own.owntv.ui.components.rememberAppliedIcon
 import tv.own.owntv.core.theme.GlassSurface
 import tv.own.owntv.ui.theme.Dimens
 import tv.own.owntv.ui.theme.OwnTVTheme
@@ -67,6 +71,7 @@ import java.util.Date
 // Top-bar chips: corner matches the nav buttons (14dp, not full-pill) and a lighter frost than the
 // big panels so the small chrome reads as glass without being heavy.
 private val TopBarChipCorner = 14.dp
+private val TopBarPanelCorner = 20.dp
 private const val TopBarFrost = 0.45f
 
 @Composable
@@ -75,6 +80,9 @@ fun TopBar(
     visibleSections: Set<MainSection>,
     onSelectSection: (MainSection) -> Unit,
     onSearchClick: () -> Unit,
+    /** Re-sync the active Xtream catalogue and guide without leaving the current destination. */
+    onRefreshClick: () -> Unit,
+    refreshing: Boolean,
     avatarId: Int,
     avatarPath: String,
     profileName: String,
@@ -91,6 +99,16 @@ fun TopBar(
     modifier: Modifier = Modifier,
 ) {
     val colors = OwnTVTheme.colors
+    val context = LocalContext.current
+    // AsyncImage contributes a ConstraintsSizeResolver when the request has no explicit size, so this
+    // large source logo is decoded near its 96-144 dp header footprint rather than as a full bitmap.
+    // Header chrome must not flash during recomposition, hence the request-local crossfade override.
+    val headerWordmarkRequest = remember(context) {
+        ImageRequest.Builder(context)
+            .data(R.drawable.zenplay_wordmark_horizontal)
+            .crossfade(false)
+            .build()
+    }
     // The new streaming shell is deliberately a little taller than the old utility strip. 56 dp is
     // the minimum comfortable D-pad target and still leaves ample room for content on 720p TVs.
     val hasAudioBar = audioBar != null
@@ -122,13 +140,25 @@ fun TopBar(
             .testTag("primary_navigation")
             .fillMaxWidth()
             .height(barHeight)
-            .padding(horizontal = 22.dp, vertical = 6.dp)
+            // One cached glass layer for the whole navigation strip. Individual destinations below
+            // only paint their focus/selection tint, avoiding a second backdrop sample per button on
+            // inexpensive Fire TV hardware. `glass` owns its reduced-effects fallback.
+            .padding(horizontal = 14.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(TopBarPanelCorner))
+            .glass(
+                GlassSurface.TOPBAR,
+                colors.surfaceContainer.copy(alpha = 0.72f),
+                RoundedCornerShape(TopBarPanelCorner),
+                frostScale = 0.72f,
+                condenseChrome = true,
+            )
+            .padding(horizontal = 8.dp, vertical = 2.dp)
             .onFocusChanged { if (it.hasFocus) onFocused() }
             .focusGroup(),
     ) {
         // Narrow 720p layouts keep the five destinations readable by hiding the profile name; the
-        // avatar remains present and focusable. No backdrop blur is calculated by this component —
-        // FocusableSurface uses the existing cached glass material and its tonal fallback.
+        // avatar remains present and focusable. The panel above owns the only backdrop sample; these
+        // children draw just their cheap tonal focus/selection state.
         val compact = maxWidth < 1120.dp
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -152,6 +182,10 @@ fun TopBar(
                     Modifier
                 },
             )
+            RefreshNavButton(
+                refreshing = refreshing,
+                onClick = onRefreshClick,
+            )
             destinations.forEach { section ->
                 TopDestination(
                     section = section,
@@ -170,7 +204,22 @@ fun TopBar(
             }
             Spacer(Modifier.weight(1f))
             audioBar?.invoke()
-            BrandMark(rememberAppliedIcon(), if (compact) 38.dp else 46.dp)
+            // The internal header uses the wide ZenPlay signature rather than the square launcher
+            // artwork. It remains decorative/non-focusable, and its bounded footprint consumes the
+            // flexible spacer before it can move any D-pad destination.
+            AsyncImage(
+                model = headerWordmarkRequest,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .widthIn(
+                        min = if (compact) 96.dp else 124.dp,
+                        max = if (compact) 108.dp else 144.dp,
+                    )
+                    .height(if (compact) 36.dp else 44.dp)
+                    .focusProperties { canFocus = false }
+                    .testTag("zenplay_header_wordmark"),
+            )
         }
     }
 }
@@ -181,9 +230,8 @@ private fun NowPlayingNavButton(onClick: () -> Unit, compact: Boolean) {
     FocusableSurface(
         onClick = onClick,
         shape = RoundedCornerShape(TopBarChipCorner),
-        surface = GlassSurface.TOPBAR,
         focusedContainerColor = colors.primaryContainer,
-        unfocusedContainerColor = colors.primary.copy(alpha = 0.12f),
+        unfocusedContainerColor = Color.Transparent,
         contentAlignment = Alignment.Center,
     ) { focused ->
         Row(
@@ -222,9 +270,8 @@ private fun ProfileNavButton(
         onClick = onClick,
         onLongClick = onLongClick,
         shape = RoundedCornerShape(TopBarChipCorner),
-        surface = GlassSurface.TOPBAR,
         focusedContainerColor = colors.primaryContainer,
-        unfocusedContainerColor = colors.surfaceContainer.copy(alpha = 0.42f),
+        unfocusedContainerColor = Color.Transparent,
         contentAlignment = Alignment.Center,
     ) { focused ->
         Row(
@@ -259,7 +306,6 @@ private fun SearchNavButton(
         selected = selected,
         modifier = modifier.size(44.dp),
         shape = RoundedCornerShape(TopBarChipCorner),
-        surface = GlassSurface.TOPBAR,
         focusedContainerColor = colors.onSurface,
         unfocusedContainerColor = Color.Transparent,
         selectedContainerColor = colors.surfaceContainerHigh.copy(alpha = 0.72f),
@@ -268,6 +314,40 @@ private fun SearchNavButton(
         OwnTVIcon(
             icon = OwnTVIcon.SEARCH,
             tint = if (focused) colors.surface else colors.onSurface,
+            modifier = Modifier.size(21.dp),
+        )
+    }
+}
+
+/** TV/Fire manual catalogue refresh. It is a real D-pad destination beside Search, and the label is
+ * present in semantics even though the compact top bar intentionally shows only the glyph. */
+@Composable
+private fun RefreshNavButton(
+    refreshing: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = OwnTVTheme.colors
+    val label = stringResource(R.string.zenplay_refresh_label)
+    FocusableSurface(
+        onClick = onClick,
+        selected = refreshing,
+        modifier = Modifier
+            .size(44.dp)
+            .semantics { contentDescription = label }
+            .testTag("topbar_refresh_content"),
+        shape = RoundedCornerShape(TopBarChipCorner),
+        focusedContainerColor = colors.onSurface,
+        unfocusedContainerColor = Color.Transparent,
+        selectedContainerColor = colors.primaryContainer.copy(alpha = 0.72f),
+        contentAlignment = Alignment.Center,
+    ) { focused ->
+        OwnTVIcon(
+            icon = OwnTVIcon.REFRESH,
+            tint = when {
+                focused -> colors.surface
+                refreshing -> colors.onPrimaryContainer
+                else -> colors.onSurface
+            },
             modifier = Modifier.size(21.dp),
         )
     }
@@ -292,9 +372,6 @@ private fun TopDestination(
         selected = selected,
         modifier = modifier,
         shape = RoundedCornerShape(TopBarChipCorner),
-        surface = GlassSurface.TOPBAR,
-        glassFrostScale = TopBarFrost,
-        glassIdleRimAlpha = if (selected) 0.24f else 0.10f,
         focusedContainerColor = colors.onSurface,
         unfocusedContainerColor = Color.Transparent,
         selectedContainerColor = colors.surfaceContainerHigh.copy(alpha = 0.76f),

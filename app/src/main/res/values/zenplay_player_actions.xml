@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="zenplay_player_channel_list">Lista de canales</string>
+    <string name="zenplay_player_next_channel">Siguiente canal</string>
+    <string name="zenplay_player_back_categories">← Categorías</string>
+    <string name="zenplay_player_playback_settings">Ajustes de reproducción</string>
+    <string name="zenplay_record_actions_title">Grabación</string>
+    <string name="zenplay_record_now">Grabar ahora</string>
+    <string name="zenplay_record_schedule">Programar grabación</string>
+    <string name="zenplay_record_schedule_title">Programar grabación</string>
+    <string name="zenplay_record_start_day">Día de inicio</string>
+    <string name="zenplay_record_start_time">Hora de inicio</string>
+    <string name="zenplay_record_duration">Duración</string>
+    <string name="zenplay_record_today">Hoy</string>
+    <string name="zenplay_record_tomorrow">Mañana</string>
+    <string name="zenplay_record_today_time_passed">Esa hora de hoy ya pasó. Elige una hora futura o Mañana.</string>
+    <string name="zenplay_record_scheduled">Grabación programada</string>
+    <string name="zenplay_record_cancel_schedule">Cancelar programación</string>
+</resources>

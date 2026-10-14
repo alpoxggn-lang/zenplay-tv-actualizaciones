@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tv.own.owntv.core.content.AdultCategoryClassifier
+import tv.own.owntv.core.content.ContentAccessPolicy
 import tv.own.owntv.core.database.dao.CategoryDao
 import tv.own.owntv.core.database.dao.HistoryDao
 import tv.own.owntv.core.database.dao.MovieDao
@@ -104,6 +105,7 @@ class VodTuner(
     private val liveTuner: LiveTuner,
     private val dataSaver: DataSaverGate,
     private val cast: CastController,
+    private val contentAccess: ContentAccessPolicy,
     val player: OwnTVPlayer,
     /** Lets core's background catalogue drain know a playlist is in use. */
     private val watchSession: tv.own.owntv.core.live.WatchSession,
@@ -114,6 +116,13 @@ class VodTuner(
     private val engine by lazy { MpvPlaybackEngine(player) }
 
     private val _playing = MutableStateFlow<VodPlayback?>(null)
+
+    /**
+     * [stop] saves through Room before it tears down the shared player. A replacement title can be
+     * opened while that write is suspended, so the destructive half is guarded by the session that
+     * requested it rather than by coroutine completion order.
+     */
+    private val playbackExitGate = VodPlaybackExitGate()
 
     /** The film or episode on screen, or null when nothing of ours is playing. */
     val playing: StateFlow<VodPlayback?> = _playing
@@ -191,7 +200,7 @@ class VodTuner(
     suspend fun playMovie(movieId: Long, startPositionMs: Long = 0): Boolean {
         val movie = withContext(Dispatchers.IO) { movieDao.getById(movieId) } ?: return false
         val pid = currentProfileId() ?: return false
-        if (!AdultCategoryClassifier.allows(pid, movie.categoryId, profileDao, categoryDao)) return false
+        if (!contentAccess.allows(pid, movie)) return false
         val source = withContext(Dispatchers.IO) { sourceDao.getById(movie.sourceId) }
 
         // #115 — a protected item cannot go to an external player: no intent extra carries a licence
@@ -249,7 +258,7 @@ class VodTuner(
         val episode = withContext(Dispatchers.IO) { seriesDao.getEpisodeById(episodeId) } ?: return false
         val show = withContext(Dispatchers.IO) { seriesDao.getSeriesById(episode.seriesId) } ?: return false
         val pid = currentProfileId() ?: return false
-        if (!AdultCategoryClassifier.allows(pid, show.categoryId, profileDao, categoryDao)) return false
+        if (!contentAccess.allows(pid, episode)) return false
         val source = withContext(Dispatchers.IO) { sourceDao.getById(show.sourceId) }
         val title = show.name
         val subtitle = episodeLabel(episode)
@@ -390,6 +399,7 @@ class VodTuner(
         // A file on this phone is not reachable from a receiver, so starting one ends the cast rather
         // than leaving the television on whatever was playing before.
         cast.release(this)
+        playbackExitGate.playbackStarted()
         player.play(url = filePath, title = title, isLive = false)
         player.exitAudioOnly()
         session.attach(engine)
@@ -423,23 +433,21 @@ class VodTuner(
      * is refused it — the same call the television makes.
      */
     private suspend fun downloadAllowed(mediaType: MediaType, itemId: Long, profileId: Long): Boolean {
-        val item = withContext(Dispatchers.IO) {
-            when (mediaType) {
-                MediaType.MOVIE -> movieDao.getById(itemId)?.categoryId to true
-                else -> seriesDao.getEpisodeById(itemId)
-                    ?.let { seriesDao.getSeriesById(it.seriesId) }
-                    ?.let { it.categoryId to true } ?: (null to false)
+        return when (mediaType) {
+            MediaType.MOVIE -> movieDao.getById(itemId)?.let { contentAccess.allows(profileId, it) } == true
+            MediaType.EPISODE -> {
+                val episode = seriesDao.getEpisodeById(itemId) ?: return false
+                contentAccess.allows(profileId, episode)
             }
+            else -> false
         }
-        if (mediaType == MediaType.MOVIE && item.first == null && !item.second) return false
-        return AdultCategoryClassifier.allows(profileId, item.first, profileDao, categoryDao)
     }
 
     /** Hand the item to VLC, MX Player or whatever else is installed — the long-press action, and the
      *  "External player" setting's route. History is still recorded; a resume position cannot be. */
     suspend fun playExternal(movie: MovieEntity): Boolean {
         val pid = currentProfileId() ?: return false
-        if (!AdultCategoryClassifier.allows(pid, movie.categoryId, profileDao, categoryDao)) return false
+        if (!contentAccess.allows(pid, movie)) return false
         val source = withContext(Dispatchers.IO) { sourceDao.getById(movie.sourceId) }
         return handOver(movie.name, source, movie.streamUrl, movie.httpHeaders, pid, MediaType.MOVIE, movie.id)
     }
@@ -447,16 +455,24 @@ class VodTuner(
     /** [playExternal] for an episode of [show]. */
     suspend fun playExternal(show: SeriesEntity, episode: EpisodeEntity): Boolean {
         val pid = currentProfileId() ?: return false
-        if (!AdultCategoryClassifier.allows(pid, show.categoryId, profileDao, categoryDao)) return false
+        if (episode.seriesId != show.id) return false
+        if (!contentAccess.allows(pid, episode)) return false
         val source = withContext(Dispatchers.IO) { sourceDao.getById(show.sourceId) }
         return handOver(show.name, source, episode.streamUrl, episode.httpHeaders, pid, MediaType.EPISODE, episode.id)
     }
 
     /** Stop playing altogether — the mini player's close button, and nothing else. */
     fun stop() {
+        val ticket = playbackExitGate.requestExit() ?: return
+        // Capture both the identity and clock before launching. If Room is busy and a replacement
+        // title starts first, this write still belongs to the title the user actually closed.
+        val progress = progressSnapshot()
         scope.launch {
-            saveProgress()
-            clearPlaying()
+            progress?.let { persistProgress(it) }
+            // A newer title (or Live TV) owns the singleton player now. Its session invalidated this
+            // ticket, so an old exit must not clear state, release Cast/MediaSession, or call stop().
+            if (!playbackExitGate.commitExit(ticket)) return@launch
+            clearPlaying(invalidateExitTickets = false)
             cast.release(this@VodTuner)
             session.attach(null)
             PlaybackService.stop(context)
@@ -488,23 +504,40 @@ class VodTuner(
 
     /** Write the resume position now — on the timer, when another item starts, and when the user stops. */
     suspend fun saveProgress() {
-        val current = _playing.value ?: return
+        val snapshot = progressSnapshot() ?: return
+        persistProgress(snapshot)
+    }
+
+    private data class ProgressSnapshot(
+        val playback: VodPlayback,
+        val profileId: Long,
+        val positionMs: Long,
+        val durationMs: Long,
+    )
+
+    /** Snapshot synchronously: a later Room suspension must never mix title A with title B's clock. */
+    private fun progressSnapshot(): ProgressSnapshot? {
+        val current = _playing.value ?: return null
         // Whichever engine actually has the film. Casting for an hour and coming back to a resume
         // position of zero would be the same bug as never writing one at all.
         val remote = cast.engine.value
         val position = remote?.position?.value ?: player.position.value
         val duration = remote?.duration?.value ?: player.duration.value
-        if (position <= 0 || duration <= 0) return
-        if (currentProfileId() != playingProfileId) return
+        if (position <= 0 || duration <= 0 || playingProfileId < 0) return null
+        return ProgressSnapshot(current, playingProfileId, position, duration)
+    }
+
+    private suspend fun persistProgress(snapshot: ProgressSnapshot) {
+        if (currentProfileId() != snapshot.profileId) return
         runCatching {
             withContext(Dispatchers.IO) {
                 progressDao.save(
                     PlaybackProgressEntity(
-                        profileId = playingProfileId,
-                        mediaType = current.mediaType,
-                        itemId = current.itemId,
-                        positionMs = position,
-                        durationMs = duration,
+                        profileId = snapshot.profileId,
+                        mediaType = snapshot.playback.mediaType,
+                        itemId = snapshot.playback.itemId,
+                        positionMs = snapshot.positionMs,
+                        durationMs = snapshot.durationMs,
                     ),
                 )
             }
@@ -514,6 +547,9 @@ class VodTuner(
     /** [onCast] = the receiver took it, so none of the local engine's housekeeping applies and the
      *  session is already pointed at the remote one. */
     private suspend fun began(profileId: Long, what: VodPlayback, onCast: Boolean = false) {
+        // Invalidates any older stop that is still waiting for its progress write to finish. This is
+        // on the main playback path and runs before any suspending work below.
+        playbackExitGate.playbackStarted()
         if (!onCast) {
             // A new film starts with its picture on, whatever the last thing playing was doing. The
             // engine holds the sound-only flag across a change of stream, so without this a channel
@@ -535,7 +571,8 @@ class VodTuner(
         }
     }
 
-    private fun clearPlaying() {
+    private fun clearPlaying(invalidateExitTickets: Boolean = true) {
+        if (invalidateExitTickets) playbackExitGate.playbackCleared()
         _playing.value = null
         playingProfileId = -1L
         playingQueue = null

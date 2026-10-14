@@ -66,7 +66,6 @@ fun rememberSettingsSearchEntries(): List<SettingsSearchEntry> {
         SettingsRowEntry(SettingsGroup.SOURCES, null, R.string.settings_epg_guide_days, R.string.settings_search_keywords_epg),
         SettingsRowEntry(SettingsGroup.SOURCES, null, R.string.settings_catchup, R.string.settings_search_keywords_catchup),
         SettingsRowEntry(SettingsGroup.SOURCES, null, R.string.settings_catchup_timezone_per_playlist, R.string.settings_search_keywords_catchup),
-        SettingsRowEntry(SettingsGroup.SOURCES, null, R.string.settings_playlists, R.string.settings_search_keywords_playlists),
         SettingsRowEntry(SettingsGroup.SOURCES, null, R.string.settings_epg_sources, R.string.settings_search_keywords_epg),
         SettingsRowEntry(SettingsGroup.SOURCES, null, R.string.settings_epg_sources_use_logos, R.string.settings_search_keywords_logos),
 
@@ -180,7 +179,7 @@ fun rememberSettingsSearchEntries(): List<SettingsSearchEntry> {
             .takeIf { tv.own.owntv.player.Tunneling.supported },
     )
 
-    val leaves = SettingsLeaf.entries.map {
+    val leaves = SettingsLeaf.entries.filter { it.listedInGroup }.map {
         SettingsSearchEntry(it.group, it, stringResource(it.titleRes), stringResource(it.keywordsRes))
     }
     val resolved = leaves + rows().map {

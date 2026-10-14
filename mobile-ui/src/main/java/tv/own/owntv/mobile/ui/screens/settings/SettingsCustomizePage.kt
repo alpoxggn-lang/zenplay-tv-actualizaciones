@@ -2,19 +2,24 @@ package tv.own.owntv.mobile.ui.screens.settings
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.androidx.compose.koinViewModel
+import tv.own.owntv.core.profile.ProfileManagementRequirement
+import tv.own.owntv.mobile.R
 import tv.own.owntv.mobile.ui.screens.settings.customize.CustomizeCategoriesPane
 import tv.own.owntv.mobile.ui.screens.settings.customize.CustomizeItemsPane
 import tv.own.owntv.mobile.ui.screens.settings.customize.CustomizeItemsViewModel
 import tv.own.owntv.mobile.ui.screens.settings.customize.CustomizePinGate
 import tv.own.owntv.mobile.ui.screens.settings.customize.CustomizeViewModel
+import tv.own.owntv.mobile.ui.screens.settings.customize.PinPromptDialog
 
 /**
  * Hide, rename, reorder and regroup everything the playlists brought in — folders on the first
@@ -30,10 +35,40 @@ fun SettingsCustomizePage(
     vm: CustomizeViewModel = koinViewModel(),
     itemsVm: CustomizeItemsViewModel = koinViewModel(),
 ) {
+    val accessRequirement by vm.accessRequirement.collectAsStateWithLifecycle()
     val pinLock by vm.pinLock.collectAsStateWithLifecycle()
     val selected by vm.selectedCategory.collectAsStateWithLifecycle()
     // Unlocking lasts as long as the page is open; leaving settings asks for the PIN again.
     var unlocked by remember { mutableStateOf(false) }
+    var adultPinError by remember { mutableStateOf(false) }
+
+    DisposableEffect(vm) {
+        onDispose { vm.clearAdultAccess() }
+    }
+
+    val adultRequirement = accessRequirement ?: return
+    if (adultRequirement is ProfileManagementRequirement.Blocked) {
+        SettingsPage(modifier) {
+            settingsSection(R.string.profiles_management_locked_title)
+            settingsNote(R.string.profiles_management_locked_message)
+        }
+        return
+    }
+    if (adultRequirement is ProfileManagementRequirement.PinRequired) {
+        PinPromptDialog(
+            title = if (adultPinError) {
+                stringResource(R.string.profiles_wrong_pin)
+            } else {
+                stringResource(R.string.profiles_adult_pin_required, adultRequirement.profile.name)
+            },
+            description = stringResource(R.string.profiles_management_locked_message),
+            onSubmit = { entered ->
+                vm.unlockAdultAccess(entered) { unlockedAdult -> adultPinError = !unlockedAdult }
+            },
+            onDismiss = { },
+        )
+        return
+    }
 
     // Feed the second level from the first, so it always pages the folder that was just opened.
     val ctx = vm.ctxForItems()
@@ -58,7 +93,11 @@ fun SettingsCustomizePage(
 
     val pin = pinLock.pin
     if (pin != null && !unlocked) {
-        CustomizePinGate(storedPin = pin, onUnlock = { unlocked = true })
+        CustomizePinGate(
+            storedPin = pin,
+            verifyPin = vm::verifyOptionalPin,
+            onUnlock = { unlocked = true },
+        )
         return
     }
 

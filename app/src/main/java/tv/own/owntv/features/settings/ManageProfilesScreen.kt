@@ -41,8 +41,13 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import tv.own.owntv.R
 import tv.own.owntv.core.database.entity.ProfileEntity
+import tv.own.owntv.core.profile.ProfileAuthorization
+import tv.own.owntv.core.profile.ProfileManagementAction
+import tv.own.owntv.core.profile.ProfileManagementRequirement
+import tv.own.owntv.core.profile.ProfilePinPurpose
+import tv.own.owntv.core.profile.canDeleteProfile
+import tv.own.owntv.features.profiles.PinDialog
 import tv.own.owntv.features.profiles.ProfileEditorDialog
-import tv.own.owntv.features.profiles.ProfileGateSessionViewModel
 import tv.own.owntv.features.profiles.ProfilesViewModel
 import tv.own.owntv.ui.components.OwnTVAvatar
 import tv.own.owntv.ui.components.OwnTVButton
@@ -51,11 +56,17 @@ import tv.own.owntv.ui.components.OwnTVIcon
 import tv.own.owntv.ui.components.roundedPanel
 import tv.own.owntv.ui.theme.OwnTVTheme
 
+private data class PendingProtectedProfileAction(
+    val target: ProfileEntity?,
+    val action: ProfileManagementAction,
+    val pinProfile: ProfileEntity,
+    val pinPurpose: ProfilePinPurpose,
+)
+
 /** Phase 13 — create / edit / delete viewer profiles. */
 @Composable
 fun ManageProfilesScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val vm: ProfilesViewModel = koinViewModel()
-    val gateSession: ProfileGateSessionViewModel = koinViewModel()
     val profiles by vm.profiles.collectAsStateWithLifecycle()
     val activeProfileId by vm.activeProfileId.collectAsStateWithLifecycle()
     val defaultProfileName = stringResource(R.string.profiles_default_name)
@@ -64,7 +75,56 @@ fun ManageProfilesScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     var editing by remember { mutableStateOf<ProfileEntity?>(null) }
     var creating by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf<ProfileEntity?>(null) }
+    var pendingProtectedAction by remember { mutableStateOf<PendingProtectedProfileAction?>(null) }
+    var pinError by remember { mutableStateOf(false) }
+    var creatingAuthorization by remember { mutableStateOf<ProfileAuthorization?>(null) }
+    var editingAuthorization by remember { mutableStateOf<ProfileAuthorization?>(null) }
+    var deleteAuthorization by remember { mutableStateOf<ProfileAuthorization?>(null) }
+    var managementFailure by remember { mutableStateOf(false) }
+    var managementChanged by remember { mutableStateOf(false) }
     val addFocus = remember { FocusRequester() }
+
+    fun perform(
+        action: ProfileManagementAction,
+        profile: ProfileEntity?,
+        authorization: ProfileAuthorization?,
+    ) {
+        when (action) {
+            ProfileManagementAction.CREATE -> {
+                creatingAuthorization = authorization
+                creating = true
+            }
+            ProfileManagementAction.EDIT -> profile?.let {
+                editingAuthorization = authorization
+                editing = it
+            }
+            ProfileManagementAction.DELETE -> profile?.let {
+                if (canDeleteProfile(profiles.size, it.id, activeProfileId)) {
+                    deleteAuthorization = authorization
+                    confirmDelete = it
+                }
+            }
+            ProfileManagementAction.SWITCH -> Unit
+        }
+    }
+
+    fun request(action: ProfileManagementAction, profile: ProfileEntity? = null) {
+        vm.managementRequirement(action, profile) { requirement ->
+            when (requirement) {
+                ProfileManagementRequirement.Allowed -> perform(action, profile, null)
+                is ProfileManagementRequirement.PinRequired -> {
+                    pinError = false
+                    pendingProtectedAction = PendingProtectedProfileAction(
+                        target = profile,
+                        action = action,
+                        pinProfile = requirement.profile,
+                        pinPurpose = requirement.purpose,
+                    )
+                }
+                is ProfileManagementRequirement.Blocked -> managementFailure = true
+            }
+        }
+    }
 
     // Per-row focus restore (mirrors ManageSourcesScreen / MoviesScreen): after create/edit/delete
     // closes, focus lands back INSIDE the list — on the acted-on row if it survived, else the nearest
@@ -130,7 +190,7 @@ fun ManageProfilesScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.profiles_title), style = MaterialTheme.typography.headlineLarge, color = colors.onSurface)
             Spacer(Modifier.weight(1f))
-            OwnTVButton(stringResource(R.string.profiles_add_button), onClick = { creating = true }, icon = OwnTVIcon.ADD, modifier = Modifier.focusRequester(addFocus))
+            OwnTVButton(stringResource(R.string.profiles_add_button), onClick = { request(ProfileManagementAction.CREATE) }, icon = OwnTVIcon.ADD, modifier = Modifier.focusRequester(addFocus))
         }
         Spacer(Modifier.height(20.dp))
 
@@ -138,24 +198,70 @@ fun ManageProfilesScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             itemsIndexed(profiles, key = { _, it -> it.id }) { index, p ->
                 ProfileRow(
                     profile = p,
-                    canDelete = profiles.size > 1,
+                    isActive = p.id == activeProfileId,
+                    canDelete = canDeleteProfile(profiles.size, p.id, activeProfileId),
                     rowModifier = when {
                         p.id == contextId -> Modifier.focusRequester(contextFocus)
                         index == 0 -> Modifier.focusRequester(firstRowFocus)
                         else -> Modifier
                     },
-                    onEdit = { contextId = p.id; contextIndex = index; editing = p },
-                    onDelete = { contextId = p.id; contextIndex = index; confirmDelete = p },
+                    onEdit = {
+                        contextId = p.id
+                        contextIndex = index
+                        request(ProfileManagementAction.EDIT, p)
+                    },
+                    onDelete = {
+                        contextId = p.id
+                        contextIndex = index
+                        request(ProfileManagementAction.DELETE, p)
+                    },
                 )
             }
         }
+    }
+    pendingProtectedAction?.let { pending ->
+        PinDialog(
+            title = if (pinError) {
+                stringResource(R.string.profiles_wrong_pin)
+            } else if (pending.pinPurpose == ProfilePinPurpose.ADULT_ADMIN) {
+                stringResource(R.string.profiles_adult_pin_required, pending.pinProfile.name)
+            } else {
+                stringResource(R.string.profiles_enter_pin, pending.pinProfile.name)
+            },
+            onSubmit = { pin ->
+                if (vm.verifyPin(pending.pinProfile, pin)) {
+                    pendingProtectedAction = null
+                    pinError = false
+                    perform(
+                        pending.action,
+                        pending.target,
+                        ProfileAuthorization(pending.pinProfile.id, pin),
+                    )
+                } else {
+                    pinError = true
+                }
+            },
+            onDismiss = {
+                pendingProtectedAction = null
+                pinError = false
+            },
+        )
     }
 
     if (creating) {
         ProfileEditorDialog(
             initial = null,
-            onConfirm = { name, avatarId, isKids, pin -> vm.create(name, avatarId, isKids, pin, defaultProfileName); creating = false },
-            onDismiss = { creating = false },
+            onConfirm = { name, avatarId, isKids, pin ->
+                vm.create(name, avatarId, isKids, pin, defaultProfileName, creatingAuthorization) { id ->
+                    if (id != null) {
+                        creating = false
+                        creatingAuthorization = null
+                    } else {
+                        managementChanged = true
+                    }
+                }
+            },
+            onDismiss = { creating = false; creatingAuthorization = null },
             // Names must stay unique (backup restore matches profiles by name).
             takenNames = profiles.map { it.name.trim().lowercase() }.toSet(),
         )
@@ -163,8 +269,17 @@ fun ManageProfilesScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     editing?.let { p ->
         ProfileEditorDialog(
             initial = p,
-            onConfirm = { name, avatarId, isKids, pin -> vm.edit(p, name, avatarId, isKids, pin); editing = null },
-            onDismiss = { editing = null },
+            onConfirm = { name, avatarId, isKids, pin ->
+                vm.edit(p, name, avatarId, isKids, pin, editingAuthorization) { changed ->
+                    if (changed) {
+                        editing = null
+                        editingAuthorization = null
+                    } else {
+                        managementChanged = true
+                    }
+                }
+            },
+            onDismiss = { editing = null; editingAuthorization = null },
             takenNames = profiles.filter { it.id != p.id }.map { it.name.trim().lowercase() }.toSet(),
         )
     }
@@ -173,20 +288,41 @@ fun ManageProfilesScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             title = stringResource(R.string.profiles_delete_title, p.name),
             message = stringResource(R.string.profiles_delete_message),
             onConfirm = {
-                // Only an active-profile deletion changes the identity authenticated by this
-                // Activity. Deleting an unrelated profile must not reopen the gate for the profile
-                // the user is still viewing.
-                gateSession.invalidateIfDeletingActiveProfile(p.id, activeProfileId)
-                vm.delete(p)
-                confirmDelete = null
+                vm.delete(p, deleteAuthorization) { deleted ->
+                    if (deleted) {
+                        confirmDelete = null
+                        deleteAuthorization = null
+                    } else {
+                        managementChanged = true
+                    }
+                }
             },
-            onDismiss = { confirmDelete = null },
+            onDismiss = { confirmDelete = null; deleteAuthorization = null },
+        )
+    }
+    if (managementFailure || managementChanged) {
+        ConfirmDialog(
+            title = stringResource(R.string.profiles_management_locked_title),
+            message = stringResource(
+                if (managementChanged) R.string.profiles_management_changed_message
+                else R.string.profiles_management_locked_message,
+            ),
+            confirmLabel = R.string.common_ok,
+            onConfirm = { managementFailure = false; managementChanged = false },
+            onDismiss = { managementFailure = false; managementChanged = false },
         )
     }
 }
 
 @Composable
-private fun ProfileRow(profile: ProfileEntity, canDelete: Boolean, rowModifier: Modifier, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun ProfileRow(
+    profile: ProfileEntity,
+    isActive: Boolean,
+    canDelete: Boolean,
+    rowModifier: Modifier,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
     val colors = OwnTVTheme.colors
     Row(
         modifier = rowModifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(colors.surfaceContainerHigh).padding(14.dp),
@@ -197,6 +333,7 @@ private fun ProfileRow(profile: ProfileEntity, canDelete: Boolean, rowModifier: 
         Column(Modifier.weight(1f)) {
             Text(profile.name, style = MaterialTheme.typography.titleMedium, color = colors.onSurface)
             val tags = buildList {
+                if (isActive) add(stringResource(R.string.profiles_active_tag))
                 if (profile.isKids) add(stringResource(R.string.profiles_kids_tag))
                 if (profile.pinHash != null) add(stringResource(R.string.profiles_locked_tag))
             }
@@ -206,9 +343,12 @@ private fun ProfileRow(profile: ProfileEntity, canDelete: Boolean, rowModifier: 
         }
         Spacer(Modifier.width(12.dp))
         OwnTVButton(stringResource(R.string.common_edit), onClick = onEdit, style = OwnTVButtonStyle.SECONDARY)
-        if (canDelete) {
-            Spacer(Modifier.width(10.dp))
-            OwnTVButton(stringResource(R.string.common_delete), onClick = onDelete, style = OwnTVButtonStyle.SECONDARY)
-        }
+        Spacer(Modifier.width(10.dp))
+        OwnTVButton(
+            stringResource(R.string.common_delete),
+            onClick = onDelete,
+            enabled = canDelete,
+            style = OwnTVButtonStyle.SECONDARY,
+        )
     }
 }

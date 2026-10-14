@@ -236,7 +236,7 @@ val dataModule = module {
     // sourceDao, movieDao, seriesDao, progressDao
     single { LauncherRecommendationPlanner(get(), get(), get(), get(), get(), get()) }
     // sourceDao, channelDao, movieDao, seriesDao, progressDao
-    single { LauncherLaunchResolver(get(), get(), get(), get(), get(), get(), get()) }
+    single { LauncherLaunchResolver(get(), get(), get(), get(), get(), get()) }
     // context, sourceDao, channelDao, movieDao, seriesDao, progressDao, tvProviderProgramDao, customize, settings, localeStore
     single { TvHomeRepository(androidContext(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), LiveLogoPosterArt(androidContext(), get())) }
     // planner, resolver, tvHomeRepository
@@ -258,11 +258,13 @@ val dataModule = module {
     // The recording half of the same idea: several can run at once (D10), so the tracker keeps a
     // line per running recording rather than a single active one.
     single { tv.own.owntv.core.recording.RecordingActivityTracker() }
-    // recordingDao, okHttpClient, sourceDao, streamUrlResolver, openStreamRegistry, settings,
+    // recordingDao, channelDao, okHttpClient, sourceDao, streamUrlResolver, openStreamRegistry, settings,
     // connectivity (the metered check that turns "not over mobile data" into a MISSED row rather
-    // than a silent wait), tracker
+    // than a silent wait), tracker, contentAccessPolicy (execution-time profile/source/content gate)
     single {
-        tv.own.owntv.core.recording.RecordingEngine(androidContext(), get(), get(), get(), get(), get(), get(), get(), get(), get())
+        tv.own.owntv.core.recording.RecordingEngine(
+            androidContext(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(),
+        )
     }
     // context, recordingDao — the AlarmManager half. Exact alarms where the user allows them,
     // inexact plus a bigger head start where they do not.
@@ -301,6 +303,8 @@ val dataModule = module {
     // editing, switching and deleting a profile, shared by both apps' profile gates.
     single { tv.own.owntv.core.profile.ProfileAvatarStore(androidContext()) }
     single { tv.own.owntv.core.profile.ProfileManager(get(), get(), get(), get(), get(), get()) }
+    single { tv.own.owntv.core.profile.ProfileCustomizationAccess(get(), get()) }
+    single { tv.own.owntv.core.content.ContentAccessPolicy(get(), get(), get(), get(), get()) }
     // context, okHttpClient — in-app updates from GitHub Releases
     single { UpdateManager(androidContext(), get()) }
     single { CatalogSyncScheduler(androidContext()) }
@@ -308,5 +312,5 @@ val dataModule = module {
     // profileDao, sourceDao, sourceRepository, backup, settings, connectivity, importFinalizer,
     // launcherIntegration, catalogSyncScheduler, stalkerAuth — onboarding: add a source, sync it,
     // undo it when it fails. Factory, not single: each wizard run owns its own state machine.
-    factory { tv.own.owntv.core.setup.SourceImporter(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    factory { tv.own.owntv.core.setup.SourceImporter(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
 }

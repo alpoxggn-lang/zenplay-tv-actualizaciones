@@ -145,6 +145,8 @@ private fun ReorderableSwitchRow(
 private fun HomeRow.titleRes() = when (this) {
     HomeRow.TRENDING -> R.string.home_row_now_trending
     HomeRow.HERO -> R.string.settings_keep_watching
+    HomeRow.RECENT_MOVIES -> R.string.zenplay_home_recent_movies
+    HomeRow.RECENT_SERIES -> R.string.zenplay_home_recent_series
     HomeRow.RECENT_CHANNELS -> R.string.home_row_recent_channels
     HomeRow.FAVORITE_CHANNELS -> R.string.home_row_favorite_channels
     HomeRow.CONTINUE_MOVIES -> R.string.home_row_continue_movies
@@ -154,6 +156,8 @@ private fun HomeRow.titleRes() = when (this) {
 private fun HomeRow.descriptionRes() = when (this) {
     HomeRow.TRENDING -> R.string.home_row_trending_description
     HomeRow.HERO -> R.string.home_row_hero_description
+    HomeRow.RECENT_MOVIES -> R.string.zenplay_home_recent_movies_description
+    HomeRow.RECENT_SERIES -> R.string.zenplay_home_recent_series_description
     HomeRow.RECENT_CHANNELS -> R.string.home_row_recent_description
     HomeRow.FAVORITE_CHANNELS -> R.string.home_row_favorite_description
     HomeRow.CONTINUE_MOVIES -> R.string.home_row_continue_movies_description

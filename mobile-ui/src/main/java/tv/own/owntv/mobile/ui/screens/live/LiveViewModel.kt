@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tv.own.owntv.core.content.AdultCategoryClassifier
+import tv.own.owntv.core.content.ContentAccessPolicy
 import tv.own.owntv.core.customize.CustomizationStore
 import tv.own.owntv.core.customize.CustomizeKeys
 import tv.own.owntv.core.customize.SectionCustomizations
@@ -95,6 +96,7 @@ class LiveViewModel(
     epgDao: EpgDao,
     /** The app-wide reader the Guide uses too (T18) — one now/next cache, not two. */
     private val epgReader: LiveEpgReader,
+    private val contentAccess: ContentAccessPolicy,
 ) : ViewModel() {
 
 
@@ -491,7 +493,7 @@ class LiveViewModel(
     fun playExternal(channel: ChannelEntity) {
         viewModelScope.launch {
             val pid = ctx.value.profileId.takeIf { it >= 0 } ?: return@launch
-            if (!AdultCategoryClassifier.allows(pid, channel.categoryId, profileDao, categoryDao)) return@launch
+            if (!contentAccess.allows(pid, channel)) return@launch
             val source = sourceDao.getById(channel.sourceId)
             val url = if (streamUrlResolver.needsResolve(source)) {
                 runCatching { streamUrlResolver.resolve(source!!, channel.streamUrl) }.getOrNull() ?: return@launch

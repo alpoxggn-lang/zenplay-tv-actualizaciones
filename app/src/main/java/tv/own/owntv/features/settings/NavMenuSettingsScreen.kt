@@ -38,6 +38,7 @@ import org.koin.androidx.compose.koinViewModel
 import tv.own.owntv.R
 import tv.own.owntv.core.settings.SettingsRepository
 import tv.own.owntv.core.nav.MainSection
+import tv.own.owntv.features.shell.tvCustomizableBrowseSections
 import tv.own.owntv.ui.components.FocusableSurface
 import tv.own.owntv.ui.components.NavDuotoneIcon
 import tv.own.owntv.ui.components.OwnTVIcon
@@ -107,7 +108,7 @@ fun NavMenuSettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
         if (mode == SettingsRepository.NavMenuMode.STATIC) {
             Spacer(Modifier.height(10.dp))
             GroupLabel(stringResource(R.string.settings_icons))
-            MainSection.browseOrder.forEach { section ->
+            tvCustomizableBrowseSections().forEach { section ->
                 NavMenuRow(
                     section = section,
                     shown = section !in hidden,

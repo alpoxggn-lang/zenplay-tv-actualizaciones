@@ -37,7 +37,7 @@ class SettingsSearchCoverageTest {
      * Tabs deliberately absent from search. Backup and Local sync live under ⋯ More, not Settings, and
      * the code says so: a result that lands somewhere the row is not is worse than no result.
      */
-    private val notSearchable = setOf("ROOT", "BACKUP", "LOCAL_SYNC")
+    private val notSearchable = setOf("ROOT", "SOURCES", "BACKUP", "LOCAL_SYNC")
 
     @Test
     fun `every settings screen can be found by search`() {
@@ -139,6 +139,7 @@ class SettingsSearchCoverageTest {
         "settings_remote_shortcuts_reset", "common_reset", "settings_delete_all_subtitles", "settings_delete_subtitle",
         "settings_epg_sources_delete_title", "settings_sources_refresh_days_title", "content_epg_title",
         "settings_panel_width_customize", "settings_refresh_now", "profiles_delete_title",
+        "profiles_management_locked_title",
         "settings_sources_delete_title", "settings_sources_probe_title", "settings_metadata_clear_advanced_title",
         "settings_metadata_key_from_phone", "settings_metadata_remote_advanced", "settings_behavior",
         "player_subtitles_connected_user", "player_subtitles_delete_action", "player_subtitles_sign_in",

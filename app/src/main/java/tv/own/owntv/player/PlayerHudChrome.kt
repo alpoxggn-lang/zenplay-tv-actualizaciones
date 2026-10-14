@@ -49,6 +49,7 @@ import tv.own.owntv.R
 import tv.own.owntv.core.player.PlayerControl
 import tv.own.owntv.core.player.ControlCluster
 import tv.own.owntv.ui.components.OwnTVButton
+import tv.own.owntv.ui.components.OwnTVButtonStyle
 import tv.own.owntv.ui.components.OwnTVIcon
 import tv.own.owntv.ui.theme.OwnTVTheme
 import tv.own.owntv.ui.theme.animationsOn
@@ -276,8 +277,6 @@ internal fun CenterControls(
     player: PlaybackEngine, nav: NavState, isPlaying: Boolean, isLive: Boolean,
     onRewindLive: (() -> Unit)?, onForwardLive: (() -> Unit)?, timeshiftOffset: () -> Int?,
     playFocus: FocusRequester, modifier: Modifier = Modifier,
-    /** ZenPlay: playback position, for the "Saltar intro" button's window. */
-    positionMs: () -> Long = { 0L },
 ) {
     val seekStep by player.seekStepMs.collectAsStateWithLifecycle() // Settings -> Seek step
     val rewindMode = onRewindLive != null // this is a catch-up-capable Live channel
@@ -295,7 +294,6 @@ internal fun CenterControls(
             Spacer(Modifier.height(12.dp))
         }
         TransportCapsule {
-            if (nav.hasPrev) CircleButton(OwnTVIcon.SKIP_PREVIOUS, size = 44) { player.previous() }
             when {
                 rewindMode -> CircleButton(OwnTVIcon.REWIND, size = 44) { onRewindLive() } // step back into the archive
                 !isLive -> CircleButton(OwnTVIcon.REWIND, size = 44) { player.seekBy(-seekStep) }
@@ -307,37 +305,9 @@ internal fun CenterControls(
             }
             // "Go to live" is no longer a transport button: it is the Go Live pill at the head of the
             // dock's left cluster, beside the timeline it acts on.
-            if (nav.hasNext) CircleButton(OwnTVIcon.SKIP_NEXT, size = 44) { player.next() }
-        }
-        // ZenPlay: series get labelled "Saltar intro" (first minutes only) and "Siguiente episodio"
-        // buttons under the transport. Only episode queues have prev/next, so that marks a series.
-        val inIntroWindow = positionMs() < ZENPLAY_INTRO_WINDOW_MS
-        if (!isLive && (nav.hasPrev || nav.hasNext) && (inIntroWindow || nav.hasNext)) {
-            Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (inIntroWindow) {
-                    OwnTVButton(
-                        stringResource(R.string.zenplay_skip_intro),
-                        onClick = { player.seekBy(ZENPLAY_INTRO_SKIP_MS) },
-                        icon = OwnTVIcon.FORWARD,
-                        style = tv.own.owntv.ui.components.OwnTVButtonStyle.SECONDARY,
-                    )
-                }
-                if (nav.hasNext) {
-                    OwnTVButton(
-                        stringResource(R.string.zenplay_next_episode),
-                        onClick = { player.next() },
-                        icon = OwnTVIcon.SKIP_NEXT,
-                    )
-                }
-            }
         }
     }
 }
-
-/** ZenPlay: "Saltar intro" is offered during the first five minutes and jumps 85 seconds ahead. */
-private const val ZENPLAY_INTRO_WINDOW_MS = 5 * 60_000L
-private const val ZENPLAY_INTRO_SKIP_MS = 85_000L
 
 // ---------------- Bottom bar ----------------
 
@@ -355,6 +325,7 @@ internal fun BottomBar(
     onPreviousChannel: (() -> Unit)? = null,
     onOpenDialog: (HudDialog) -> Unit, onPip: (() -> Unit)?, onAudioMode: (() -> Unit)?,
     onMultiview: (() -> Unit)? = null, onRecordThis: (() -> Unit)? = null, recordingThis: Boolean = false,
+    onOpenChannelList: (() -> Unit)? = null, onNextChannel: (() -> Unit)? = null,
     /** Given to whichever timeline is drawn, so Left/Right with the controls hidden can land on it (N6). */
     seekFocus: FocusRequester? = null,
     onBack: () -> Unit, modifier: Modifier = Modifier,
@@ -366,6 +337,33 @@ internal fun BottomBar(
     val sleepLeft = org.koin.compose.koinInject<SleepTimer>().remainingMs.collectAsStateWithLifecycle()
     val sleepRunning by androidx.compose.runtime.remember { androidx.compose.runtime.derivedStateOf { sleepLeft.value != null } }
     Dock(modifier = modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 20.dp)) {
+        // The only two ways the D-pad changes a live channel from fullscreen. They are deliberately
+        // visible and focusable: directional keys with hidden chrome merely reveal this HUD.
+        if (isLive && (onOpenChannelList != null || onNextChannel != null)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (onOpenChannelList != null) {
+                    OwnTVButton(
+                        stringResource(R.string.zenplay_player_channel_list),
+                        onClick = onOpenChannelList,
+                        icon = OwnTVIcon.PLAYLIST,
+                        style = OwnTVButtonStyle.SECONDARY,
+                    )
+                } else Spacer(Modifier.width(1.dp))
+                if (onNextChannel != null) {
+                    OwnTVButton(
+                        stringResource(R.string.zenplay_player_next_channel),
+                        onClick = onNextChannel,
+                        icon = OwnTVIcon.REMOTE_CHANNEL_UP,
+                        style = OwnTVButtonStyle.SECONDARY,
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+        }
         // Band A — the instrument. The times are the bar's own end caps now; the separate time row is
         // gone, and on live the right cap is the state badge instead of a clock.
         when {
@@ -399,144 +397,47 @@ internal fun BottomBar(
                 Spacer(Modifier.height(10.dp))
             }
         }
-        // Band B — the tools. Each cluster hugs its own screen edge and the gap between them is the
-        // slack a focused button expands into, so growth is always toward the centre: the left cluster
-        // pushes only the buttons to its right, the right cluster only those to its left. Walk either
-        // cluster outward-in and nothing you have already passed ever moves.
+        // Band B — a deliberately small set. Track, speed, quality and aspect choices live behind
+        // one Playback settings button so the D-pad does not have to cross a dozen glyphs.
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().focusGroup()) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                // H2 — the ORDER comes from core's canonical list, not from the order these lines
-                // happen to be written in. Each control keeps its own composable and its own
-                // condition; only the sequence is shared, which is what makes this bar and the
-                // phone's read alike. The `when` is exhaustive, so a control added to the shared
-                // list cannot be silently missing here.
-                PlayerControl.clusterFor(tv = true, cluster = ControlCluster.MEDIA).forEach { control ->
-                    when (control) {
-                        // Go Live leads the media cluster, but only while there is actually a live
-                        // edge to go back to: at the edge it is absent and the tools sit flush left,
-                        // and falling behind inserts it and pushes them right. onGoToLive alone is
-                        // non-null on every tuned live channel, so onScrubLive is what says the
-                        // channel has an archive at all.
-                        PlayerControl.GO_LIVE -> if (onGoToLive != null && onScrubLive != null) {
-                            GoLivePill(enabled = (timeshiftOffsetSec ?: 0) > 1) { onGoToLive() }
-                        }
-                        PlayerControl.VOLUME ->
-                            CtrlButton(volumeIcon(volume), label = stringResource(R.string.player_tool_volume)) { onOpenDialog(HudDialog.VOLUME) }
-                        PlayerControl.SPEED ->
-                            SpeedButton(label = speedLabel, active = speedLabel != stringResource(R.string.player_speed_normal_short), toolLabel = stringResource(R.string.player_tool_speed)) { onOpenDialog(HudDialog.SPEED) }
-                        PlayerControl.SUBTITLES ->
-                            CtrlButton(OwnTVIcon.SUBTITLE, badge = subCount.takeIf { it > 0 }, label = stringResource(R.string.player_tool_subtitles)) { onOpenDialog(HudDialog.SUBS) }
-                        PlayerControl.AUDIO ->
-                            CtrlButton(OwnTVIcon.AUDIO, badge = audioCount.takeIf { it > 1 }, label = stringResource(R.string.player_tool_audio)) { onOpenDialog(HudDialog.AUDIO) }
-                        // Favorite the current channel/movie/series without leaving the stream (coral
-                        // heart = on, the same colour the marker has on posters and in browse rows).
-                        PlayerControl.FAVOURITE -> if (onToggleFavorite != null) {
-                            CtrlButton(OwnTVIcon.FAVORITE, active = favorite, activeTint = OwnTVTheme.colors.favorite, label = stringResource(R.string.player_tool_favorite)) { onToggleFavorite() }
-                        }
-                        // "Go back to…" — jump straight to a time in this channel's archive. Only on
-                        // catch-up channels. CATCHUP (a TV with a replay loop): REWIND is already the
-                        // transport button beside it, and a plain clock would not say which of the
-                        // two time controls this is.
-                        PlayerControl.CATCH_UP -> if (onOpenJumpBack != null) {
-                            CtrlButton(OwnTVIcon.CATCHUP, label = stringResource(R.string.player_tool_catchup)) { onOpenJumpBack() }
-                        }
-                        // N2 — back to the channel watched before; present only once there is one.
-                        PlayerControl.PREVIOUS_CHANNEL -> if (onPreviousChannel != null) {
-                            CtrlButton(OwnTVIcon.HISTORY, label = stringResource(R.string.player_previous_channel)) { onPreviousChannel() }
-                        }
-                        // Belongs to the tools cluster; `clusterFor` never hands them to this loop.
-                        PlayerControl.BRIGHTNESS, PlayerControl.CHANNEL_LIST, PlayerControl.ENGINE,
-                        PlayerControl.ASPECT, PlayerControl.QUALITY, PlayerControl.MINI_PLAYER, PlayerControl.AUDIO_ONLY,
-                        PlayerControl.MULTIVIEW, PlayerControl.RECORD, PlayerControl.SLEEP_TIMER,
-                        PlayerControl.INFO, PlayerControl.REPORT,
-                        -> Unit
-                    }
+                if (onGoToLive != null && onScrubLive != null) {
+                    GoLivePill(enabled = (timeshiftOffsetSec ?: 0) > 1) { onGoToLive() }
+                }
+                CtrlButton(volumeIcon(volume), label = stringResource(R.string.player_tool_volume)) {
+                    onOpenDialog(HudDialog.VOLUME)
+                }
+                CtrlButton(OwnTVIcon.GEAR, label = stringResource(R.string.zenplay_player_playback_settings)) {
+                    onOpenDialog(HudDialog.PLAYBACK_SETTINGS)
+                }
+                if (onToggleFavorite != null) {
+                    CtrlButton(
+                        OwnTVIcon.FAVORITE,
+                        active = favorite,
+                        activeTint = OwnTVTheme.colors.favorite,
+                        label = stringResource(R.string.player_tool_favorite),
+                    ) { onToggleFavorite() }
+                }
+                if (onOpenJumpBack != null) {
+                    CtrlButton(OwnTVIcon.CATCHUP, label = stringResource(R.string.player_tool_catchup)) { onOpenJumpBack() }
                 }
             }
             Spacer(Modifier.weight(1f))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                // H2 — the ORDER is core's, exactly as in the media cluster above. Each control
-                // keeps its own composable and condition; only the sequence is shared.
-                PlayerControl.clusterFor(tv = true, cluster = ControlCluster.TOOLS).forEach { control ->
-                    when (control) {
-                        PlayerControl.ENGINE -> {
-                            // Live "compatibility mode" (Live TV + channels opened from the Guide):
-                            // pin this channel to mpv. The pill shows the active engine and flips on
-                            // click (teal while pinned to mpv).
-                            if (onToggleCompatMode != null) {
-                                EngineToggle(label = stringResource(if (compatMode == true) R.string.player_engine_mpv else R.string.player_engine_exo), active = compatMode == true, toolLabel = stringResource(R.string.player_tool_engine)) { onToggleCompatMode() }
-                            }
-                            // VOD engine toggle (Movies/Series): flip THIS movie/episode between mpv
-                            // and ExoPlayer. The pill shows the active engine (teal while ExoPlayer
-                            // owns playback).
-                            if (onToggleVodEngine != null) {
-                                EngineToggle(label = stringResource(if (vodOnExo == true) R.string.player_engine_exo else R.string.player_engine_mpv), active = vodOnExo == true, toolLabel = stringResource(R.string.player_tool_engine)) { onToggleVodEngine() }
-                            }
-                        }
-                        // Aspect/zoom works in every mode now — direct mode resizes the surface view
-                        // itself (see MpvVideoSurface), GL mode scales internally.
-                        PlayerControl.ASPECT ->
-                            CtrlButton(OwnTVIcon.ASPECT, active = zoomMode != ZoomMode.FIT, label = stringResource(R.string.player_tool_aspect)) { onOpenDialog(HudDialog.ZOOM) }
-                        // N11 — only when this stream offers several; tinted while a pick overrides Auto.
-                        PlayerControl.QUALITY -> {
-                            val qualities by player.videoQualities.collectAsStateWithLifecycle()
-                            val pick by player.videoQualityPick.collectAsStateWithLifecycle()
-                            if (qualities.isNotEmpty()) {
-                                CtrlButton(OwnTVIcon.VIDEO, active = pick != null, label = stringResource(R.string.player_tool_quality)) { onOpenDialog(HudDialog.QUALITY) }
-                            }
-                        }
-                        PlayerControl.MINI_PLAYER -> if (onPip != null) {
-                            CtrlButton(OwnTVIcon.PIP, label = stringResource(R.string.player_tool_mini)) { onPip() }
-                        }
-                        PlayerControl.AUDIO_ONLY -> if (onAudioMode != null) {
-                            CtrlButton(OwnTVIcon.HEADPHONES, label = stringResource(R.string.player_tool_audio_only)) { onAudioMode() }
-                        }
-                        // Live only, and only once the user has switched Multiview on: four tiles
-                        // from the channel already playing. Next to the mini-player button, which is
-                        // its nearest relative.
-                        PlayerControl.MULTIVIEW -> if (onMultiview != null) {
-                            CtrlButton(OwnTVIcon.LIST_GRID, label = stringResource(R.string.multiview_button)) { onMultiview() }
-                        }
-                        // Record what is already on screen. Present only when the setting is on, so
-                        // it never needs to explain itself here — the trade-off was accepted when it
-                        // was enabled (D3). Tinted while running, and the label flips, because
-                        // "Record" on a button that is already recording is the kind of thing that
-                        // loses an hour of somebody's evening.
-                        PlayerControl.RECORD -> if (onRecordThis != null) {
-                            CtrlButton(
-                                OwnTVIcon.LIVE_TV,
-                                active = recordingThis,
-                                activeTint = androidx.compose.ui.graphics.Color(0xFFEF4444),
-                                label = stringResource(
-                                    if (recordingThis) R.string.recording_stop else R.string.recording_record,
-                                ),
-                            ) { onRecordThis() }
-                        }
-                        // N17 — stop after a while; tinted while a countdown is running.
-                        PlayerControl.SLEEP_TIMER ->
-                            CtrlButton(OwnTVIcon.BEDTIME, active = sleepRunning, label = stringResource(R.string.player_sleep_timer)) { onOpenDialog(HudDialog.SLEEP_TIMER) }
-                        // Stream technical info (codec/res/HDR/bitrate/decoder/audio/buffer) —
-                        // toggles the overlay. Parked at the far right, where the redundant
-                        // exit-fullscreen button used to sit (Back already leaves the player, so
-                        // that button never did anything the remote couldn't).
-                        PlayerControl.INFO -> if (onInfo != null) {
-                            CtrlButton(OwnTVIcon.INFO, active = infoOn, label = stringResource(R.string.player_tool_info)) { onInfo() }
-                        }
-                        // "Report this stream": copies the readout the user is looking at into the
-                        // playback log, so a "this channel judders" complaint carries the
-                        // codec/decoder/bitrate that caused it. Only offered while the info overlay
-                        // is open — there is nothing to report otherwise, and the bar stays as short
-                        // as it was for everyone who never needs this. H1 made that the rule on both
-                        // apps.
-                        PlayerControl.REPORT -> if (infoOn && onReport != null) {
-                            CtrlButton(OwnTVIcon.SHARE, label = stringResource(R.string.player_tool_report)) { onReport() }
-                        }
-                        // Belongs to the media cluster; `clusterFor` never hands them to this loop.
-                        PlayerControl.GO_LIVE, PlayerControl.VOLUME, PlayerControl.BRIGHTNESS,
-                        PlayerControl.SPEED, PlayerControl.SUBTITLES, PlayerControl.AUDIO,
-                        PlayerControl.FAVOURITE, PlayerControl.CATCH_UP, PlayerControl.PREVIOUS_CHANNEL,
-                        PlayerControl.CHANNEL_LIST,
-                        -> Unit
+                if (onMultiview != null) {
+                    CtrlButton(OwnTVIcon.LIST_GRID, label = stringResource(R.string.multiview_button)) { onMultiview() }
+                }
+                if (onRecordThis != null) {
+                    CtrlButton(
+                        // A TV glyph looked like "open channels". The standard REC ring/dot remains
+                        // unmistakable both collapsed and focused, while the existing label supplies
+                        // the screen-reader description (Record / Stop recording).
+                        OwnTVIcon.RECORD,
+                        active = recordingThis,
+                        activeTint = androidx.compose.ui.graphics.Color(0xFFEF4444),
+                        label = stringResource(if (recordingThis) R.string.recording_stop else R.string.recording_record),
+                    ) {
+                        if (recordingThis) onRecordThis() else onOpenDialog(HudDialog.RECORD)
                     }
                 }
             }

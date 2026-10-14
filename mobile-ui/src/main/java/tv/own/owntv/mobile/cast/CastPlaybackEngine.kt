@@ -159,8 +159,14 @@ class CastPlaybackEngine(private val session: CastSession) : PlaybackEngine {
 
     override fun seekBy(deltaMs: Long) {
         if (live) return
+        seekTo(_position.value + deltaMs)
+    }
+
+    override fun seekTo(positionMs: Long) {
+        if (live) return
         val client = client ?: return
-        val target = (_position.value + deltaMs).coerceIn(0L, _duration.value.coerceAtLeast(0L))
+        val duration = _duration.value
+        val target = if (duration > 0L) positionMs.coerceIn(0L, duration) else positionMs.coerceAtLeast(0L)
         runCatching { client.seek(MediaSeekOptions.Builder().setPosition(target).build()) }
     }
 

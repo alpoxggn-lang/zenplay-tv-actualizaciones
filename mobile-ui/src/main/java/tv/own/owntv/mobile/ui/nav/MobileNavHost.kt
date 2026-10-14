@@ -37,7 +37,6 @@ import tv.own.owntv.mobile.ui.screens.settings.SettingsGroupPage
 import tv.own.owntv.mobile.ui.screens.settings.SettingsLeaf
 import tv.own.owntv.mobile.ui.screens.settings.SettingsLeafPage
 import tv.own.owntv.mobile.ui.screens.settings.SettingsScreen
-import tv.own.owntv.mobile.ui.setup.SetupFlow
 import tv.own.owntv.mobile.ui.shell.LocalMiniRequested
 import tv.own.owntv.mobile.ui.theme.LocalMobileMotion
 
@@ -147,7 +146,7 @@ fun MobileNavHost(
                     )
                     MobileDestination.SETTINGS -> SettingsScreen(
                         onOpenRoute = { navController.navigate(it) },
-                        onAddSource = { navController.navigate(SETUP_ROUTE) },
+                        onAddSource = {},
                     )
                 }
                 }
@@ -216,7 +215,9 @@ fun MobileNavHost(
         // The seven group pages and every leaf under them. Each is a route rather than an expanding
         // block, so the system back gesture is what closes it.
         val openRoute: (String) -> Unit = { navController.navigate(it) }
-        val addSource: () -> Unit = { navController.navigate(SETUP_ROUTE) }
+        // ZenPlay has one fixed, already validated source. Keep the historical callback in the
+        // settings API for source compatibility, but never open the generic source wizard.
+        val addSource: () -> Unit = {}
         SettingsGroup.entries.forEach { group ->
             composable(group.route) { SettingsGroupPage(group, openRoute) }
         }
@@ -227,23 +228,34 @@ fun MobileNavHost(
         // left, so nothing under `settings/` can reach them and the settings search cannot see them.
         MoreLeaf.entries.forEach { leaf ->
             composable(leaf.route) {
-                CompositionLocalProvider(LocalNavAnimatedScope provides this) {
-                    MoreLeafPage(
-                        leaf = leaf,
-                        // A channel or a title opened from Favourites lands on the screen it has
-                        // under its own tab — the same convention the Guide uses for its channels.
-                        onOpenChannel = { channelId, openCatchup ->
-                            navController.navigate(
-                                channelRoute(MobileDestination.LIVE, channelId, openCatchup),
-                            )
-                        },
-                        onOpenItem = { tab, id ->
-                            navController.navigate(
-                                detailRoute(tab.destination().route, tab, id),
-                            )
-                        },
-                        onOpenPlayer = { navController.navigate(PLAYER_ROUTE) },
-                    )
+                if (!leaf.enabled) {
+                    // A process restored on an old Backup/Local-sync route must not reveal those
+                    // parked screens. Return it to Mi ZenPlay immediately.
+                    LaunchedEffect(leaf) {
+                        navController.navigate(MobileDestination.MORE.route) {
+                            popUpTo(leaf.route) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
+                } else {
+                    CompositionLocalProvider(LocalNavAnimatedScope provides this) {
+                        MoreLeafPage(
+                            leaf = leaf,
+                            // A channel or a title opened from Favourites lands on the screen it has
+                            // under its own tab — the same convention the Guide uses for its channels.
+                            onOpenChannel = { channelId, openCatchup ->
+                                navController.navigate(
+                                    channelRoute(MobileDestination.LIVE, channelId, openCatchup),
+                                )
+                            },
+                            onOpenItem = { tab, id ->
+                                navController.navigate(
+                                    detailRoute(tab.destination().route, tab, id),
+                                )
+                            },
+                            onOpenPlayer = { navController.navigate(PLAYER_ROUTE) },
+                        )
+                    }
                 }
             }
         }
@@ -260,10 +272,14 @@ fun MobileNavHost(
             )
         }
         composable(SETUP_ROUTE) {
-            SetupFlow(
-                onDone = { navController.popBackStack() },
-                onCancel = { navController.popBackStack() },
-            )
+            // Historical saved navigation state may still name the generic source wizard. ZenPlay
+            // accepts only the account established at sign-in, so recover to Mi ZenPlay instead.
+            LaunchedEffect(Unit) {
+                navController.navigate(MobileDestination.MORE.route) {
+                    popUpTo(SETUP_ROUTE) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
         }
         if (MobileHostInfo.devTools) {
             composable(DevRoute.GALLERY.route) { ThemeGalleryScreen() }

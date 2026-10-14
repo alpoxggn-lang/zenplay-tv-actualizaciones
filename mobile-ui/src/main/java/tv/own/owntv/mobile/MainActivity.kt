@@ -131,10 +131,15 @@ open class MainActivity : FragmentActivity() {
                     // Inside the backdrop, because a sheet's whole reason for living in this window
                     // is that it can frost the same wallpaper everything else frosts.
                     MobileSheetHost {
-                        // Width, not device type: a phone in landscape and a tablet in split-screen
-                        // are the same problem, and the configuration re-reads itself on every
-                        // rotation and resize.
-                        MobileShell(windowWidthDp = LocalConfiguration.current.screenWidthDp)
+                        // Window size and orientation, not a marketing device name. Portrait keeps
+                        // the reachable bottom bar; landscape uses the compact rail. Configuration
+                        // is re-read on every rotation and resize.
+                        val configuration = LocalConfiguration.current
+                        MobileShell(
+                            windowWidthDp = configuration.screenWidthDp,
+                            windowHeightDp = configuration.screenHeightDp,
+                            compactHandset = configuration.smallestScreenWidthDp < 600,
+                        )
                     }
                 }
             }

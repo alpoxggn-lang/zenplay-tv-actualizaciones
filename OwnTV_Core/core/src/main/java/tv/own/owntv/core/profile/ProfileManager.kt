@@ -1,6 +1,8 @@
 package tv.own.owntv.core.profile
 
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import tv.own.owntv.core.database.dao.ProfileDao
 import tv.own.owntv.core.database.dao.SourceDao
 import tv.own.owntv.core.database.entity.ProfileEntity
@@ -9,6 +11,7 @@ import tv.own.owntv.core.launcher.LauncherIntegrationRepository
 import tv.own.owntv.core.settings.SettingsRepository
 import tv.own.owntv.core.subtitles.OpenSubtitlesAccountManager
 import tv.own.owntv.core.util.Pin
+import tv.own.owntv.core.util.PinAttemptGuard
 
 /**
  * Creating, editing, switching and deleting a profile — everything about a profile that is not
@@ -28,16 +31,43 @@ class ProfileManager(
     private val avatars: ProfileAvatarStore,
 ) {
 
-    /** Make [id] the profile the app is showing. */
-    suspend fun switchTo(id: Long) = settings.setActiveProfile(id)
+    /** Serializes identity-changing operations so switch/delete cannot invalidate each other's check. */
+    private val mutationMutex = Mutex()
 
-    fun verifyPin(profile: ProfileEntity, pin: String): Boolean = Pin.verify(pin, profile.pinHash)
+    /** Current Core challenge for an operation. UI uses this to present the right PIN prompt. */
+    suspend fun managementRequirement(
+        action: ProfileManagementAction,
+        targetProfileId: Long? = null,
+    ): ProfileManagementRequirement = currentRequirement(action, targetProfileId)
+
+    /** Make [id] active only after Core independently validates the target/profile PIN policy. */
+    suspend fun switchTo(id: Long, authorization: ProfileAuthorization? = null): Boolean =
+        mutationMutex.withLock {
+            if (!authorized(ProfileManagementAction.SWITCH, id, authorization)) return@withLock false
+            settings.setActiveProfile(id)
+            true
+        }
+
+    fun verifyPin(profile: ProfileEntity, pin: String): Boolean =
+        PinAttemptGuard.verify("profile:${profile.id}") { Pin.verify(pin, profile.pinHash) }
 
     /**
      * Add a profile. It inherits every source that already exists — one account, several viewers —
      * so it has something to watch immediately; favorites and history stay its own.
      */
-    suspend fun create(name: String, avatarId: Int, isKids: Boolean, pin: String?, fallbackName: String): Long {
+    suspend fun create(
+        name: String,
+        avatarId: Int,
+        isKids: Boolean,
+        pin: String?,
+        fallbackName: String,
+        authorization: ProfileAuthorization? = null,
+    ): Long? = mutationMutex.withLock {
+        if (!authorized(ProfileManagementAction.CREATE, null, authorization)) return@withLock null
+        if (!pin.isNullOrEmpty() && !Pin.isValid(pin)) return@withLock null
+        val profiles = profileDao.getAllOnce()
+        // A kids profile with no protected adult would permanently strand profile administration.
+        if (isKids && profiles.none { !it.isKids && !it.pinHash.isNullOrBlank() }) return@withLock null
         val id = profileDao.insert(
             ProfileEntity(
                 name = name.ifBlank { fallbackName },
@@ -48,27 +78,44 @@ class ProfileManager(
             ),
         )
         sourceDao.allSourceIds().forEach { sourceDao.link(ProfileSourceCrossRef(profileId = id, sourceId = it)) }
-        return id
+        id
     }
 
     /** Apply the editor's changes. [pin]: null keeps the existing PIN, "" removes it. */
-    suspend fun edit(profile: ProfileEntity, name: String, avatarId: Int, isKids: Boolean, pin: String?) {
+    suspend fun edit(
+        profile: ProfileEntity,
+        name: String,
+        avatarId: Int,
+        isKids: Boolean,
+        pin: String?,
+        authorization: ProfileAuthorization? = null,
+    ): Boolean = mutationMutex.withLock {
+        if (!authorized(ProfileManagementAction.EDIT, profile.id, authorization)) return@withLock false
+        if (pin != null && pin.isNotEmpty() && !Pin.isValid(pin)) return@withLock false
+        val stored = profileDao.getById(profile.id) ?: return@withLock false
         val pinHash = when {
-            pin == null -> profile.pinHash
+            pin == null -> stored.pinHash
             pin.isEmpty() -> null
             else -> Pin.hash(pin)
         }
-        profileDao.update(
-            profile.copy(
-                name = name.ifBlank { profile.name },
-                avatarId = avatarId,
-                isKids = isKids,
-                pinHash = pinHash,
-            ),
+        val updated = stored.copy(
+            name = name.ifBlank { stored.name },
+            avatarId = avatarId,
+            isKids = isKids,
+            pinHash = pinHash,
         )
-        if (profile.isKids != isKids) {
-            launcherIntegration.refreshProfile(profile.id, allowBrowsableRequest = false)
+        val prospective = profileDao.getAllOnce().map { if (it.id == stored.id) updated else it }
+        // Once a kids profile exists, at least one adult PIN must remain as its administration key.
+        if (prospective.any { it.isKids } &&
+            prospective.none { !it.isKids && !it.pinHash.isNullOrBlank() }
+        ) return@withLock false
+        profileDao.update(
+            updated,
+        )
+        if (stored.isKids != isKids) {
+            launcherIntegration.refreshProfile(stored.id, allowBrowsableRequest = false)
         }
+        true
     }
 
     /**
@@ -79,46 +126,106 @@ class ProfileManager(
      * The picture replaces the drawn tile but does not erase the choice of tile: clearing it later
      * brings back the one the profile already had rather than resetting to the first.
      */
-    suspend fun setCustomAvatar(profile: ProfileEntity, source: java.io.File): Boolean =
-        apply(profile, avatars.save(profile.id, source))
+    suspend fun setCustomAvatar(
+        profile: ProfileEntity,
+        source: java.io.File,
+        authorization: ProfileAuthorization? = null,
+    ): Boolean = mutationMutex.withLock {
+        if (!authorized(ProfileManagementAction.EDIT, profile.id, authorization)) return@withLock false
+        if (isLegacyPinRecovery(profile.id)) return@withLock false
+        apply(profile.id, avatars.save(profile.id, source))
+    }
 
     /**
      * As above, for a picture that is not a file on disk — the phone's photo picker hands over a
      * content stream, and copying it out to a temporary file first would only be so that this could
      * copy it in again.
      */
-    suspend fun setCustomAvatar(profile: ProfileEntity, source: java.io.InputStream): Boolean =
-        apply(profile, avatars.save(profile.id, source))
+    suspend fun setCustomAvatar(
+        profile: ProfileEntity,
+        source: java.io.InputStream,
+        authorization: ProfileAuthorization? = null,
+    ): Boolean = mutationMutex.withLock {
+        if (!authorized(ProfileManagementAction.EDIT, profile.id, authorization)) return@withLock false
+        if (isLegacyPinRecovery(profile.id)) return@withLock false
+        apply(profile.id, avatars.save(profile.id, source))
+    }
 
-    private suspend fun apply(profile: ProfileEntity, savedPath: String?): Boolean {
+    private suspend fun apply(profileId: Long, savedPath: String?): Boolean {
         val path = savedPath ?: return false
-        profileDao.update(profile.copy(avatarPath = path))
+        val stored = profileDao.getById(profileId) ?: return false
+        profileDao.update(stored.copy(avatarPath = path))
         return true
     }
 
     /** Drop [profile]'s own picture, returning it to the drawn tile named by its `avatarId`. */
-    suspend fun clearCustomAvatar(profile: ProfileEntity) {
-        avatars.clear(profile.id)
-        profileDao.update(profile.copy(avatarPath = null))
+    suspend fun clearCustomAvatar(
+        profile: ProfileEntity,
+        authorization: ProfileAuthorization? = null,
+    ): Boolean = mutationMutex.withLock {
+        if (!authorized(ProfileManagementAction.EDIT, profile.id, authorization)) return@withLock false
+        if (isLegacyPinRecovery(profile.id)) return@withLock false
+        val stored = profileDao.getById(profile.id) ?: return@withLock false
+        avatars.clear(stored.id)
+        profileDao.update(stored.copy(avatarPath = null))
+        true
     }
 
     /**
-     * Delete a profile and everything keyed to it, and hand the active slot to a survivor when it
-     * was the one on screen. The last profile is never deleted — an app with none has nobody to
-     * resolve any content for.
+     * Delete a non-active profile and everything keyed to it. The active and last profiles are
+     * protected — a profile must be switched away from before it can be removed, and an app with
+     * none has nobody to resolve any content for.
      */
-    suspend fun delete(profile: ProfileEntity) {
-        if (profileDao.count() <= 1) return
-        val activeProfileId = settings.activeProfileId.first()
-        val remainingProfileId = profileDao.getAllOnce().firstOrNull { it.id != profile.id }?.id
-        runCatching { launcherIntegration.clearProfile(profile.id) }
+    suspend fun delete(profile: ProfileEntity, authorization: ProfileAuthorization? = null): Boolean =
+        mutationMutex.withLock {
+        if (!authorized(ProfileManagementAction.DELETE, profile.id, authorization)) return@withLock false
+        val stored = profileDao.getById(profile.id) ?: return@withLock false
+        val survivors = profileDao.getAllOnce().filterNot { it.id == stored.id }
+        if (survivors.any { it.isKids } &&
+            survivors.none { !it.isKids && !it.pinHash.isNullOrBlank() }
+        ) return@withLock false
+        runCatching { launcherIntegration.clearProfile(stored.id) }
         // Deleting a profile permanently erases its stored OpenSubtitles login (subtitle plan §5.5).
-        openSubtitlesAccounts.eraseFor(profile.id)
+        openSubtitlesAccounts.eraseFor(stored.id)
         // …and its picture, which nothing else would ever clean up.
-        avatars.clear(profile.id)
-        settings.setStartupChannel(profile.id, null)
-        profileDao.delete(profile)
-        if (activeProfileId == profile.id) settings.setActiveProfile(remainingProfileId ?: -1L)
+        avatars.clear(stored.id)
+        settings.setStartupChannel(stored.id, null)
+        profileDao.delete(stored)
+        true
+    }
+
+    private suspend fun currentRequirement(
+        action: ProfileManagementAction,
+        targetProfileId: Long?,
+    ): ProfileManagementRequirement = profileManagementRequirement(
+        profiles = profileDao.getAllOnce(),
+        activeProfileId = settings.activeProfileId.first(),
+        action = action,
+        targetProfileId = targetProfileId,
+    )
+
+    private suspend fun authorized(
+        action: ProfileManagementAction,
+        targetProfileId: Long?,
+        authorization: ProfileAuthorization?,
+    ): Boolean = when (val requirement = currentRequirement(action, targetProfileId)) {
+        ProfileManagementRequirement.Allowed -> true
+        is ProfileManagementRequirement.Blocked -> false
+        is ProfileManagementRequirement.PinRequired ->
+            authorization?.profileId == requirement.profile.id &&
+                PinAttemptGuard.verify("profile:${requirement.profile.id}") {
+                    Pin.verify(authorization.pin, requirement.profile.pinHash)
+                }
+    }
+
+    /** Legacy recovery permits the editor to open, but no side mutation before it establishes a PIN. */
+    private suspend fun isLegacyPinRecovery(profileId: Long): Boolean {
+        val profiles = profileDao.getAllOnce()
+        val active = settings.activeProfileId.first()
+        return active == profileId &&
+            profiles.firstOrNull { it.id == profileId }?.isKids == false &&
+            profiles.any { it.isKids } &&
+            profiles.none { !it.isKids && !it.pinHash.isNullOrBlank() }
     }
 }
 

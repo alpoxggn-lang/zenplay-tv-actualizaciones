@@ -36,15 +36,13 @@ import tv.own.owntv.mobile.ui.theme.MobileDimens
 /**
  * The hub behind the More tab: everything that is neither content nor a preference.
  *
- * Nine rows in three groups — where you go, your own data, and the app itself. Backup, Local sync,
- * the error log and About are here rather than in Settings because none of them is a setting: they
- * were in Settings only because Settings was the only door.
+ * The rows are grouped by where you go, your own data, and the app itself. Backup/restore and local
+ * device sharing are deliberately parked for this ZenPlay release: both can introduce a source
+ * other than the fixed account, and cross-device sharing is planned for a later update.
  *
- * Downloads and Settings are also rail destinations on a tablet, so they are reachable two ways
- * there and one way on a phone — the same screen either way.
+ * Downloads and Settings remain reachable from this hub on every touch layout.
  *
- * There is deliberately no "Add playlist", "Restore backup" or "Sync now" row: all three already
- * live where they belong, and a second door is what this screen exists to remove.
+ * There is deliberately no "Add playlist", "Restore backup" or "Sync now" row.
  */
 @Composable
 fun MoreScreen(
@@ -59,11 +57,11 @@ fun MoreScreen(
     // and look. Both queries already exist on the DAOs — see [MoreCountsViewModel].
     val favorites by counts.favorites.collectAsStateWithLifecycle()
     val history by counts.history.collectAsStateWithLifecycle()
+    val zenAccount: tv.own.owntv.mobile.zenplay.ZenPlayAccount = koinInject()
+    val scope = rememberCoroutineScope()
 
-    // ZenPlay: "Mis planes" and "Cerrar sesión".
-    var zenPlans by remember { mutableStateOf(false) }
+    // ZenPlay uses one fixed service; account management is limited to signing out.
     var zenLogout by remember { mutableStateOf(false) }
-    if (zenPlans) tv.own.owntv.mobile.zenplay.ZenPlayPlansSheet(onDismiss = { zenPlans = false })
     if (zenLogout) tv.own.owntv.mobile.zenplay.ZenPlayLogoutDialog(onDismiss = { zenLogout = false })
 
     val listState = rememberLazyListState()
@@ -83,27 +81,26 @@ fun MoreScreen(
         // what you do to the library. The rounded pane is the grouping, the way a settings page
         // groups its rows.
         item {
-            // ZenPlay: the account first — when the subscription runs out, switch plan, sign out.
+            // ZenPlay: the account first — show expiry and allow a clean sign-out.
             MobileGroup {
                 val expiry = tv.own.owntv.mobile.zenplay.rememberZenPlayExpiryText()
+                val expiryRetryable = tv.own.owntv.mobile.zenplay.rememberZenPlayExpiryRetryable()
                 MoreRow(
                     R.string.zenplay_expiry_title,
                     MobileIcons.CalendarMonth,
-                    subtitle = expiry ?: stringResource(R.string.zenplay_expiry_unknown),
-                )
-                MoreRow(
-                    R.string.zenplay_plans_title,
-                    MobileIcons.SwapHoriz,
-                    subtitle = stringResource(R.string.zenplay_plans_summary),
-                ) { zenPlans = true }
+                    subtitle = expiry,
+                ) { if (expiryRetryable) scope.launch { zenAccount.refresh() } }
                 MoreRow(
                     R.string.zenplay_logout_title,
                     MobileIcons.Logout,
                     subtitle = stringResource(R.string.zenplay_logout_summary),
                 ) { zenLogout = true }
             }
-            // Favoritos and Descargas live in the bottom bar now, so they are not repeated here.
             MobileGroup {
+                LeafRow(MoreLeaf.FAVORITES, onOpenLeaf, count = favorites.total)
+                MoreRow(R.string.zenplay_nav_downloads, MobileIcons.Download) {
+                    onNavigate(MobileDestination.DOWNLOADS)
+                }
                 MoreRow(R.string.common_nav_settings, MobileIcons.Settings) {
                     onNavigate(MobileDestination.SETTINGS)
                 }
@@ -111,9 +108,6 @@ fun MoreScreen(
             }
             MobileGroup {
                 LeafRow(MoreLeaf.HISTORY, onOpenLeaf, count = history.total)
-                // Side by side, because they are the same act aimed at a file and at a device.
-                LeafRow(MoreLeaf.BACKUP, onOpenLeaf)
-                LeafRow(MoreLeaf.LOCAL_SYNC, onOpenLeaf)
             }
             MobileGroup {
                 LeafRow(MoreLeaf.ERROR_LOG, onOpenLeaf)

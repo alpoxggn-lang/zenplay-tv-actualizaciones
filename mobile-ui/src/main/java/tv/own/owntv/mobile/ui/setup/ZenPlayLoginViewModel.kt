@@ -107,7 +107,7 @@ class ZenPlayLoginViewModel(
                 val createdProfileId = withContext(NonCancellable) {
                     importer.createProfile(profileName, avatarId = avatarId.coerceAtLeast(0), isKids = isKids, pin = pin)
                         .also { newProfileId = it }
-                }
+                } ?: error("Profile creation was not authorized")
                 currentCoroutineContext().ensureActive()
                 importing = true
                 importer.xtream(

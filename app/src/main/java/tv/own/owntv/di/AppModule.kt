@@ -33,6 +33,8 @@ import tv.own.owntv.features.setup.DisplaySizeViewModel
 import tv.own.owntv.features.setup.SetupViewModel
 import tv.own.owntv.features.shell.ShellViewModel
 import tv.own.owntv.features.subtitles.SubtitleSearchViewModel
+import org.koin.android.ext.koin.androidContext
+import tv.own.owntv.zenplay.ZenPlayExpiryMonitor
 
 /**
  * Root Koin module. Each feature will contribute its own bindings as the app grows;
@@ -45,6 +47,7 @@ import tv.own.owntv.features.subtitles.SubtitleSearchViewModel
  * reordering is safe and a missing binding fails immediately, naming the type.
  */
 val appModule = module {
+    single { ZenPlayExpiryMonitor(androidContext(), get(), get(), get()) }
     viewModelOf(::ShellViewModel)
     // Home's rails are core's, shared with the phone app; the view model only decorates them.
     // LiveEpgReader is registered because GuideReader now needs one: a guide row whose stored data
@@ -63,11 +66,12 @@ val appModule = module {
     // Takes a Context first; Koin resolves it from androidContext().
     //
     // Spelled out rather than `viewModelOf(::LiveViewModel)`: that reflective helper is generated for
-    // up to 22 constructor parameters and this class now has 23. The failure is a "none of the
+    // up to 22 constructor parameters and this class now has 24. The failure is a "none of the
     // following candidates is applicable" at the call above, which says nothing about arity — hence
     // this note. Every argument is resolved by type, so the order here does not matter.
     viewModel {
         LiveViewModel(
+            get(),
             get(),
             get(),
             get(),

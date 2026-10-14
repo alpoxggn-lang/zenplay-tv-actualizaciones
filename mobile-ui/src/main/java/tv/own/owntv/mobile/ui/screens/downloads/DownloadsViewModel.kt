@@ -23,14 +23,9 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
-import tv.own.owntv.core.content.AdultCategoryClassifier
-import tv.own.owntv.core.customize.CustomizationStore
-import tv.own.owntv.core.customize.CustomizeKeys
-import tv.own.owntv.core.customize.SectionCustomizations
-import tv.own.owntv.core.database.dao.CategoryDao
+import tv.own.owntv.core.content.ContentAccessPolicy
 import tv.own.owntv.core.database.dao.DownloadDao
 import tv.own.owntv.core.database.dao.MovieDao
-import tv.own.owntv.core.database.dao.ProfileDao
 import tv.own.owntv.core.database.dao.SeriesDao
 import tv.own.owntv.core.database.entity.DownloadEntity
 import tv.own.owntv.core.download.DownloadManager
@@ -58,12 +53,10 @@ class DownloadsViewModel(
     private val downloadDao: DownloadDao,
     private val movieDao: MovieDao,
     private val seriesDao: SeriesDao,
-    private val categoryDao: CategoryDao,
-    private val profileDao: ProfileDao,
-    private val customize: CustomizationStore,
     private val settings: SettingsRepository,
     private val downloadManager: DownloadManager,
     private val vodTuner: VodTuner,
+    private val contentAccess: ContentAccessPolicy,
 ) : ViewModel() {
 
     /**
@@ -74,41 +67,16 @@ class DownloadsViewModel(
         .flatMapLatest { pid ->
             if (pid < 0) {
                 flowOf(emptyList())
-            } else {
-                combine(
-                    downloadDao.observeForProfile(pid),
-                    customize.observe(pid, MediaType.MOVIE),
-                    customize.observe(pid, MediaType.SERIES),
-                    profileDao.observeById(pid),
-                ) { list, custMovie, custSeries, profile ->
-                    if (custMovie.hiddenItems.isEmpty() && custSeries.hiddenItems.isEmpty() &&
-                        profile?.isKids != true
-                    ) {
-                        list
-                    } else {
-                        list.filterNot { isHidden(it, custMovie, custSeries, profile?.isKids == true) }
-                    }
-                }
+            } else downloadDao.observeForProfile(pid).mapLatest { list ->
+                list.filter { canAccess(it, pid) }
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private suspend fun isHidden(
-        d: DownloadEntity,
-        custMovie: SectionCustomizations,
-        custSeries: SectionCustomizations,
-        isKidsProfile: Boolean,
-    ): Boolean = when (d.mediaType) {
-        MediaType.MOVIE -> movieDao.getById(d.itemId)?.let { movie ->
-            CustomizeKeys.movie(movie) in custMovie.hiddenItems ||
-                (isKidsProfile && AdultCategoryClassifier.isAdult(movie.categoryId?.let { categoryDao.getById(it)?.name }))
-        } ?: isKidsProfile
+    private suspend fun canAccess(d: DownloadEntity, profileId: Long): Boolean = when (d.mediaType) {
+        MediaType.MOVIE -> movieDao.getById(d.itemId)?.let { contentAccess.allows(profileId, it) } == true
         MediaType.EPISODE -> seriesDao.getEpisodeById(d.itemId)
-            ?.let { ep -> seriesDao.getSeriesById(ep.seriesId) }
-            ?.let { series ->
-                CustomizeKeys.series(series) in custSeries.hiddenItems ||
-                    (isKidsProfile && AdultCategoryClassifier.isAdult(series.categoryId?.let { categoryDao.getById(it)?.name }))
-            } ?: isKidsProfile
+            ?.let { contentAccess.allows(profileId, it) } == true
         else -> false
     }
 
@@ -267,6 +235,7 @@ class DownloadsViewModel(
     fun export(download: DownloadEntity, target: Uri) {
         val source = MediaTarget.of(context, download.filePath) ?: return
         viewModelScope.launch(Dispatchers.IO) {
+            if (!canAccess(download, download.profileId)) return@launch
             val copied = runCatching {
                 context.contentResolver.openOutputStream(target)?.use { out ->
                     source.openInput().use { it.copyTo(out) }
@@ -281,9 +250,17 @@ class DownloadsViewModel(
         }
     }
 
-    fun retry(download: DownloadEntity) = downloadManager.retry(download)
+    fun retry(download: DownloadEntity) {
+        viewModelScope.launch {
+            if (canAccess(download, download.profileId)) downloadManager.retry(download)
+        }
+    }
     fun pause(download: DownloadEntity) = downloadManager.pause(download)
-    fun resume(download: DownloadEntity) = downloadManager.resume(download)
+    fun resume(download: DownloadEntity) {
+        viewModelScope.launch {
+            if (canAccess(download, download.profileId)) downloadManager.resume(download)
+        }
+    }
     fun delete(download: DownloadEntity) = downloadManager.delete(download)
 
     private companion object {

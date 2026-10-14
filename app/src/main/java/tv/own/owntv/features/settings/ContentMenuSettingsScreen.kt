@@ -65,6 +65,14 @@ private fun menuTitle(menu: ContentMenu) = stringResource(
     },
 )
 
+/**
+ * Content downloads are a touch-only ZenPlay feature. Keep the shared catalogue intact for the
+ * phone/tablet settings UI, while ensuring the television customiser cannot expose an action that
+ * the TV/Fire detail and context menus deliberately do not implement.
+ */
+internal fun tvContentMenuCatalogue(menu: ContentMenu) =
+    catalogue(menu).filterNot { it.key == "download" }
+
 private fun menuIcon(menu: ContentMenu) = when (menu) {
     ContentMenu.LIVE -> OwnTVIcon.LIVE_TV
     ContentMenu.MOVIE -> OwnTVIcon.MOVIES
@@ -156,7 +164,7 @@ private fun ArrangeMenuOverlay(
 ) {
     val vm: SettingsViewModel = koinViewModel()
     val colors = OwnTVTheme.colors
-    val refs = catalogue(menu)
+    val refs = tvContentMenuCatalogue(menu)
     // Wait for DataStore's first real value before seeding. An eager empty placeholder would make
     // every reopened editor show the shipped order even when a custom order is already saved.
     var keys by remember(menu) { mutableStateOf(emptyList<String>()) }

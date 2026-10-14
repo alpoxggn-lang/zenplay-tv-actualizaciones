@@ -51,7 +51,10 @@ private class MpvSurfaceView(context: Context, private val player: OwnTVPlayer) 
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
-        player.detachSurface()
+        // Name the exact surface that went away. Compose can attach the replacement SurfaceView
+        // before Android delivers this callback for the outgoing one; an unqualified detach would
+        // then tear the decoder away from that newer surface and leave the picture black.
+        player.detachSurface(holder.surface)
     }
 }
 

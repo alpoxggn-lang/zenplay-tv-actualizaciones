@@ -223,7 +223,7 @@ class PlaybackSession(
             // system control therefore means "silence it", which is a pause the user can undo.
             override fun onStop() = withEngine { if (it.isPlaying.value) it.togglePlayPause() }
             override fun onSeekTo(pos: Long) = withEngine {
-                if (!it.isLiveContent) it.seekBy(pos - it.position.value)
+                if (!it.isLiveContent) it.seekTo(pos)
             }
             // Settings → Seek step, the same value the on-screen buttons use: a Bluetooth remote or the
             // system media notification must not move by a different amount than the HUD does.

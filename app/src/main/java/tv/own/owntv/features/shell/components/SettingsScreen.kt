@@ -86,16 +86,13 @@ import tv.own.owntv.R
 import tv.own.owntv.features.customize.CustomizeScreen
 import tv.own.owntv.core.i18n.SupportedLocales
 import tv.own.owntv.core.player.SurroundMode
-import tv.own.owntv.features.settings.LocalSyncScreen
 import tv.own.owntv.features.settings.HomeSettingsScreen
 import tv.own.owntv.features.settings.NO_ARGS
 import tv.own.owntv.features.settings.LanguageSettingsScreen
 import tv.own.owntv.features.settings.LanguageSettingsViewModel
 import tv.own.owntv.core.settings.SettingsRepository
 import tv.own.owntv.features.update.UpdateDialog
-import tv.own.owntv.features.settings.BackupScreen
 import tv.own.owntv.features.settings.ManageProfilesScreen
-import tv.own.owntv.features.settings.ManageSourcesScreen
 import tv.own.owntv.features.settings.SettingsViewModel
 import tv.own.owntv.features.settings.VideoPlayerSettingsScreen
 import tv.own.owntv.core.nav.MainSection
@@ -156,7 +153,34 @@ internal val LocalSettingsRowTone = staticCompositionLocalOf { TileTone.PRIMARY 
 private fun Toned(tone: TileTone, content: @Composable () -> Unit) =
     CompositionLocalProvider(LocalSettingsRowTone provides tone, content = content)
 
-private enum class SettingsTab { ROOT, RECORDING, LANGUAGE, SOURCES, EPG, PROFILES, BACKUP, LOCAL_SYNC, VIDEO, CUSTOMIZE, HOME, NETWORK, DNS, METADATA, OPEN_SUBTITLES, WEATHER, NAV_MENU, CH_NAV, PANEL_WIDTH, GUIDE_WIDTH, GLASS_EFFECT, CONTENT_MENUS }
+/** SOURCES/BACKUP/LOCAL_SYNC remain only so an older rememberSaveable value can deserialize. */
+private enum class SettingsTab {
+    ROOT,
+    RECORDING,
+    LANGUAGE,
+    EPG,
+    PROFILES,
+    SOURCES,
+    BACKUP,
+    LOCAL_SYNC,
+    VIDEO,
+    CUSTOMIZE,
+    HOME,
+    NETWORK,
+    DNS,
+    METADATA,
+    OPEN_SUBTITLES,
+    WEATHER,
+    NAV_MENU,
+    CH_NAV,
+    PANEL_WIDTH,
+    GUIDE_WIDTH,
+    GLASS_EFFECT,
+    CONTENT_MENUS,
+}
+
+private val SettingsTab.isRetiredZenPlayTab: Boolean
+    get() = this == SettingsTab.SOURCES || this == SettingsTab.BACKUP || this == SettingsTab.LOCAL_SYNC
 
 @Composable
 internal fun surroundModeLabel(mode: SurroundMode): String = stringResource(
@@ -215,6 +239,10 @@ fun SettingsScreen(
     // shaping and font fallback. Keep the open settings sub-screen across that configuration change
     // instead of dropping back to the Settings root/sidebar.
     var tab by rememberSaveable { mutableStateOf(SettingsTab.ROOT) }
+    val activeTab = tab.takeUnless { it.isRetiredZenPlayTab } ?: SettingsTab.ROOT
+    LaunchedEffect(tab) {
+        if (tab.isRetiredZenPlayTab) tab = SettingsTab.ROOT
+    }
     // Deep-link from the Guide's "Add EPG" button: jump straight to EPG Sources in add mode.
     var consumeEpgAdd by remember { mutableStateOf(false) }
     var showZoom by remember { mutableStateOf(false) }
@@ -254,7 +282,7 @@ fun SettingsScreen(
     var searchExpanded by remember { mutableStateOf(false) }
     val searchFieldFocus = remember { FocusRequester() }
     // While searching, Back clears the query (and returns focus to the field) instead of leaving Settings.
-    BackHandler(enabled = tab == SettingsTab.ROOT && searchQuery.isNotBlank()) {
+    BackHandler(enabled = activeTab == SettingsTab.ROOT && searchQuery.isNotBlank()) {
         searchQuery = ""
         runCatching { searchFieldFocus.requestFocus() }
     }
@@ -392,6 +420,9 @@ fun SettingsScreen(
 
     // Restore focus to the row a sub-screen was opened from when the user navigates back.
     var lastTab by rememberSaveable { mutableStateOf<SettingsTab?>(null) }
+    LaunchedEffect(lastTab) {
+        if (lastTab?.isRetiredZenPlayTab == true) lastTab = null
+    }
     // Built from the enum, not hand-listed. It used to be a literal map of twenty entries, and
     // adding SettingsTab.RECORDING without adding a line to it crashed the whole Settings screen
     // with "Key RECORDING is missing in the map" — a `getValue` on a map that had quietly gone
@@ -414,13 +445,10 @@ fun SettingsScreen(
         if (openEpgAdd) { consumeEpgAdd = true; open(SettingsTab.EPG); onEpgAddConsumed() }
     }
 
-    when (tab) {
+    when (activeTab) {
         SettingsTab.LANGUAGE -> { LanguageSettingsScreen(onBack = { tab = SettingsTab.ROOT }, modifier = modifier); return }
-        SettingsTab.SOURCES -> { ManageSourcesScreen(onBack = { tab = SettingsTab.ROOT }, modifier = modifier); return }
         SettingsTab.EPG -> { tv.own.owntv.features.settings.EpgSourcesScreen(onBack = { tab = SettingsTab.ROOT; consumeEpgAdd = false }, modifier = modifier, startOnAdd = consumeEpgAdd); return }
         SettingsTab.PROFILES -> { ManageProfilesScreen(onBack = { tab = SettingsTab.ROOT }, modifier = modifier); return }
-        SettingsTab.BACKUP -> { Toned(TileTone.TERTIARY) { BackupScreen(onBack = { tab = SettingsTab.ROOT }, modifier = modifier) }; return }
-        SettingsTab.LOCAL_SYNC -> { Toned(TileTone.TERTIARY) { LocalSyncScreen(onBack = { tab = SettingsTab.ROOT }, modifier = modifier) }; return }
         SettingsTab.VIDEO -> {
             Toned(TileTone.TERTIARY) {
                 VideoPlayerSettingsScreen(
@@ -457,6 +485,7 @@ fun SettingsScreen(
             SettingsTab.PANEL_WIDTH -> { tv.own.owntv.features.settings.PanelWidthSettingsScreen(onBack = { tab = SettingsTab.ROOT }, modifier = modifier); return }
             SettingsTab.GUIDE_WIDTH -> { tv.own.owntv.features.settings.GuideWidthSettingsScreen(onBack = { tab = SettingsTab.ROOT }, modifier = modifier); return }
             SettingsTab.GLASS_EFFECT -> { GlassEffectSettingsScreen(onBack = { tab = SettingsTab.ROOT }, modifier = modifier); return }
+            SettingsTab.SOURCES, SettingsTab.BACKUP, SettingsTab.LOCAL_SYNC -> Unit
             SettingsTab.ROOT -> Unit
     }
 
@@ -525,12 +554,6 @@ fun SettingsScreen(
             onClick = { open(SettingsTab.PROFILES) },
         ),
         RootGroup("group_sources", stringResource(R.string.settings_group_sources), OwnTVIcon.PLAYLIST, stringResource(R.string.settings_group_summary_sources)),
-        RootRow(
-            tabRowKey(SettingsTab.SOURCES), TileTone.PRIMARY, OwnTVIcon.PLAYLIST,
-            title = stringResource(R.string.settings_playlists), desc = stringResource(R.string.settings_playlists_description),
-            focus = rowFocus.getValue(SettingsTab.SOURCES),
-            onClick = { open(SettingsTab.SOURCES) },
-        ),
         RootRow(
             tabRowKey(SettingsTab.EPG), TileTone.PRIMARY, OwnTVIcon.EPG,
             title = stringResource(R.string.settings_epg_sources), desc = stringResource(R.string.settings_epg_sources_nav_description),
@@ -1024,7 +1047,6 @@ fun SettingsScreen(
             SettingsSearchEntry(stringResource(R.string.settings_app_group), stringResource(R.string.settings_language), stringResource(R.string.settings_search_keywords_language), OwnTVIcon.LANGUAGE, TileTone.PRIMARY,
                 chip = languageChip, chipTone = TileTone.PRIMARY) { open(SettingsTab.LANGUAGE) },
             SettingsSearchEntry(stringResource(R.string.settings_group_profile), stringResource(R.string.profiles_title), stringResource(R.string.settings_search_keywords_profiles), OwnTVIcon.PERSON, TileTone.SECONDARY) { open(SettingsTab.PROFILES) },
-            SettingsSearchEntry(stringResource(R.string.settings_group_sources), stringResource(R.string.settings_playlists), stringResource(R.string.settings_search_keywords_playlists), OwnTVIcon.PLAYLIST, TileTone.PRIMARY) { open(SettingsTab.SOURCES) },
             SettingsSearchEntry(stringResource(R.string.settings_group_sources), stringResource(R.string.settings_epg_sources), stringResource(R.string.settings_search_keywords_epg), OwnTVIcon.EPG, TileTone.PRIMARY) { open(SettingsTab.EPG) },
             SettingsSearchEntry(stringResource(R.string.settings_group_sources), stringResource(R.string.content_epg_time_offset), stringResource(R.string.settings_search_keywords_epg_offset), OwnTVIcon.EPG, TileTone.SECONDARY,
                 chip = epgShiftLabel(epgOffset), chipTone = if (epgOffset == 0) TileTone.SECONDARY else TileTone.PRIMARY) { saveScroll(); dialogReturn = searchFieldFocus; showEpgOffset = true },

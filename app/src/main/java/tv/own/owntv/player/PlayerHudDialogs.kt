@@ -63,6 +63,99 @@ private val SPEEDS = listOf(0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0)
  *  reproduced there exactly. */
 private const val AV_SYNC_STEP_MS = 25
 
+/** One compact D-pad menu replaces the separate audio/subtitle/speed/aspect/quality HUD glyphs. */
+@Composable
+internal fun PlaybackSettingsDialog(
+    hasQuality: Boolean,
+    /** Real selected adaptive height; null means Auto. Ignored when this source exposes no variants. */
+    currentQuality: Int?,
+    /** Current renderer (MPV/ExoPlayer). Null means this stream cannot change engines. */
+    engineName: String?,
+    /** Switch this one channel, film or episode to the other renderer. */
+    onToggleEngine: (() -> Unit)?,
+    onOpen: (HudDialog) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { requestFocusRetrying(focus) }
+    val hasEngineSwitch = engineName != null && onToggleEngine != null
+    val entries = buildList {
+        if (hasQuality) {
+            val value = when {
+                currentQuality == null -> stringResource(R.string.settings_auto)
+                currentQuality >= 4320 -> "8K"
+                currentQuality >= 2160 -> "4K"
+                else -> stringResource(R.string.settings_video_quality_lines, currentQuality)
+            }
+            add("${stringResource(R.string.player_tool_quality)} · $value" to HudDialog.QUALITY)
+        }
+        add(stringResource(R.string.player_audio_track) to HudDialog.AUDIO)
+        add(stringResource(R.string.player_subtitles) to HudDialog.SUBS)
+        add(stringResource(R.string.player_tool_speed) to HudDialog.SPEED)
+        add(stringResource(R.string.player_tool_aspect) to HudDialog.ZOOM)
+    }
+    DialogScaffold(
+        title = stringResource(R.string.zenplay_player_playback_settings),
+        onDismiss = onDismiss,
+    ) {
+        if (hasEngineSwitch) {
+            item {
+                OptionRow(
+                    label = "${stringResource(R.string.player_tool_engine)} · ${engineName.orEmpty()}",
+                    selected = false,
+                    modifier = Modifier.focusRequester(focus),
+                    onClick = {
+                        onToggleEngine()
+                        onDismiss()
+                    },
+                )
+            }
+        }
+        items(entries.size) { index ->
+            val (label, target) = entries[index]
+            OptionRow(
+                label = label,
+                selected = false,
+                modifier = if (index == 0 && !hasEngineSwitch) Modifier.focusRequester(focus) else Modifier,
+                onClick = { onOpen(target) },
+            )
+        }
+    }
+}
+
+/** TV/Fire recording stays inside the player: Now or a future timer, never navigation to EPG. */
+@Composable
+internal fun RecordActionsDialog(
+    onRecordNow: () -> Unit,
+    onSchedule: (() -> Unit)?,
+    onDismiss: () -> Unit,
+) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { requestFocusRetrying(focus) }
+    DialogScaffold(
+        title = stringResource(R.string.zenplay_record_actions_title),
+        onDismiss = onDismiss,
+    ) {
+        item {
+            OptionRow(
+                label = stringResource(R.string.zenplay_record_now),
+                selected = false,
+                modifier = Modifier.focusRequester(focus),
+                onClick = onRecordNow,
+            )
+        }
+        if (onSchedule != null) {
+            item {
+                OptionRow(
+                    label = stringResource(R.string.zenplay_record_schedule),
+                    selected = false,
+                    onClick = onSchedule,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 internal fun TrackDialog(
     title: String,
@@ -356,7 +449,12 @@ internal fun QualityDialog(heights: List<Int>, current: Int?, onSelect: (Int?) -
         items(options.size) { index ->
             val height = options[index]
             OptionRow(
-                label = if (height == null) stringResource(R.string.settings_auto) else stringResource(R.string.settings_video_quality_lines, height),
+                label = when {
+                    height == null -> stringResource(R.string.settings_auto)
+                    height >= 4320 -> "8K"
+                    height >= 2160 -> "4K"
+                    else -> stringResource(R.string.settings_video_quality_lines, height)
+                },
                 selected = height == current,
                 modifier = if (index == selectedIndex) Modifier.focusRequester(focus) else Modifier,
                 onClick = { onSelect(height) },

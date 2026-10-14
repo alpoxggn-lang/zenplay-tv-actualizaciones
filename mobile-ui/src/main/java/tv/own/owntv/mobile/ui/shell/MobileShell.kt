@@ -1,19 +1,18 @@
 package tv.own.owntv.mobile.ui.shell
 
-import androidx.compose.ui.graphics.luminance
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
 import tv.own.owntv.mobile.cast.CastController
-import tv.own.owntv.mobile.cast.CastRouteButton
 import tv.own.owntv.mobile.ui.components.MobileIcons
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Alignment
-import tv.own.owntv.core.database.entity.SourceEntity
-import tv.own.owntv.core.model.SourceType
 import kotlinx.coroutines.delay
 import tv.own.owntv.core.update.UpdateManager
 import tv.own.owntv.mobile.ui.screens.settings.SettingsChoice
@@ -54,6 +53,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,20 +63,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import tv.own.owntv.core.metadata.MetadataBudget
@@ -121,18 +124,22 @@ import tv.own.owntv.mobile.ui.theme.MobileTopBarShape
 import tv.own.owntv.mobile.ui.theme.glassSurface
 
 /**
- * The frame every screen sits in: a top app bar that collapses as you scroll, the navigation itself,
- * and the content.
+ * The frame every screen sits in: a fixed top app bar, the navigation itself, and the content.
  *
- * The navigation is a bottom bar on a phone and a rail on anything wider, chosen by width rather
- * than by device type — a phone in landscape and a foldable opened flat are both "wider", and a
- * tablet in split-screen is not. Which destinations appear is core's `NavVisibility` rule, the same
- * one the TV app's sidebar uses, so a channels-only playlist loses Library in both apps at once.
+ * The ZenPlay actions must remain reachable while a long catalogue scrolls. Content therefore moves
+ * underneath the Scaffold's fixed chrome; only fullscreen playback is allowed to hide it.
+ *
+ * The navigation is a bottom bar in portrait and a rail in a medium-or-wider landscape window.
+ * The choice follows the current window rather than a device label, so rotation, foldables and
+ * split-screen all adapt without mounting a second shell. Which destinations appear is core's
+ * `NavVisibility` rule, the same one the TV shell uses.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MobileShell(
     windowWidthDp: Int,
+    windowHeightDp: Int,
+    compactHandset: Boolean = false,
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
     hostManagesAccess: Boolean = false,
@@ -140,6 +147,29 @@ fun MobileShell(
 ) {
     val shellViewModel: ShellViewModel = koinViewModel()
     val sections by shellViewModel.visibleSections.collectAsStateWithLifecycle()
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
+    val hostActivity = LocalContext.current.findActivity()
+
+    // Browsing is portrait-first on a handset; only the full player may rotate to landscape.
+    // Tablets remain sensor-adaptive, so portrait keeps the bottom bar and landscape gets the rail.
+    // This is evaluated before the login/profile early returns, which also keeps first-run forms
+    // upright and touch-friendly.
+    LaunchedEffect(hostActivity, compactHandset, currentRoute) {
+        when {
+            !compactHandset -> hostActivity?.requestedOrientation =
+                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            // PlayerScreen is the single owner while video is full screen. Keeping two owners here
+            // caused portrait -> landscape -> unspecified -> portrait loops on phones held upright.
+            currentRoute == PLAYER_ROUTE -> Unit
+            else -> hostActivity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+        }
+    }
+    DisposableEffect(hostActivity) {
+        onDispose {
+            hostActivity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
 
     // The universal host already owns onboarding, profile selection and the PIN gate. Re-running
     // that flow here would display two different access UIs one after the other. The legacy mobile
@@ -224,17 +254,24 @@ fun MobileShell(
         return
     }
 
-    val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = backStackEntry?.destination?.route
-
-    // 600dp is Material's compact/medium boundary: below it a rail would eat the content.
-    val useRail = windowWidthDp >= 600
+    // 600dp is Material's compact/medium boundary. ZenPlay keeps the tablet portrait design on the
+    // bottom bar and moves the exact same five destinations to a rail after rotation.
+    val useRail = !compactHandset && windowWidthDp >= 600 && windowWidthDp >= windowHeightDp
     // Compact phones get tighter shell chrome so content keeps usable space in portrait: the same
     // 48 dp touch targets and the same islands, with less air around them. Tablet/landscape keeps
     // the existing insets untouched.
     val compact = !useRail
     val shellInsetH = if (compact) CompactShellInset else MobileDimens.ShellInset
     val shellGapV = if (compact) CompactShellGap else MobileDimens.ShellGap
+    // Keep the complete ZenPlay name readable without crowding the two useful actions. The narrow
+    // variant is only for unusually small split-screen windows; phone and tablet layouts retain
+    // their normal 48 dp touch targets.
+    val headerWordmarkWidth = when {
+        windowWidthDp < 360 -> 96.dp
+        compactHandset -> 120.dp
+        useRail -> 156.dp
+        else -> 140.dp
+    }
     val destinations =
         (if (useRail) MobileDestination.rail else MobileDestination.bottomBar).visible(sections)
     // A detail route ("live/42/false") keeps its tab selected and its tab's title: on a phone the
@@ -301,7 +338,9 @@ fun MobileShell(
     LaunchedEffect(openPlayerRequested) {
         if (openPlayerRequested) {
             pip.openPlayerRequested.value = false
-            if (channel != null || film != null) navController.navigate(PLAYER_ROUTE)
+            if ((channel != null || film != null) && currentRoute != PLAYER_ROUTE) {
+                navController.navigate(PLAYER_ROUTE) { launchSingleTop = true }
+            }
         }
     }
 
@@ -311,6 +350,14 @@ fun MobileShell(
     // channel. A channel opens its own screen rather than the full screen player, because a phone is
     // picked up in places where sound arriving unannounced is not welcome.
     val context = LocalContext.current
+    // Leave size resolution to AsyncImage: it derives the request size from the bounded header layout
+    // below, avoiding a full-size decode of the exact 2172 px brand asset. Chrome never crossfades.
+    val headerWordmarkRequest = remember(context) {
+        ImageRequest.Builder(context)
+            .data(R.drawable.zenplay_wordmark_horizontal)
+            .crossfade(false)
+            .build()
+    }
     val startupLive: StartupLiveSelection = koinInject()
     val startupUnavailable = stringResource(tv.own.owntv.mobile.R.string.settings_startup_channel_unavailable)
     var startupHandled by remember { mutableStateOf(false) }
@@ -337,7 +384,6 @@ fun MobileShell(
 
     val playlists by shellViewModel.playlists.collectAsStateWithLifecycle()
     val activePlaylistId by shellViewModel.activePlaylistId.collectAsStateWithLifecycle()
-    var playlistSheet by remember { mutableStateOf(false) }
 
     val catalogRefresh = if (onRefreshContent == null) {
         (context.applicationContext as? OwnTVMobileApp)?.catalogRefresh
@@ -383,16 +429,6 @@ fun MobileShell(
     // Downloads is a tab on a rail but a row in More on a phone, where no tab is selected to name it
     // — without this the bar would call it "Home", which is where it is not.
     val offBarTitle = MobileDestination.entries.firstOrNull { it.route == currentRoute }?.labelRes
-
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
-
-    // One behaviour serves every screen, so the offset the last one scrolled it to travels with the
-    // user: leave Live TV half way down its list and Home, Guide and More all open with no bar at
-    // all. Each arrival starts with the bar down.
-    LaunchedEffect(currentRoute) {
-        scrollBehavior.state.heightOffset = 0f
-        scrollBehavior.state.contentOffset = 0f
-    }
 
     // Say once per launch that the day's share of the shared metadata service is gone, rather than
     // letting posters and plots quietly stop appearing. It can happen on any screen, so it belongs
@@ -452,9 +488,7 @@ fun MobileShell(
         // The player owns every pixel, camera strip included: keeping the bars' and the cutout's room
         // free there would leave a band of wallpaper down the side of the picture.
         contentWindowInsets = if (fullscreen) WindowInsets(0, 0, 0, 0) else ScaffoldDefaults.contentWindowInsets,
-        modifier = modifier
-            .fillMaxSize()
-            .nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = modifier.fillMaxSize(),
         topBar = {
             // The bar is a pane standing off the screen, not a lid on top of it: the status bar's
             // room is held by the wrapper so the wallpaper runs above the bar and stays clear when
@@ -485,28 +519,41 @@ fun MobileShell(
                         .glassSurface(GlassSurface.TOPBAR, MobileTopBarShape)
                         .clip(MobileTopBarShape),
                     title = {
-                        Text(
-                            // Search belongs to no tab, so it names itself rather than inheriting Home's.
-                            // A settings page names itself too, and that name is what "back" leaves.
-                            text = stringResource(
-                                settingsTitle
-                                    ?: if (currentRoute == SEARCH_ROUTE_PATTERN) tv.own.owntv.mobile.R.string.search_title
-                                    else current?.labelRes ?: offBarTitle ?: MobileDestination.HOME.labelRes,
-                            ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        // Primary destinations use the requested icon-only ZenPlay header. Detail
+                        // pages retain their title beside Back so navigation never becomes ambiguous.
+                        if (MobileDestination.bottomBar.none { it.route == currentRoute }) {
+                            Text(
+                                text = stringResource(
+                                    settingsTitle
+                                        ?: if (currentRoute == SEARCH_ROUTE_PATTERN) tv.own.owntv.mobile.R.string.search_title
+                                        else current?.labelRes ?: offBarTitle ?: MobileDestination.HOME.labelRes,
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     },
                     navigationIcon = {
-                        // The gear replaces More in the bottom bar. Check all browse roots, including
-                        // hidden ones, so hiding every content tab can never remove access to settings.
+                        // ZenPlay identity on the five main destinations; details use Back. The
+                        // wordmark remains a Home shortcut without looking like another menu item.
                         if (MobileDestination.bottomBar.any { it.route == currentRoute }) {
-                            IconButton(onClick = {
-                                navController.navigate(MobileDestination.MORE.route) { launchSingleTop = true }
-                            }) {
-                                Icon(
-                                    imageVector = MobileIcons.Settings,
-                                    contentDescription = stringResource(tv.own.owntv.mobile.R.string.common_nav_more),
+                            val homeDescription = stringResource(MobileDestination.HOME.labelRes)
+                            Box(
+                                contentAlignment = Alignment.CenterStart,
+                                modifier = Modifier
+                                    .width(headerWordmarkWidth)
+                                    .height(48.dp)
+                                    .clickable { navController.navigateToTab(MobileDestination.HOME) }
+                                    .semantics { contentDescription = homeDescription },
+                            ) {
+                                AsyncImage(
+                                    model = headerWordmarkRequest,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier
+                                        .width(headerWordmarkWidth)
+                                        .height(40.dp)
+                                        .padding(start = 8.dp, end = 4.dp),
                                 )
                             }
                         } else {
@@ -519,9 +566,13 @@ fun MobileShell(
                         }
                     },
                     actions = {
-                        // ZenPlay: "Actualizar" lives up here now, so the bottom bar has room for
-                        // Favoritos and Descargas.
-                        IconButton(onClick = requestRefresh, enabled = !refreshing) {
+                        // ZenPlay: "Actualizar" lives in the top bar on every touch layout.
+                        val refreshDescription = stringResource(R.string.zenplay_refresh_action)
+                        IconButton(
+                            onClick = requestRefresh,
+                            enabled = !refreshing,
+                            modifier = Modifier.semantics { contentDescription = refreshDescription },
+                        ) {
                             RefreshNavIcon(refreshing)
                         }
                         IconButton(
@@ -534,24 +585,7 @@ fun MobileShell(
                                 contentDescription = stringResource(tv.own.owntv.mobile.R.string.common_nav_search),
                             )
                         }
-                        // ZenPlay: the sports agenda opens from the banner on "En vivo", not from here.
-                        // Which way round the icon is drawn follows the app's own theme, not the
-                        // phone's night mode: OwnTV's light/dark is a setting, and the two can
-                        // disagree. It appears only when there is a receiver to send to.
-                        CastRouteButton(
-                            light = MaterialTheme.colorScheme.onSurface.luminance() > 0.5f,
-                        )
-                        // The television's playlist chip, in the space the profile avatar used to
-                        // take. The avatar only ever opened the More tab, which the bottom bar
-                        // already reaches; switching playlist had no door on the phone at all.
-                        PlaylistChip(
-                            playlists = playlists,
-                            activeId = activePlaylistId,
-                            compact = compact,
-                            onClick = { playlistSheet = true },
-                        )
                     },
-                    scrollBehavior = scrollBehavior,
                 )
             }
         },
@@ -609,10 +643,6 @@ fun MobileShell(
             }
         },
     ) { insets ->
-        // The player owns the whole display, so it gets none of the shell's geometry: an inset,
-        // rounded pane around a video would be a frame nobody asked for.
-        val pageShape = if (fullscreen) RectangleShape else MobilePageShape
-
         /*
          * How much of the shell's own inset is still owed along the bottom edge.
          *
@@ -675,23 +705,27 @@ fun MobileShell(
                     }
                 }
             }
-            Box(
+            // Fullscreen playback receives a plain, un-clipped host: even a transparent panel glass
+            // modifier adds an off-screen/draw layer across every video pixel. Browsing pages keep the
+            // inset rounded pane and its nesting contract.
+            val pageModifier = if (fullscreen) {
+                Modifier.fillMaxSize()
+            } else {
                 Modifier
                     .fillMaxSize()
                     .padding(
                         // Against a rail the page keeps the smaller gap; against the screen edge it
                         // keeps the full inset, so the wallpaper frames the whole shell evenly.
                         // Compact phones use the tighter inset to keep one-handed content width.
-                        start = if (fullscreen) 0.dp else if (useRail) MobileDimens.ShellGap else shellInsetH,
-                        end = if (fullscreen) 0.dp else shellInsetH,
+                        start = if (useRail) MobileDimens.ShellGap else shellInsetH,
+                        end = shellInsetH,
                         bottom = shellBottom,
                     )
-                    .glassSurface(GlassSurface.PANELS, pageShape)
-                    .clip(pageShape),
-            ) {
-                // Every screen in the app is standing on this page panel, so a panel of its own
-                // draws as the layer behind one instead of frosting what is already frosted.
-                GlassNest(GlassSurface.PANELS) {
+                    .glassSurface(GlassSurface.PANELS, MobilePageShape)
+                    .clip(MobilePageShape)
+            }
+            Box(pageModifier) {
+                val navigationHost: @Composable () -> Unit = {
                     CompositionLocalProvider(
                         LocalStreamOnScreen provides streamOnScreen,
                         LocalMiniRequested provides miniRequested,
@@ -701,6 +735,13 @@ fun MobileShell(
                             scrollToTop = shellViewModel.scrollToTop,
                         )
                     }
+                }
+                if (fullscreen) {
+                    navigationHost()
+                } else {
+                    // Every browsing screen is standing on this page panel, so a panel of its own
+                    // draws as the layer behind one instead of frosting what is already frosted.
+                    GlassNest(GlassSurface.PANELS) { navigationHost() }
                 }
                 // Low over the page, under the mini player: a sync running while the user browses is
                 // news, but it is never what they came to the screen for.
@@ -770,99 +811,7 @@ fun MobileShell(
     ) {
         tv.own.owntv.mobile.zenplay.ZenPlaySplash()
     }
-    if (playlistSheet) {
-        // ZenPlay: the plan chip opens "Mis planes" — switch between Básica, Avanzado and Premium, or
-        // sign in to one more, without signing out.
-        tv.own.owntv.mobile.zenplay.ZenPlayPlansSheet(onDismiss = { playlistSheet = false })
-    }
 }
-
-/**
- * A playlist's name, or the name it would have been given had one been typed.
- *
- * The name field is optional and older mobile builds stored a blank one rather than filling it in,
- * so a playlist added before that was fixed has no name at all — and a chip with no text is a bare
- * pill, which is exactly what the owner saw. Falling back at the point of display repairs those
- * rows without a migration, and matches what the setup flow now writes for a new one.
- */
-@Composable
-private fun SourceEntity.displayName(): String = name.ifBlank {
-    stringResource(
-        when (type) {
-            SourceType.XTREAM -> tv.own.owntv.mobile.R.string.setup_default_iptv
-            SourceType.STALKER -> tv.own.owntv.mobile.R.string.setup_default_portal
-            else -> tv.own.owntv.mobile.R.string.setup_name_default_playlist
-        },
-    )
-}
-
-/**
- * Which playlist every browse screen is showing, and the way to change it.
- *
- * A button with a chevron once there are two to choose between, a plain badge when there is only
- * one — there is nothing to pick then, but which playlist you are in is still worth saying. Its
- * width is capped because a provider's own name can be very long and the bar's title must survive it.
- */
-@Composable
-private fun PlaylistChip(
-    playlists: List<SourceEntity>,
-    activeId: Long,
-    onClick: () -> Unit,
-    compact: Boolean = false,
-) {
-    if (playlists.isEmpty()) return
-    val label = when {
-        playlists.size == 1 -> playlists.first().displayName()
-        else -> playlists.firstOrNull { it.id == activeId }?.displayName()
-            ?: stringResource(tv.own.owntv.mobile.R.string.content_all_playlists)
-    }
-    val switchable = playlists.size > 1
-    val shape = RoundedCornerShape(50)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .padding(start = MobileDimens.GapSmall)
-            .widthIn(max = if (compact) PlaylistChipMaxWidthCompact else PlaylistChipMaxWidth)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f))
-            .then(
-                if (switchable) {
-                    Modifier.clickable(
-                        onClick = onClick,
-                        onClickLabel = stringResource(
-                            tv.own.owntv.mobile.R.string.content_playlist_picker_title,
-                        ),
-                    )
-                } else {
-                    Modifier
-                },
-            )
-            .padding(start = 10.dp, end = if (switchable) 4.dp else 10.dp, top = 5.dp, bottom = 5.dp),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        if (switchable) {
-            Icon(
-                imageVector = MobileIcons.KeyboardArrowDown,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
-}
-
-/** Long enough for most playlist names, short enough that the bar's title still has room. */
-private val PlaylistChipMaxWidth = 132.dp
-
-/** Compact phones give the bar's title priority: the chip stays a badge, not a banner. */
-private val PlaylistChipMaxWidthCompact = 96.dp
 
 /** Tighter shell chrome for compact phones in portrait. Touch targets stay 48 dp; only air is cut. */
 private val CompactShellInset = 8.dp
@@ -872,22 +821,13 @@ private val CompactShellGap = 6.dp
 
 @Composable
 private fun NavIcon(destination: MobileDestination) {
-    // ZenPlay: colourful emoji icons, matching the sports agenda's ball.
-    val emoji = when (destination) {
-        MobileDestination.HOME -> "🏠"
-        MobileDestination.LIVE -> "📺"
-        MobileDestination.MOVIES -> "🎬"
-        MobileDestination.SERIES -> "🍿"
-        MobileDestination.FAVORITES -> "❤️"
-        MobileDestination.DOWNLOADS -> "📥"
-        MobileDestination.GUIDE -> "⚽"
-        else -> null
-    }
-    if (emoji != null) {
-        Text(emoji, fontSize = 22.sp)
-    } else {
-        Icon(imageVector = destination.icon, contentDescription = null)
-    }
+    Icon(imageVector = destination.icon, contentDescription = null)
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 @Composable

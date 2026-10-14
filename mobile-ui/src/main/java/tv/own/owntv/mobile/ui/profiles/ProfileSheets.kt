@@ -61,6 +61,7 @@ private val AVATAR_PICK_SIZE = 52.dp
 @Composable
 fun ProfilePinSheet(
     profileName: String,
+    titleOverride: String? = null,
     onSubmit: (String) -> Boolean,
     onDismiss: () -> Unit,
 ) {
@@ -75,7 +76,7 @@ fun ProfilePinSheet(
     }
     MobileBottomSheet(
         onDismissRequest = onDismiss,
-        title = stringResource(R.string.profiles_enter_pin, profileName),
+        title = titleOverride ?: stringResource(R.string.profiles_enter_pin, profileName),
     ) {
         Column(
             modifier = Modifier
@@ -277,7 +278,6 @@ fun ProfileEditorSheet(
                 (removePin || pin.isEmpty() || pin.length >= PIN_MIN),
             onConfirm = {
                 onConfirm(name.trim(), avatarId, isKids, if (removePin) "" else pin.takeIf { it.isNotBlank() })
-                onDismiss()
             },
             onDismiss = onDismiss,
             // Delete stands beside Cancel rather than under the fields, where a thumb reaching for

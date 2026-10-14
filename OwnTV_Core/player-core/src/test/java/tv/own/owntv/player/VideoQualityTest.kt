@@ -37,4 +37,14 @@ class VideoQualityTest {
         assertNull(VideoQuality.mpvTrack(tracks, cap = null, pick = null))
         assertNull(VideoQuality.mpvTrack(listOf(1 to 1080, 2 to 0), cap = 720, pick = null))
     }
+
+    @Test
+    fun `mpv Auto is an explicit command only when adaptive tracks really exist`() {
+        val adaptive = listOf(1 to 2160, 2 to 1080, 3 to 720)
+        assertEquals(true, VideoQuality.mpvShouldUseAuto(adaptive, cap = null, pick = null))
+        assertEquals(false, VideoQuality.mpvShouldUseAuto(adaptive, cap = 1080, pick = null))
+        assertEquals(false, VideoQuality.mpvShouldUseAuto(adaptive, cap = null, pick = 720))
+        assertEquals(false, VideoQuality.mpvShouldUseAuto(listOf(1 to 1080), cap = null, pick = null))
+        assertEquals(false, VideoQuality.mpvShouldUseAuto(listOf(1 to 1080, 2 to 0), cap = null, pick = null))
+    }
 }

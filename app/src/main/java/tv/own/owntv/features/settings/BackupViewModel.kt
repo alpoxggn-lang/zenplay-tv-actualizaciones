@@ -19,6 +19,7 @@ class BackupViewModel(
     private val profileDao: tv.own.owntv.core.database.dao.ProfileDao,
     private val settings: tv.own.owntv.core.settings.SettingsRepository,
     private val companion: tv.own.owntv.core.companion.CompanionController,
+    private val profileManager: tv.own.owntv.core.profile.ProfileManager,
 ) : ViewModel() {
 
     // ---- Remote restore: another device uploads a backup JSON to the TV over the LAN companion server. ----
@@ -67,7 +68,7 @@ class BackupViewModel(
 
     /** PIN check for ticking a locked, non-active profile in the export picker. */
     fun verifyPin(profile: tv.own.owntv.core.database.entity.ProfileEntity, pin: String): Boolean =
-        tv.own.owntv.core.util.Pin.verify(pin, profile.pinHash)
+        profileManager.verifyPin(profile, pin)
 
     sealed interface State {
         data object Idle : State

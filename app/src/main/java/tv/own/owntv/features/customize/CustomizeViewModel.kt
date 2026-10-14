@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -29,9 +30,13 @@ import tv.own.owntv.core.database.dao.ContentOrderDao
 import tv.own.owntv.core.database.dao.CustomCategoryDao
 import tv.own.owntv.core.database.dao.SourceDao
 import tv.own.owntv.core.model.MediaType
+import tv.own.owntv.core.profile.ProfileCustomizationAccess
+import tv.own.owntv.core.profile.ProfileManagementRequirement
 import tv.own.owntv.core.repository.ActiveProfileSources
 import tv.own.owntv.core.repository.activeProfileSources
 import tv.own.owntv.core.settings.SettingsRepository
+import tv.own.owntv.core.util.Pin
+import tv.own.owntv.core.util.PinAttemptGuard
 
 /** One category row in the Customize screen (hidden rows stay visible here, marked, for unhiding).
  *  [categoryId] is null for a user's custom combined category (issue #87) — there is no provider
@@ -71,6 +76,7 @@ class CustomizeViewModel(
     private val customCategoryDao: CustomCategoryDao,
     private val contentOrderDao: ContentOrderDao,
     private val customize: CustomizationStore,
+    private val customizationAccess: ProfileCustomizationAccess,
 ) : ViewModel() {
 
     /** Moves serialize so a fast second press snapshots the result of the first, never the stale
@@ -91,6 +97,47 @@ class CustomizeViewModel(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, Ctx(-1L, emptyList()))
 
+    private val accessRefresh = MutableStateFlow(0L)
+
+    /** Null while the active identity is loading; Core remains the authority for every write. */
+    val accessRequirement: StateFlow<ProfileManagementRequirement?> =
+        combine(ctx, accessRefresh) { c, _ -> c.profileId }
+            .flatMapLatest { profileId ->
+                if (profileId < 0L) flowOf<ProfileManagementRequirement?>(null)
+                else flow<ProfileManagementRequirement?> { emit(customizationAccess.entryRequirement(profileId)) }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun unlockAdultAccess(pin: String, onResult: (Boolean) -> Unit) {
+        val profileId = ctx.value.profileId
+        if (profileId < 0L) {
+            onResult(false)
+            return
+        }
+        viewModelScope.launch {
+            val unlocked = customizationAccess.unlock(profileId, pin)
+            accessRefresh.value += 1L
+            onResult(unlocked)
+        }
+    }
+
+    fun clearAdultAccess() {
+        customizationAccess.clear()
+        accessRefresh.value += 1L
+    }
+
+    fun verifyOptionalPin(entered: String, stored: String): Boolean =
+        PinAttemptGuard.verify("customize:${ctx.value.profileId}") {
+            entered == stored || Pin.verify(entered, stored)
+        }
+
+    private suspend fun authorizeWrite(profileId: Long): Boolean {
+        if (profileId < 0L) return false
+        val allowed = customizationAccess.authorizeWrite(profileId)
+        if (!allowed) accessRefresh.value += 1L
+        return allowed
+    }
+
     /** Optional PIN lock on this screen (per profile). [loaded]=false while DataStore is still read,
      *  so the screen never flashes unlocked content before the lock state is known. */
     data class PinLock(val loaded: Boolean = false, val pin: String? = null)
@@ -106,7 +153,9 @@ class CustomizeViewModel(
     fun setPin(pin: String?) {
         val pid = ctx.value.profileId
         if (pid < 0) return
-        viewModelScope.launch { settings.setCustomizePin(pid, pin) }
+        viewModelScope.launch {
+            if (authorizeWrite(pid)) settings.setCustomizePin(pid, pin)
+        }
     }
 
     private val _section = MutableStateFlow(MediaType.LIVE)
@@ -208,7 +257,9 @@ class CustomizeViewModel(
     fun setHideNewCategories(hidden: Boolean) {
         val pid = ctx.value.profileId
         if (pid < 0) return
-        viewModelScope.launch { settings.setHideNewCategoriesDefault(pid, hidden) }
+        viewModelScope.launch {
+            if (authorizeWrite(pid)) settings.setHideNewCategoriesDefault(pid, hidden)
+        }
     }
 
     // --- Sort (reuses SettingsRepository.SortMode — the same per-section value Browse uses) ---
@@ -228,6 +279,7 @@ class CustomizeViewModel(
 
     fun setSort(mode: SettingsRepository.SortMode) {
         viewModelScope.launch {
+            if (!authorizeWrite(ctx.value.profileId)) return@launch
             when (_section.value) {
                 MediaType.LIVE -> settings.setSortLive(mode)
                 MediaType.MOVIE -> settings.setSortMovies(mode)
@@ -266,6 +318,7 @@ class CustomizeViewModel(
         val pid = ctx.value.profileId
         if (pid < 0) return
         viewModelScope.launch {
+            if (!authorizeWrite(pid)) return@launch
             customize.createCustomCategory(pid, _section.value, name)
         }
     }
@@ -279,10 +332,12 @@ class CustomizeViewModel(
         val pid = ctx.value.profileId
         if (pid < 0 || !CustomizeKeys.isCustom(row.key)) return
         viewModelScope.launch {
+            if (!authorizeWrite(pid)) return@launch
             val type = _section.value
             // Capture stable member keys first so deleting a destination restores any provider
             // origins those items left when they were moved here.
             val formerMemberKeys = customCategoryDao.stableItemKeys(pid, row.key).toSet()
+            if (!authorizeWrite(pid)) return@launch
             // 1) Room: drop the category's membership + its content_order rows (the category's own
             //    rail-order rows ride the same contextKey as the browse screens' reorder).
             customCategoryDao.clearContext(pid, type, row.key)
@@ -294,14 +349,16 @@ class CustomizeViewModel(
 
     fun setCategoryHidden(row: CustomizeCatRow, hidden: Boolean) {
         viewModelScope.launch {
-            customize.setCategoryHidden(ctx.value.profileId, _section.value, row.key, hidden)
+            val pid = ctx.value.profileId
+            if (authorizeWrite(pid)) customize.setCategoryHidden(pid, _section.value, row.key, hidden)
         }
     }
 
     /** Blank name restores the provider's original. */
     fun renameCategory(row: CustomizeCatRow, name: String?) {
         viewModelScope.launch {
-            customize.renameCategory(ctx.value.profileId, _section.value, row.key, name)
+            val pid = ctx.value.profileId
+            if (authorizeWrite(pid)) customize.renameCategory(pid, _section.value, row.key, name)
         }
     }
 
@@ -315,12 +372,15 @@ class CustomizeViewModel(
 
     private fun moveSingle(row: CustomizeCatRow, kind: MoveKind) {
         viewModelScope.launch {
+            val pid = ctx.value.profileId
+            if (!authorizeWrite(pid)) return@launch
             moveMutex.withLock {
                 val current = rows.value
                 val index = current.indexOfFirst { it.key == row.key }
                 if (index < 0) return@withLock
                 val reordered = moveBlock(current, index, index, kind) ?: return@withLock
-                customize.setCategoryOrder(ctx.value.profileId, _section.value, reordered.map { it.key })
+                if (!authorizeWrite(pid)) return@withLock
+                customize.setCategoryOrder(pid, _section.value, reordered.map { it.key })
             }
         }
     }
@@ -328,7 +388,8 @@ class CustomizeViewModel(
 
     fun unhideChannel(key: String) {
         viewModelScope.launch {
-            customize.setItemHidden(ctx.value.profileId, _section.value, key, "", false)
+            val pid = ctx.value.profileId
+            if (authorizeWrite(pid)) customize.setItemHidden(pid, _section.value, key, "", false)
         }
     }
 
@@ -342,7 +403,8 @@ class CustomizeViewModel(
     fun applyRange(endRow: CustomizeCatRow, hidden: Boolean) {
         val keys = span.keysInRange(endRow) ?: return
         viewModelScope.launch {
-            customize.setCategoriesHidden(ctx.value.profileId, _section.value, keys, hidden)
+            val pid = ctx.value.profileId
+            if (authorizeWrite(pid)) customize.setCategoriesHidden(pid, _section.value, keys, hidden)
         }
         span.cancel()
     }
@@ -351,6 +413,8 @@ class CustomizeViewModel(
         val anchorKey = span.anchorKey.value ?: return
         val endKey = span.endKey.value ?: endRow.key
         viewModelScope.launch {
+            val pid = ctx.value.profileId
+            if (!authorizeWrite(pid)) return@launch
             moveMutex.withLock {
                 val current = rows.value
                 val anchorIndex = current.indexOfFirst { it.key == anchorKey }
@@ -358,7 +422,8 @@ class CustomizeViewModel(
                 if (anchorIndex < 0 || endIndex < 0) return@withLock
                 span.setEndKey(endKey)
                 val reordered = moveBlock(current, minOf(anchorIndex, endIndex), maxOf(anchorIndex, endIndex), kind) ?: return@withLock
-                customize.setCategoryOrder(ctx.value.profileId, _section.value, reordered.map { it.key })
+                if (!authorizeWrite(pid)) return@withLock
+                customize.setCategoryOrder(pid, _section.value, reordered.map { it.key })
             }
         }
     }
@@ -375,11 +440,11 @@ class CustomizeViewModel(
         scope = viewModelScope,
         persist = { renames ->
             val pid = ctx.value.profileId
-            if (pid >= 0) customize.applyBulkRenames(pid, _section.value, renames)
+            if (authorizeWrite(pid)) customize.applyBulkRenames(pid, _section.value, renames)
         },
         restore = { keys ->
             val pid = ctx.value.profileId
-            if (pid >= 0) customize.clearCategoryNames(pid, _section.value, keys)
+            if (authorizeWrite(pid)) customize.clearCategoryNames(pid, _section.value, keys)
         },
         existingNames = { selectedKeys ->
             val pid = ctx.value.profileId

@@ -4,7 +4,6 @@ import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.flow.first
 import tv.own.owntv.core.customize.CustomizationStore
 import tv.own.owntv.core.customize.CustomizeKeys
-import tv.own.owntv.core.customize.SectionCustomizations
 import tv.own.owntv.core.database.dao.CategoryDao
 import tv.own.owntv.core.database.dao.ChannelDao
 import tv.own.owntv.core.database.dao.ChannelSearchResult
@@ -12,6 +11,8 @@ import tv.own.owntv.core.database.dao.MovieDao
 import tv.own.owntv.core.database.dao.ProfileDao
 import tv.own.owntv.core.database.dao.SeriesDao
 import tv.own.owntv.core.database.entity.MovieEntity
+import tv.own.owntv.core.database.entity.CategoryEntity
+import tv.own.owntv.core.database.entity.ProfileEntity
 import tv.own.owntv.core.database.entity.SeriesEntity
 import tv.own.owntv.core.model.MediaType
 import tv.own.owntv.core.repository.ActiveProfileSources
@@ -64,25 +65,16 @@ class SearchReader(
     ): SearchResults {
         if (profileId < 0 || !sources.hasAny) return SearchResults()
         val fts = ftsQuery(query)
-        val custLive = customize.observe(profileId, MediaType.LIVE).first()
-        val custMovie = customize.observe(profileId, MediaType.MOVIE).first()
-        val custSeries = customize.observe(profileId, MediaType.SERIES).first()
-        val isKids = profileDao.getById(profileId)?.isKids == true
-        val hiddenLiveCats = hiddenCategoryIds(sources.liveSourceIds, MediaType.LIVE, custLive, isKids)
-        val hiddenMovieCats = hiddenCategoryIds(sources.movieSourceIds, MediaType.MOVIE, custMovie, isKids)
-        val hiddenSeriesCats = hiddenCategoryIds(sources.seriesSourceIds, MediaType.SERIES, custSeries, isKids)
+        val access = accessSnapshot(profileId, sources) ?: return SearchResults()
         return SearchResults(
             channels = if (sources.liveSourceIds.isEmpty()) emptyList() else
                 (
                     if (fts != null) channelDao.searchListDetailedFts(fts, sources.liveSourceIds, limit)
                     else channelDao.searchListDetailed(query, sources.liveSourceIds, limit)
                     )
-                    .filter {
-                        CustomizeKeys.channel(it.channel) !in custLive.hiddenItems &&
-                            (it.channel.categoryId == null || it.channel.categoryId !in hiddenLiveCats)
-                    }
+                    .filter { row -> access.allows(MediaType.LIVE, CustomizeKeys.channel(row.channel), row.channel.categoryId, row.channel.sourceId) }
                     .map { row ->
-                        custLive.itemNames[CustomizeKeys.channel(row.channel)]
+                        access.live.itemNames[CustomizeKeys.channel(row.channel)]
                             ?.let { row.copy(channel = row.channel.copy(name = it)) } ?: row
                     },
             movies = if (sources.movieSourceIds.isEmpty()) emptyList() else
@@ -90,21 +82,15 @@ class SearchReader(
                     if (fts != null) movieDao.searchListFts(fts, sources.movieSourceIds, limit)
                     else movieDao.searchList(query, sources.movieSourceIds, limit)
                     )
-                    .filter {
-                        CustomizeKeys.movie(it) !in custMovie.hiddenItems &&
-                            (it.categoryId == null || it.categoryId !in hiddenMovieCats)
-                    }
-                    .map { m -> custMovie.itemNames[CustomizeKeys.movie(m)]?.let { m.copy(name = it) } ?: m },
+                    .filter { access.allows(MediaType.MOVIE, CustomizeKeys.movie(it), it.categoryId, it.sourceId) }
+                    .map { m -> access.movie.itemNames[CustomizeKeys.movie(m)]?.let { m.copy(name = it) } ?: m },
             series = if (sources.seriesSourceIds.isEmpty()) emptyList() else
                 (
                     if (fts != null) seriesDao.searchListFts(fts, sources.seriesSourceIds, limit)
                     else seriesDao.searchList(query, sources.seriesSourceIds, limit)
                     )
-                    .filter {
-                        CustomizeKeys.series(it) !in custSeries.hiddenItems &&
-                            (it.categoryId == null || it.categoryId !in hiddenSeriesCats)
-                    }
-                    .map { s -> custSeries.itemNames[CustomizeKeys.series(s)]?.let { s.copy(name = it) } ?: s },
+                    .filter { access.allows(MediaType.SERIES, CustomizeKeys.series(it), it.categoryId, it.sourceId) }
+                    .map { s -> access.series.itemNames[CustomizeKeys.series(s)]?.let { s.copy(name = it) } ?: s },
         )
     }
 
@@ -116,7 +102,8 @@ class SearchReader(
         limit: Int = LIMIT,
     ): SearchResults {
         if (profileId < 0 || !sources.hasAny) return SearchResults()
-        return when (intent) {
+        val access = accessSnapshot(profileId, sources) ?: return SearchResults()
+        val raw = when (intent) {
             SearchIntent.CONTINUE -> SearchResults(
                 channels = channelDao.recentlyWatched(profileId, limit).first()
                     .filter { it.sourceId in sources.liveSourceIds }
@@ -139,21 +126,72 @@ class SearchReader(
                     .map { ChannelSearchResult(it, null) },
             )
         }
+        return SearchResults(
+            channels = raw.channels
+                .filter { row -> access.allows(MediaType.LIVE, CustomizeKeys.channel(row.channel), row.channel.categoryId, row.channel.sourceId) }
+                .map { row ->
+                    access.live.itemNames[CustomizeKeys.channel(row.channel)]
+                        ?.let { row.copy(channel = row.channel.copy(name = it)) } ?: row
+                },
+            movies = raw.movies
+                .filter { access.allows(MediaType.MOVIE, CustomizeKeys.movie(it), it.categoryId, it.sourceId) }
+                .map { movie -> access.movie.itemNames[CustomizeKeys.movie(movie)]?.let { movie.copy(name = it) } ?: movie },
+            series = raw.series
+                .filter { access.allows(MediaType.SERIES, CustomizeKeys.series(it), it.categoryId, it.sourceId) }
+                .map { series -> access.series.itemNames[CustomizeKeys.series(series)]?.let { series.copy(name = it) } ?: series },
+        )
     }
 
-    /** DB ids of this profile's hidden categories for [type] (so hidden groups drop out of search too). */
-    private suspend fun hiddenCategoryIds(
-        sourceIds: List<Long>,
-        type: MediaType,
-        cust: SectionCustomizations,
-        isKidsProfile: Boolean,
-    ): Set<Long> {
-        if (cust.hiddenCategories.isEmpty() && !isKidsProfile) return emptySet()
-        return AdultCategoryClassifier.hiddenCategoryIds(
-            categoryDao.observe(sourceIds, type).first(),
-            cust.hiddenCategories,
-            isKidsProfile,
+    private suspend fun accessSnapshot(profileId: Long, sources: ActiveProfileSources): AccessSnapshot? {
+        val profile = profileDao.getById(profileId) ?: return null
+        val live = customize.observe(profileId, MediaType.LIVE).first()
+        val movie = customize.observe(profileId, MediaType.MOVIE).first()
+        val series = customize.observe(profileId, MediaType.SERIES).first()
+        val categories = buildMap<Long, CategoryEntity> {
+            if (sources.liveSourceIds.isNotEmpty()) putAll(categoryDao.observe(sources.liveSourceIds, MediaType.LIVE).first().associateBy { it.id })
+            if (sources.movieSourceIds.isNotEmpty()) putAll(categoryDao.observe(sources.movieSourceIds, MediaType.MOVIE).first().associateBy { it.id })
+            if (sources.seriesSourceIds.isNotEmpty()) putAll(categoryDao.observe(sources.seriesSourceIds, MediaType.SERIES).first().associateBy { it.id })
+        }
+        return AccessSnapshot(
+            profile = profile,
+            live = live,
+            movie = movie,
+            series = series,
+            categories = categories,
+            liveSourceIds = sources.liveSourceIds.toSet(),
+            movieSourceIds = sources.movieSourceIds.toSet(),
+            seriesSourceIds = sources.seriesSourceIds.toSet(),
         )
+    }
+
+    private data class AccessSnapshot(
+        val profile: ProfileEntity,
+        val live: tv.own.owntv.core.customize.SectionCustomizations,
+        val movie: tv.own.owntv.core.customize.SectionCustomizations,
+        val series: tv.own.owntv.core.customize.SectionCustomizations,
+        val categories: Map<Long, CategoryEntity>,
+        val liveSourceIds: Set<Long>,
+        val movieSourceIds: Set<Long>,
+        val seriesSourceIds: Set<Long>,
+    ) {
+        fun allows(type: MediaType, itemKey: String, categoryId: Long?, sourceId: Long): Boolean =
+            ContentAccessPolicy.allowsSnapshot(
+                profile = profile,
+                itemKey = itemKey,
+                categoryId = categoryId,
+                category = categoryId?.let(categories::get)?.takeIf { it.mediaType == type },
+                customizations = when (type) {
+                    MediaType.LIVE -> live
+                    MediaType.MOVIE -> movie
+                    MediaType.SERIES, MediaType.EPISODE -> series
+                },
+                sourceId = sourceId,
+                allowedSourceIds = when (type) {
+                    MediaType.LIVE -> liveSourceIds
+                    MediaType.MOVIE -> movieSourceIds
+                    MediaType.SERIES, MediaType.EPISODE -> seriesSourceIds
+                },
+            )
     }
 
     companion object {

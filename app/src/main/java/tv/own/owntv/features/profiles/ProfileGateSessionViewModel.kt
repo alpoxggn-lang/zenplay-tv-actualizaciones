@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import tv.own.owntv.core.profile.ProfileAuthorization
 
 /**
  * Activity-scoped gate/session state for the profile gate and the in-session "Who's watching?"
@@ -37,6 +38,10 @@ class ProfileGateSessionViewModel : ViewModel() {
 
     /** True while the "add a profile" onboarding flow is open from the gate. Resets on process death. */
     var addingProfile by mutableStateOf(false)
+        private set
+
+    /** One-use proof obtained at the gate for creating a profile from a kids session. */
+    var addingProfileAuthorization by mutableStateOf<ProfileAuthorization?>(null)
         private set
 
     /**
@@ -79,20 +84,28 @@ class ProfileGateSessionViewModel : ViewModel() {
     }
 
     /** Open the add-profile onboarding from the gate. */
-    fun startAddingProfile() {
+    fun startAddingProfile(authorization: ProfileAuthorization? = null) {
         addingProfile = true
+        addingProfileAuthorization = authorization
         switchProfileRequested = false
     }
 
     /** Add-profile onboarding completed: enter the shell as the newly active profile. */
     fun completeAddingProfile(profileId: Long?) {
         addingProfile = false
+        addingProfileAuthorization = null
         authenticateProfile(profileId)
     }
 
     /** Add-profile onboarding cancelled: back to the gate. */
     fun cancelAddingProfile() {
         addingProfile = false
+        addingProfileAuthorization = null
+    }
+
+    /** Drop the one-use PIN proof as soon as Core has accepted the profile creation. */
+    fun clearAddingProfileAuthorization() {
+        addingProfileAuthorization = null
     }
 
     /** Back out of a user-requested switch: restore authentication for the unchanged active profile. */

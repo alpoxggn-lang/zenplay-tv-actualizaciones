@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tv.own.owntv.core.content.AdultCategoryClassifier
+import tv.own.owntv.core.content.ContentAccessPolicy
 import tv.own.owntv.core.customize.CustomizationStore
 import tv.own.owntv.core.customize.CustomizeKeys
 import tv.own.owntv.core.customize.SectionCustomizations
@@ -90,6 +91,7 @@ class LiveTuner(
     private val audioOnlyStore: AudioOnlyStore,
     private val cast: CastController,
     private val recordings: tv.own.owntv.core.recording.RecordingManager,
+    private val contentAccess: ContentAccessPolicy,
     /**
      * The second live engine (L2). Live played on mpv and nothing else here, which is why the HUD's
      * engine button was hidden for live: there was no engine to swap to. This is the same
@@ -153,6 +155,7 @@ class LiveTuner(
         profileId: Long,
         programme: tv.own.owntv.core.parser.XtEpgEntry?,
     ): tv.own.owntv.core.database.entity.RecordingEntity? {
+        if (!contentAccess.allows(profileId, ch)) return null
         if (recordings.canRecordOn(ch.sourceId) !is tv.own.owntv.core.live.StreamGrant.Allowed) return null
         val startMs = System.currentTimeMillis()
         // Start now: the programme is already under way and a live edge cannot be rewound, so the
@@ -518,9 +521,16 @@ class LiveTuner(
     }
 
     fun switchTo(channel: ChannelEntity) {
-        if (channel.id == loadedId) return
+        // A previous open may have been cancelled while resolving, refused by the provider, or lost its
+        // surface before producing a frame. The same row is then a legitimate Retry, not a no-op.
+        if (channel.id == loadedId && hasStream) return
         loadedId = channel.id
-        live.launch { open(channel) }
+        live.launch {
+            open(channel)
+            // The full-screen "Next channel" action must follow the category just selected in the
+            // overlay. Keeping the previous sibling window made +1 jump back into the old category.
+            loadSiblings(channel)
+        }
     }
 
     /**
@@ -558,7 +568,7 @@ class LiveTuner(
         val refuse = { loadedId = showing?.id }
         if (!dataSaver.allowsStreaming()) return refuse()
         val pid = ctx.value.profileId.takeIf { it >= 0 } ?: return refuse()
-        if (!AdultCategoryClassifier.allows(pid, channel.categoryId, profileDao, categoryDao)) return refuse()
+        if (!contentAccess.allows(pid, channel)) return refuse()
 
         val source = withContext(Dispatchers.IO) { sourceDao.getById(channel.sourceId) }
         // Stalker portals mint a play URL per tune; the stored "URL" is a portal command until then.
@@ -657,7 +667,7 @@ class LiveTuner(
         scope.launch {
             if (!dataSaver.allowsStreaming()) return@launch
             val pid = ctx.value.profileId.takeIf { it >= 0 } ?: return@launch
-            if (!AdultCategoryClassifier.allows(pid, channel.categoryId, profileDao, categoryDao)) return@launch
+            if (!contentAccess.allows(pid, channel)) return@launch
             // Core builds the tile's URL, headers and per-playlist overrides exactly as a full-screen
             // tune does — including "Prefer HLS", which the phone's own copy of this had left out.
             live.playTile(engine, channel, muted)
@@ -716,10 +726,13 @@ class LiveTuner(
         val c = ctx.value
         if (c.profileId < 0) return emptyList()
         val cust = custom.value
-        return withContext(Dispatchers.IO) {
+        val categories = withContext(Dispatchers.IO) {
             categoryDao.observe(c.liveSourceIds.ifEmpty { listOf(-1L) }, MediaType.LIVE).first()
         }
-            .filter { CustomizeKeys.category(it) !in cust.hiddenItems }
+        val kids = profileDao.getById(c.profileId)?.isKids == true
+        return categories
+            .filter { CustomizeKeys.category(it) !in cust.hiddenCategories }
+            .filterNot { kids && AdultCategoryClassifier.isAdult(it.name) }
             .map { cat -> cat.id to (cust.itemNames[CustomizeKeys.category(cat)] ?: cat.name) }
     }
 
@@ -728,8 +741,9 @@ class LiveTuner(
         val c = ctx.value
         if (c.profileId < 0) return emptyList()
         val category = withContext(Dispatchers.IO) { categoryDao.getById(categoryId) } ?: return emptyList()
+        if (category.sourceId !in c.liveSourceIds) return emptyList()
         val cust = custom.value
-        return withContext(Dispatchers.IO) {
+        val channels = withContext(Dispatchers.IO) {
             channelDao.snapshotByCategoryManual(
                 categoryId = category.id,
                 profileId = c.profileId,
@@ -737,7 +751,8 @@ class LiveTuner(
                 limit = SIBLING_LIMIT,
             )
         }
-            .filter { CustomizeKeys.channel(it) !in cust.hiddenItems }
+        return channels
+            .filter { contentAccess.allows(c.profileId, it) }
             .map { ch -> cust.itemNames[CustomizeKeys.channel(ch)]?.let { ch.copy(name = it) } ?: ch }
     }
 
@@ -796,7 +811,7 @@ class LiveTuner(
         live.launch {
             if (!dataSaver.allowsStreaming()) return@launch
             val pid = ctx.value.profileId.takeIf { it >= 0 } ?: return@launch
-            if (!AdultCategoryClassifier.allows(pid, channel.categoryId, profileDao, categoryDao)) return@launch
+            if (!contentAccess.allows(pid, channel)) return@launch
             val url = archiveUrls.forProgramme(channel, programme) ?: run {
                 // Silence here is indistinguishable from a broken button: the tap did nothing, said
                 // nothing, and left the user to guess whether the app or the provider was at fault.
@@ -895,8 +910,9 @@ class LiveTuner(
             // Stage by source, so the playing playlist's own 101 wins over another playlist's 101
             // instead of the two of them cancelling each other out as an ambiguity.
             for (sourceId in ordered) {
-                val hits = withContext(Dispatchers.IO) { channelDao.findByNumber(listOf(sourceId), number) }
+                val candidates = withContext(Dispatchers.IO) { channelDao.findByNumber(listOf(sourceId), number) }
                     .filter { CustomizeKeys.channel(it) !in hidden }
+                val hits = candidates.filter { contentAccess.allows(ctx.value.profileId, it) }
                 when (hits.size) {
                     0 -> continue
                     1 -> {

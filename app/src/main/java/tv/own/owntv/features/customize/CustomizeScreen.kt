@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -49,7 +50,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import tv.own.owntv.R
 import tv.own.owntv.core.model.MediaType
-import tv.own.owntv.core.util.Pin
+import tv.own.owntv.core.profile.ProfileManagementRequirement
 import tv.own.owntv.features.profiles.PinDialog
 import tv.own.owntv.features.settings.PickerDialog
 import tv.own.owntv.features.settings.SettingsViewModel
@@ -91,6 +92,7 @@ fun CustomizeScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val rangeMode by vm.rangeMode.collectAsStateWithLifecycle()
     val rangeEndKey by vm.rangeEndKey.collectAsStateWithLifecycle()
     val rangeSelectedKeys by vm.rangeSelectedKeys.collectAsStateWithLifecycle()
+    val accessRequirement by vm.accessRequirement.collectAsStateWithLifecycle()
     val pinLock by vm.pinLock.collectAsStateWithLifecycle()
     val selectedCategory by vm.selectedCategory.collectAsStateWithLifecycle()
     val colors = OwnTVTheme.colors
@@ -107,6 +109,7 @@ fun CustomizeScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     // PIN gate: asked on every entry (state is per-composition, so leaving the screen re-locks it).
     var unlocked by remember { mutableStateOf(false) }
     var pinError by remember { mutableStateOf(false) }
+    var adultPinError by remember { mutableStateOf(false) }
     // Set/Change/Remove PIN flow (only reachable once unlocked).
     var editingPin by remember { mutableStateOf<PinEdit?>(null) }
     var firstPin by remember { mutableStateOf("") }
@@ -137,6 +140,10 @@ fun CustomizeScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     var listPaneFocused by remember { mutableStateOf(false) }
 
+    DisposableEffect(vm) {
+        onDispose { vm.clearAdultAccess() }
+    }
+
     LaunchedEffect(section) {
         listState.scrollToItem(0)
     }
@@ -147,12 +154,64 @@ fun CustomizeScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     // header) — the offset that maps a category index to its LazyColumn item index.
     val headerOffset = if (hiddenChannels.isNotEmpty()) hiddenChannels.size + 2 else 0
 
+    // Adult authorization is independent of the optional historical Customize PIN. A kids profile
+    // never sees category names or hidden rows before Core approves this first gate.
+    val adultRequirement = accessRequirement
+    if (adultRequirement == null) {
+        Column(modifier.fillMaxSize().roundedPanel()) {}
+        return
+    }
+    if (adultRequirement is ProfileManagementRequirement.Blocked) {
+        BackHandler(onBack = onBack)
+        Column(
+            modifier = modifier.fillMaxSize().roundedPanel().padding(horizontal = 40.dp, vertical = 28.dp),
+        ) {
+            Text(stringResource(R.string.profiles_management_locked_title), style = MaterialTheme.typography.headlineLarge, color = colors.onSurface)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(R.string.profiles_management_locked_message),
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(18.dp))
+            OwnTVButton(stringResource(R.string.common_back), onClick = onBack)
+        }
+        return
+    }
+    if (adultRequirement is ProfileManagementRequirement.PinRequired) {
+        Column(
+            modifier = modifier.fillMaxSize().roundedPanel().padding(horizontal = 40.dp, vertical = 28.dp),
+        ) {
+            Text(stringResource(R.string.settings_customize_title), style = MaterialTheme.typography.headlineLarge, color = colors.onSurface)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                stringResource(R.string.profiles_management_locked_message),
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.onSurfaceVariant,
+            )
+        }
+        PinDialog(
+            title = if (adultPinError) {
+                stringResource(R.string.profiles_wrong_pin)
+            } else {
+                stringResource(R.string.profiles_adult_pin_required, adultRequirement.profile.name)
+            },
+            onSubmit = { entered ->
+                vm.unlockAdultAccess(entered) { unlockedAdult -> adultPinError = !unlockedAdult }
+            },
+            onDismiss = onBack,
+            compact = true,
+        )
+        return
+    }
+
     // Wait for the stored lock state before showing anything (no unlocked flash).
     if (!pinLock.loaded) {
         Column(modifier.fillMaxSize().roundedPanel()) {}
         return
     }
-    if (pinLock.pin != null && !unlocked) {
+    val storedCustomizePin = pinLock.pin
+    if (storedCustomizePin != null && !unlocked) {
         Column(
             modifier = modifier.fillMaxSize().roundedPanel().padding(horizontal = 40.dp, vertical = 28.dp),
         ) {
@@ -167,7 +226,7 @@ fun CustomizeScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
         PinDialog(
             title = stringResource(if (pinError) R.string.settings_customize_wrong_pin else R.string.settings_customize_enter_pin),
             onSubmit = { entered ->
-                if (entered == pinLock.pin || Pin.verify(entered, pinLock.pin)) {
+                if (vm.verifyOptionalPin(entered, storedCustomizePin)) {
                     unlocked = true
                     pinError = false
                 } else {

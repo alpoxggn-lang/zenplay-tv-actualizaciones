@@ -83,10 +83,13 @@
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/zenplay_icon"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode"
             android:launchMode="singleTop"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
             android:roundIcon="@mipmap/zenplay_icon"
             android:theme="@style/Theme.OwnTV.Starting.Petrol"
-            android:windowSoftInputMode="adjustPan">
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
@@ -111,10 +114,13 @@
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/zenplay_icon"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode"
             android:launchMode="singleTop"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
             android:roundIcon="@mipmap/zenplay_icon"
             android:theme="@style/Theme.OwnTV.Starting.Sunflower"
-            android:windowSoftInputMode="adjustPan">
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
@@ -139,10 +145,13 @@
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/zenplay_icon"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode"
             android:launchMode="singleTop"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
             android:roundIcon="@mipmap/zenplay_icon"
             android:theme="@style/Theme.OwnTV.Starting.Cobalt"
-            android:windowSoftInputMode="adjustPan">
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
@@ -167,10 +176,13 @@
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/zenplay_icon"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode"
             android:launchMode="singleTop"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
             android:roundIcon="@mipmap/zenplay_icon"
             android:theme="@style/Theme.OwnTV.Starting.Tomato"
-            android:windowSoftInputMode="adjustPan">
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
@@ -195,10 +207,13 @@
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/zenplay_icon"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode"
             android:launchMode="singleTop"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
             android:roundIcon="@mipmap/zenplay_icon"
             android:theme="@style/Theme.OwnTV.Starting.Board"
-            android:windowSoftInputMode="adjustPan">
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
@@ -223,10 +238,13 @@
             android:enabled="true"
             android:exported="true"
             android:icon="@mipmap/zenplay_icon"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode"
             android:launchMode="singleTop"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
             android:roundIcon="@mipmap/zenplay_icon"
             android:theme="@style/Theme.OwnTV.Starting.Eggshell"
-            android:windowSoftInputMode="adjustPan">
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
@@ -251,10 +269,13 @@
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/zenplay_icon"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode"
             android:launchMode="singleTop"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
             android:roundIcon="@mipmap/zenplay_icon"
             android:theme="@style/Theme.OwnTV.Starting.Olive"
-            android:windowSoftInputMode="adjustPan">
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
@@ -279,10 +300,13 @@
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/zenplay_icon"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode"
             android:launchMode="singleTop"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
             android:roundIcon="@mipmap/zenplay_icon"
             android:theme="@style/Theme.OwnTV.Starting.OliveCream"
-            android:windowSoftInputMode="adjustPan">
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />

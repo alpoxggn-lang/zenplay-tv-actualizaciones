@@ -45,6 +45,8 @@ import tv.own.owntv.ui.components.ContentPanelFill
 import tv.own.owntv.ui.components.modalScrim
 import tv.own.owntv.ui.components.roundedPanel
 import tv.own.owntv.ui.components.OwnTVIcon
+import tv.own.owntv.ui.components.OwnTVButton
+import tv.own.owntv.ui.components.OwnTVButtonStyle
 import tv.own.owntv.ui.components.ProviderChip
 import tv.own.owntv.core.theme.GlassSurface
 import tv.own.owntv.ui.theme.OwnTVTheme
@@ -101,6 +103,15 @@ fun ChannelListOverlay(
                 }
                 .padding(vertical = 18.dp),
         ) {
+            if (onOpenCategories != null) {
+                OwnTVButton(
+                    stringResource(R.string.zenplay_player_back_categories),
+                    onClick = onOpenCategories,
+                    icon = OwnTVIcon.BACK,
+                    style = OwnTVButtonStyle.SECONDARY,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp).fillMaxWidth(),
+                )
+            }
             Text(
                 title ?: stringResource(R.string.content_channel_overlay_title),
                 style = MaterialTheme.typography.titleMedium,

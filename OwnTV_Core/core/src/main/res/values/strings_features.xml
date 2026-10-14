@@ -18,15 +18,15 @@
     <string name="profiles_avatar_own_picture">Your own picture</string>
     <string name="profiles_kids">Kids profile</string>
     <!-- Translators: Description beneath the kids-mode toggle in the profile editor. -->
-    <string name="profiles_kids_description">Simplified, safe browsing</string>
+    <string name="profiles_kids_description">Parental control hides adult categories and blocks direct playback</string>
     <!-- Translators: Button in the profile editor to remove the PIN lock. -->
     <string name="profiles_remove_pin">Remove PIN lock</string>
     <!-- Translators: Status text indicating the profile has no PIN lock. -->
     <string name="profiles_no_pin">This profile opens without a PIN</string>
     <!-- Translators: Text-field label for changing the PIN in the profile editor. "blank = keep" means leaving it empty preserves the current PIN. -->
-    <string name="profiles_change_pin">Change PIN (blank = keep)</string>
+    <string name="profiles_change_pin">Change parental PIN (blank = keep)</string>
     <!-- Translators: Text-field label for an optional PIN in the profile editor. -->
-    <string name="profiles_optional_pin">PIN (optional)</string>
+    <string name="profiles_optional_pin">Parental PIN (optional)</string>
     <!-- Translators: Hint text below the PIN field indicating the required format. -->
     <string name="profiles_pin_digits">4\u20136 digits</string>
     <!-- Translators: Placeholder dots shown in the PIN input field. -->
@@ -41,14 +41,23 @@
     <string name="profiles_gate_title">Who\'s watching?</string>
     <!-- Translators: Error text on the PIN entry screen when the wrong PIN is entered. -->
     <string name="profiles_wrong_pin">Wrong PIN \u2014 try again</string>
+    <string name="profiles_management_locked_title">Profile management locked</string>
+    <string name="profiles_management_locked_message">A kids profile can manage profiles only with the PIN of a protected adult profile. Switch to an adult profile; on a legacy unlocked adult, set its PIN before making any other change.</string>
+    <string name="profiles_management_changed_message">Profile access changed before this action finished. Try again from a protected adult profile.</string>
+    <string name="profiles_first_adult_required">The first profile must be an adult profile. Set a PIN before creating a kids profile.</string>
+    <string name="profiles_adult_pin_required"><xliff:g id="name">%1$s</xliff:g> \u2014 enter the adult profile PIN</string>
     <!-- Translators: PIN entry prompt. "name" is the profile name. -->
     <string name="profiles_enter_pin"><xliff:g id="name">%1$s</xliff:g> \u2014 enter PIN</string>
     <!-- Translators: Badge shown on kids profiles. All caps is intentional for this badge. -->
     <string name="profiles_kids_badge">KIDS</string>
     <!-- Translators: Button on the profile gate screen to add a new profile. -->
     <string name="profiles_add">Add profile</string>
+    <!-- Translators: Primary action after selecting a profile on the TV profile gate. -->
+    <string name="profiles_use_profile">Use profile</string>
+    <!-- Translators: Explanation shown when the selected TV profile cannot be deleted. -->
+    <string name="profiles_delete_unavailable">Switch to another profile before deleting this one. At least one profile must remain.</string>
     <!-- Translators: Screen title for the profile management screen. -->
-    <string name="profiles_title">Profiles</string>
+    <string name="profiles_title">Profiles &amp; parental controls</string>
     <!-- Translators: Button on the profile management screen to add a profile. -->
     <string name="profiles_add_button">Add Profile</string>
     <!-- Translators: Dialog title for profile deletion confirmation. "name" is the profile name. -->
@@ -59,6 +68,8 @@
     <string name="profiles_kids_tag">Kids</string>
     <!-- Translators: Tag shown on PIN-locked profiles in the profile list. -->
     <string name="profiles_locked_tag">PIN locked</string>
+    <!-- Translators: Tag shown on the profile currently in use. -->
+    <string name="profiles_active_tag">Active</string>
 
     <!-- Search -->
     <!-- Translators: Screen title for the global search screen. -->

@@ -7,6 +7,8 @@
     <string name="zenplay_kind_series">Serie</string>
     <string name="zenplay_expiry_until">Vence: %1$s</string>
     <string name="zenplay_expiry_expired">Suscripción vencida</string>
+    <string name="zenplay_expiry_revoked">Cuenta suspendida o acceso revocado</string>
+    <string name="zenplay_my_zenplay">Mi ZenPlay</string>
     <string name="zenplay_plans_title">Mis planes</string>
     <string name="zenplay_plans_summary">Cambia entre Básica, Avanzado y Premium</string>
     <string name="zenplay_plans_subtitle">Inicia sesión en los planes que tengas y cambia entre ellos con un toque, sin volver a escribir tus datos.</string>
@@ -17,7 +19,7 @@
     <string name="zenplay_plans_switched">Ahora estás viendo el plan %1$s.</string>
     <string name="zenplay_plans_added">¡Listo! El plan se agregó y ya está en uso.</string>
     <string name="zenplay_logout_title">Cerrar sesión</string>
-    <string name="zenplay_logout_summary">Salir para entrar con otro plan o cuenta</string>
+    <string name="zenplay_logout_summary">Salir para entrar con otra cuenta</string>
     <string name="zenplay_logout_confirm_title">¿Cerrar sesión?</string>
     <string name="zenplay_logout_warning">Se borrarán de este teléfono tu cuenta, los perfiles (con sus PIN), favoritos, historial, descargas y ajustes. ZenPlay se cerrará; al abrirla de nuevo verás la pantalla de inicio de sesión.</string>
     <string name="zenplay_skip_intro">Saltar intro</string>
@@ -48,7 +50,10 @@
     <string name="zenplay_profile_back">Atrás</string>
     <string name="zenplay_profile_enter">Entrar</string>
     <string name="zenplay_expiry_title">Mi suscripción</string>
-    <string name="zenplay_expiry_unknown">Consultando fecha de vencimiento…</string>
+    <string name="zenplay_expiry_loading">Consultando fecha de vencimiento…</string>
+    <string name="zenplay_expiry_unlimited">Cuenta sin fecha de vencimiento</string>
+    <string name="zenplay_expiry_unavailable">No se pudo consultar. Toca para reintentar.</string>
+    <string name="zenplay_expiry_no_account">Inicia sesión para consultar tu suscripción</string>
     <string name="zenplay_agenda_title">Agenda deportiva de hoy</string>
     <string name="zenplay_agenda_short">Agenda deportiva</string>
     <string name="zenplay_agenda_banner_hint">Partidos y eventos de hoy en tus canales</string>

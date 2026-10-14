@@ -5,10 +5,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,13 +15,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -34,7 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import android.content.res.Configuration
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,8 +39,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tv.own.owntv.core.live.EpgNowNext
 import tv.own.owntv.mobile.R
-import tv.own.owntv.core.player.PlayerControl
-import tv.own.owntv.core.player.ControlCluster
 import tv.own.owntv.mobile.cast.CastRouteButton
 import tv.own.owntv.mobile.ui.components.rememberClockTick
 import tv.own.owntv.mobile.ui.theme.LocalAccentOnVideo
@@ -54,13 +48,12 @@ import tv.own.owntv.mobile.ui.theme.SquircleShape
 import tv.own.owntv.player.LiveProgramme
 import tv.own.owntv.player.PlaybackEngine
 import tv.own.owntv.player.OwnTVPlayer
-import tv.own.owntv.player.SleepTimer
-import org.koin.compose.koinInject
 import java.text.NumberFormat
 
 /** The pickers the tool bar opens. Each one is a sheet; each one also has a gesture. */
 enum class PlayerSheet {
-    VOLUME, BRIGHTNESS, SUBTITLES, SUBTITLE_SEARCH, AUDIO, ASPECT, QUALITY, SPEED, INFO, CHANNELS, CATCHUP, SLEEP_TIMER,
+    VOLUME, BRIGHTNESS, PLAYBACK_SETTINGS, SUBTITLES, SUBTITLE_SEARCH, AUDIO, ASPECT, QUALITY, SPEED, INFO,
+    CHANNELS, CATCHUP, SLEEP_TIMER,
 }
 
 /**
@@ -97,51 +90,24 @@ fun PlayerControls(
     timelineProgrammes: List<LiveProgramme>,
     /** The provider's own number for the channel, or null when the user has numbers turned off. */
     channelNumber: Int?,
-    /**
-     * Whether live is playing on ExoPlayer right now (L3). Ignored off live.
-     *
-     * The engine button used to be hidden on live, and the comment beside it said why: the phone had
-     * only mpv, so there was nothing to swap to. Now there is.
-     */
-    liveOnExo: Boolean = false,
-    /**
-     * Flip the live channel between ExoPlayer and mpv, remembering the choice for that channel —
-     * the television's "compatibility mode". Null hides the button, which is what a replay, a rewind
-     * and a protected channel all want.
-     */
-    onToggleLiveEngine: (() -> Unit)? = null,
     onBack: () -> Unit,
-    onGoLive: () -> Unit,
     onScrubLive: (deltaSec: Int) -> Unit,
     /** N4 — the saved copy's holes, for the live bar. */
     liveGaps: () -> List<LongRange> = { emptyList() },
     /** One Live-rewind-step back (false) or forward (true); null on a channel that cannot be rewound. */
     onSkipLive: ((forward: Boolean) -> Unit)? = null,
     onOpenSheet: (PlayerSheet) -> Unit,
-    /** Shrink into the app's own mini player, still playing. */
-    onMini: () -> Unit,
-    audioOnly: Boolean,
-    onAudioOnly: () -> Unit,
     /** Whether what is playing is one of this profile's favourites. */
     favorite: Boolean,
     onToggleFavorite: () -> Unit,
-    /** Opens "Go back to…", or null when this channel's provider keeps no archive. */
-    onCatchup: (() -> Unit)?,
-    /** N2 — back to the channel watched before this one; null hides the button. */
-    onPreviousChannel: (() -> Unit)? = null,
-    // Live only, and only once Multiview is switched on in Settings. Null hides the button.
+    /** Live-only entry to the grid; null on hardware that cannot sustain two decoders. */
     onMultiview: (() -> Unit)? = null,
-    /** Files a diagnostic report about the stream on screen. */
-    onReport: () -> Unit,
-    /** Flashes a line over the picture — what the engine toggle uses to name what it switched to. */
-    onToast: (String) -> Unit,
+    /** Live-only glass channel browser. */
+    onChannels: (() -> Unit)? = null,
+    /** Live-only +1 zap within the category currently playing. */
+    onNextChannel: (() -> Unit)? = null,
     /** The screen-wide scrub gesture's running total, in media milliseconds, while it is happening. */
     gestureScrubMs: Long?,
-    /** Whether the Info sheet is open — Report is offered only while it is (H1). */
-    infoOpen: Boolean = false,
-    // Live only, and only once "Record what I'm watching" is switched on (D3). Null hides it.
-    onRecordThis: (() -> Unit)? = null,
-    recordingThis: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     // The app's own effects spring, not Material's default: with animations off it snaps, so the
@@ -191,14 +157,6 @@ fun PlayerControls(
                 behindLive = (offsetSec ?: 0) > 1,
                 modifier = Modifier.align(Alignment.Center),
             )
-            // ZenPlay: "Saltar intro" (first minutes) and "Siguiente episodio" under the transport.
-            if (!isLive) {
-                ZenEpisodeButtons(
-                    player = engine,
-                    modifier = Modifier.align(Alignment.Center).offset(y = 92.dp),
-                )
-            }
-
             Column(
                 Modifier
                     .align(Alignment.BottomCenter)
@@ -209,6 +167,10 @@ fun PlayerControls(
             ) {
                 PlayerDock {
                     if (isLive) {
+                        LiveChannelActions(
+                            onChannels = onChannels,
+                            onNextChannel = onNextChannel,
+                        )
                         LiveBar(
                             offsetSec = offsetSec,
                             archiveWindowSec = archiveWindowSec,
@@ -220,26 +182,11 @@ fun PlayerControls(
                         SeekBar(player, gestureScrubMs)
                     }
                     ToolBar(
-                        player = player,
-                        engine = engine,
                         isLive = isLive,
-                        goLive = if (isLive && (offsetSec ?: 0) > 1) onGoLive else null,
                         onOpenSheet = onOpenSheet,
-                        onMini = onMini,
-                        audioOnly = audioOnly,
-                        onAudioOnly = onAudioOnly,
                         favorite = favorite,
                         onToggleFavorite = onToggleFavorite,
-                        onCatchup = onCatchup,
-                        onPreviousChannel = onPreviousChannel,
                         onMultiview = onMultiview,
-                        onReport = onReport,
-                        onToast = onToast,
-                        infoOpen = infoOpen,
-                        onRecordThis = onRecordThis,
-                        recordingThis = recordingThis,
-                        liveOnExo = liveOnExo,
-                        onToggleLiveEngine = onToggleLiveEngine,
                     )
                 }
             }
@@ -308,18 +255,7 @@ private fun TransportRow(
 ) {
     val playing by player.isPlaying.collectAsStateWithLifecycle()
     val step by player.seekStepMs.collectAsStateWithLifecycle()
-    // Whether there is an episode either side of this one. The engine answers "no" for a film and for
-    // live, so the two buttons appear only where they mean something.
-    val nav by player.nav.collectAsStateWithLifecycle()
     TransportCapsule(modifier) {
-        // The phone used to reach the next episode only through the card that appears in the last
-        // thirty seconds — so skipping the end credits meant leaving the player, finding the series
-        // and picking the episode. The television has had both of these beside play all along.
-        if (nav.hasPrev) {
-            RoundControl(MobileIcons.SkipPrevious, R.string.settings_remote_button_previous) {
-                player.previous()
-            }
-        }
         if (!isLive) {
             RoundControl(MobileIcons.FastRewind, R.string.player_skip_back) { player.seekBy(-step) }
         } else if (onSkipLive != null) {
@@ -337,43 +273,8 @@ private fun TransportRow(
         } else if (onSkipLive != null && behindLive) {
             RoundControl(MobileIcons.FastForward, R.string.player_skip_forward) { onSkipLive(true) }
         }
-        if (nav.hasNext) {
-            RoundControl(MobileIcons.SkipNext, R.string.settings_remote_button_next) { player.next() }
-        }
     }
 }
-
-/**
- * ZenPlay: two labelled buttons for series. Only an episode queue has a previous or next item, so
- * films never show them. "Saltar intro" is offered during the first five minutes and jumps 85 seconds
- * ahead — providers do not say where an intro ends, so it is a fixed jump.
- */
-@Composable
-private fun ZenEpisodeButtons(player: PlaybackEngine, modifier: Modifier = Modifier) {
-    val nav by player.nav.collectAsStateWithLifecycle()
-    val position by player.position.collectAsStateWithLifecycle()
-    if (!nav.hasPrev && !nav.hasNext) return
-    val inIntro = position < ZEN_INTRO_WINDOW_MS
-    if (!inIntro && !nav.hasNext) return
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (inIntro) {
-            tv.own.owntv.mobile.ui.components.MobileButton(
-                text = stringResource(R.string.zenplay_skip_intro),
-                onClick = { player.seekBy(ZEN_INTRO_SKIP_MS) },
-                style = tv.own.owntv.mobile.ui.components.MobileButtonStyle.SECONDARY,
-            )
-        }
-        if (nav.hasNext) {
-            tv.own.owntv.mobile.ui.components.MobileButton(
-                text = stringResource(R.string.zenplay_next_episode),
-                onClick = { player.next() },
-            )
-        }
-    }
-}
-
-private const val ZEN_INTRO_WINDOW_MS = 5 * 60_000L
-private const val ZEN_INTRO_SKIP_MS = 85_000L
 
 @Composable
 private fun RoundControl(
@@ -425,11 +326,13 @@ private fun SeekBar(player: OwnTVPlayer, gestureDeltaMs: Long?) {
             // While the value is moving, say where it will land and by how much.
             bubbleTargetMs = targetMs.takeIf { dragging || gestureDeltaMs != null },
             bubbleDeltaMs = gestureDeltaMs ?: (targetMs - position).takeIf { dragging },
-            onSeekTo = { player.seekBy((it * duration).toLong() - player.position.value) },
+            // A direct tap/drag owns an absolute destination. Re-deriving a delta from the live
+            // position flow races playback and used to issue the wrong Range request on release.
+            onSeekTo = { player.seekTo((it * duration).toLong()) },
             onDrag = { dragging = true; dragValue = it },
             onDragEnd = {
                 dragging = false
-                player.seekBy((dragValue * duration).toLong() - player.position.value)
+                player.seekTo((dragValue * duration).toLong())
             },
             modifier = Modifier.weight(1f).padding(horizontal = MobileDimens.GapSmall),
         )
@@ -475,6 +378,57 @@ private fun LiveBar(
 }
 
 /**
+ * The two live-TV actions users need while the picture stays visible.
+ *
+ * They intentionally sit above the timeline instead of joining the icon strip: on a phone the
+ * strip used to contain fourteen indistinguishable glyphs. The short labels fit a handset and the
+ * full labels use the extra width of a tablet. The translucent plates sit inside the player's glass
+ * dock, so opening either action never replaces the stream behind it.
+ */
+@Composable
+private fun LiveChannelActions(
+    onChannels: (() -> Unit)?,
+    onNextChannel: (() -> Unit)?,
+) {
+    if (onChannels == null && onNextChannel == null) return
+    val tablet = LocalConfiguration.current.smallestScreenWidthDp >= 600
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = MobileDimens.GapTiny),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LiveActionButton(
+            icon = MobileIcons.FormatListBulleted,
+            text = stringResource(
+                if (tablet) R.string.zenplay_player_channel_list else R.string.zenplay_player_channels_short,
+            ),
+            onClick = onChannels,
+        )
+        LiveActionButton(
+            icon = MobileIcons.SkipNext,
+            text = stringResource(
+                if (tablet) R.string.zenplay_player_next_channel else R.string.zenplay_player_next_short,
+            ),
+            onClick = onNextChannel,
+        )
+    }
+}
+
+@Composable
+private fun LiveActionButton(icon: ImageVector, text: String, onClick: (() -> Unit)?) {
+    TextButton(
+        onClick = { onClick?.invoke() },
+        enabled = onClick != null,
+        modifier = Modifier
+            .clip(SquircleShape(18.dp))
+            .background(Color.Black.copy(alpha = 0.30f)),
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+        Text(text = text, modifier = Modifier.padding(start = 6.dp))
+    }
+}
+
+/**
  * The tools: one button per picker, scrollable because a phone in portrait is narrow.
  *
  * Each is a 48 dp square showing **its glyph and nothing else**. No control draws its name: the bar
@@ -486,259 +440,41 @@ private fun LiveBar(
  */
 @Composable
 private fun ToolBar(
-    player: OwnTVPlayer,
-    /** Read state from here; `player` is used only for the VOD engine toggle, which is mpv's own. */
-    engine: PlaybackEngine,
     isLive: Boolean,
-    /** The way back to the live edge, or null when the picture is already there. */
-    goLive: (() -> Unit)?,
     onOpenSheet: (PlayerSheet) -> Unit,
-    /** Shrink into the app's own mini player, still playing. */
-    onMini: () -> Unit,
-    audioOnly: Boolean,
-    onAudioOnly: () -> Unit,
     favorite: Boolean,
     onToggleFavorite: () -> Unit,
-    onCatchup: (() -> Unit)?,
-    onPreviousChannel: (() -> Unit)? = null,
-    // Live only, and only once Multiview is switched on in Settings. Null hides the button.
     onMultiview: (() -> Unit)? = null,
-    onReport: () -> Unit,
-    onToast: (String) -> Unit,
-    /**
-     * Whether the Info sheet is open. Report is offered only while it is (H1) — a report is about
-     * what Info is showing, and there is nothing to report without it.
-     */
-    infoOpen: Boolean = false,
-    // Live only, and only once "Record what I'm watching" is switched on in Settings (D3). Null
-    // hides the button, exactly as on the television.
-    onRecordThis: (() -> Unit)? = null,
-    recordingThis: Boolean = false,
-    liveOnExo: Boolean = false,
-    onToggleLiveEngine: (() -> Unit)? = null,
-    sleepTimer: SleepTimer = koinInject(),
 ) {
-    val speed by engine.speed.collectAsStateWithLifecycle()
-    // Only whether one runs: the countdown ticks every second, and the bar must not redraw with it.
-    val sleepLeft = sleepTimer.remainingMs.collectAsStateWithLifecycle()
-    val sleepRunning by remember { derivedStateOf { sleepLeft.value != null } }
-    val engineName by engine.engineChip.collectAsStateWithLifecycle()
-    val qualities by engine.videoQualities.collectAsStateWithLifecycle()
-    val qualityPick by engine.videoQualityPick.collectAsStateWithLifecycle()
-    // The engine chip in the title line is small and easy to miss, so the swap says which engine it
-    // landed on — otherwise the only feedback for the button is a picture that blinks.
-    val switchedToExo = stringResource(R.string.player_switch_exo)
-    val switchedToMpv = stringResource(R.string.player_switch_mpv)
-    // H5 - the ORDER is core's `PlayerControl`, the same list the television's HUD renders from, so
-    // the two bars read alike. Each control keeps its own composable and its own condition; only the
-    // sequence is shared. The `when` is exhaustive, so a control added to the shared list cannot be
-    // silently missing here.
-    //
-    // Drawn through one lambda because the bar has two LAYOUTS and only one set of buttons. In
-    // portrait a phone has nowhere near the width for both clusters, so they are concatenated into a
-    // single scrolling row. In landscape there is room, and the bar takes the television's shape:
-    // the media cluster hugs the left edge, the tools cluster the right, and the gap between them
-    // separates "what is playing" from "how it is shown". That gap is the thing the two bars were
-    // supposed to share after H3 and did not - the phone ran them together at every width.
-    val render: @Composable (PlayerControl) -> Unit = { control ->
-        when (control) {
-            // First, so the way back to now is the first thing the thumb reaches on a bar that
-            // scrolls.
-            PlayerControl.GO_LIVE -> GoLivePill(enabled = goLive != null, onClick = { goLive?.invoke() })
-            PlayerControl.VOLUME -> CtrlButton(MobileIcons.VolumeUp, stringResource(R.string.player_tool_volume), {
-                onOpenSheet(PlayerSheet.VOLUME)
-            })
-            // Phone-only, and rightly so: a television's brightness belongs to the television.
-            PlayerControl.BRIGHTNESS -> CtrlButton(MobileIcons.BrightnessMedium, stringResource(R.string.player_tool_brightness), {
-                onOpenSheet(PlayerSheet.BRIGHTNESS)
-            })
-            // Live has no speed to change - the stream arrives at the rate it arrives.
-            PlayerControl.SPEED -> if (!isLive) {
-                SpeedButton(
-                    rate = formatSpeed(speed),
-                    label = stringResource(R.string.player_tool_speed),
-                    active = speed != 1.0,
-                    onClick = { onOpenSheet(PlayerSheet.SPEED) },
-                )
-            }
-            PlayerControl.SUBTITLES -> CtrlButton(
-                icon = MobileIcons.ClosedCaption,
-                label = stringResource(R.string.player_tool_subtitles),
-                onClick = { onOpenSheet(PlayerSheet.SUBTITLES) },
-            )
-            // Always, like the subtitles button beside it and like the television's — never gated on
-            // the track count. This sheet is also where A/V sync lives, and a single-soundtrack film
-            // is precisely the one whose voices need dragging back into line with the mouths; hidden
-            // on one track, the fix was unreachable exactly when it was wanted. An empty list says so
-            // itself, the way the subtitle sheet already does.
-            PlayerControl.AUDIO -> CtrlButton(
-                icon = MobileIcons.Audiotrack,
-                label = stringResource(R.string.player_tool_audio),
-                onClick = { onOpenSheet(PlayerSheet.AUDIO) },
-            )
-            // Adding what is on to Favourites without leaving it. From here there is no list row
-            // to hold down, so the player has to carry the toggle itself.
-            PlayerControl.FAVOURITE -> CtrlButton(
-                icon = if (favorite) MobileIcons.Favorite else MobileIcons.FavoriteBorder,
-                label = stringResource(
-                    if (favorite) R.string.content_favorited else R.string.content_favorite,
-                ),
-                onClick = onToggleFavorite,
-                active = favorite,
-            )
-            // H3 - the television's catch-up glyph, not History.
-            PlayerControl.CATCH_UP -> if (onCatchup != null) {
-                CtrlButton(MobileIcons.Catchup, stringResource(R.string.content_catchup_jump), onCatchup)
-            }
-            // N2 — the television's glyph for it, History; present only once there is a channel to go back to.
-            PlayerControl.PREVIOUS_CHANNEL -> if (onPreviousChannel != null) {
-                CtrlButton(MobileIcons.History, stringResource(R.string.player_previous_channel), onPreviousChannel)
-            }
-            // L3 - live has two engines now, so the button is real there too. It is NOT the VOD
-            // toggle: on live it is the television's "compatibility mode", pinned per channel, so a
-            // channel only mpv can play opens on mpv next time without being asked again. Null means
-            // there is nothing sensible to swap - a replay, a rewind, or a protected channel whose
-            // key only one engine can obtain.
-            PlayerControl.ENGINE -> if (isLive) {
-                if (onToggleLiveEngine != null) {
-                    EngineToggle(
-                        engine = stringResource(
-                            if (liveOnExo) R.string.player_engine_exo else R.string.player_engine_mpv,
-                        ),
-                        label = stringResource(R.string.player_tool_engine),
-                        // Teal while pinned to mpv, exactly as on the television: being on the
-                        // compatibility engine is the state worth colouring, because it is the one
-                        // the user chose.
-                        active = !liveOnExo,
-                        icon = MobileIcons.SwapHoriz,
-                        onClick = {
-                            onToast(if (liveOnExo) switchedToMpv else switchedToExo)
-                            onToggleLiveEngine()
-                        },
-                    )
-                }
-            } else {
-                EngineToggle(
-                    engine = engineName.orEmpty(),
-                    label = stringResource(R.string.player_tool_engine),
-                    // ExoPlayer is not this app's default for a film, so being on it is a state
-                    // worth colouring - it is what the user switched to.
-                    active = engineName == EXO,
-                    icon = MobileIcons.SwapHoriz,
-                    onClick = {
-                        onToast(if (engineName == EXO) switchedToMpv else switchedToExo)
-                        player.toggleVodEngine()
-                    },
-                )
-            }
-            PlayerControl.ASPECT -> CtrlButton(
-                icon = MobileIcons.AspectRatio,
-                label = stringResource(R.string.player_tool_aspect),
-                onClick = { onOpenSheet(PlayerSheet.ASPECT) },
-            )
-            // N11 — only when this stream offers several; tinted while a pick overrides Auto.
-            PlayerControl.QUALITY -> if (qualities.isNotEmpty()) {
-                CtrlButton(
-                    icon = MobileIcons.VideoLibrary,
-                    label = stringResource(R.string.player_tool_quality),
-                    onClick = { onOpenSheet(PlayerSheet.QUALITY) },
-                    active = qualityPick != null,
-                )
-            }
-            // Phone-only today; the television reaches the same list with Left.
-            PlayerControl.CHANNEL_LIST -> if (isLive) {
-                CtrlButton(MobileIcons.FormatListBulleted, stringResource(R.string.content_channel_overlay_title), {
-                    onOpenSheet(PlayerSheet.CHANNELS)
-                })
-            }
-            // Shrink into the app's own small player and keep browsing. Not the system's floating
-            // window: that one goes over *other* apps and is what pressing Home gives, so it is
-            // not a button.
-            PlayerControl.MINI_PLAYER ->
-                CtrlButton(MobileIcons.PictureInPictureAlt, stringResource(R.string.settings_mini_player), onMini)
-            // Dropping the picture is the phone's biggest battery and data saving, so it is a
-            // button on the bar rather than something only the notification offers.
-            // H3 - the television's headphones glyph, not a music note.
-            PlayerControl.AUDIO_ONLY -> CtrlButton(
-                icon = MobileIcons.Headphones,
-                label = stringResource(R.string.player_tool_audio_only),
-                onClick = onAudioOnly,
-                active = audioOnly,
-            )
-            PlayerControl.MULTIVIEW -> if (onMultiview != null) {
-                CtrlButton(MobileIcons.GridView, stringResource(R.string.multiview_button), onMultiview)
-            }
-            // Record the channel already playing (D3). Null until the setting is on, exactly as
-            // on the television.
-            PlayerControl.RECORD -> if (onRecordThis != null) {
-                CtrlButton(
-                    icon = MobileIcons.LiveTv,
-                    label = stringResource(
-                        if (recordingThis) R.string.recording_stop else R.string.recording_record,
-                    ),
-                    onClick = onRecordThis,
-                    active = recordingThis,
-                )
-            }
-            // N17 / M14 — the full-screen way to the sleep timer; the sound-only screen and the
-            // floating window already had one. Coloured while a countdown is running.
-            PlayerControl.SLEEP_TIMER -> CtrlButton(
-                icon = MobileIcons.Bedtime,
-                label = stringResource(R.string.player_sleep_timer),
-                onClick = { onOpenSheet(PlayerSheet.SLEEP_TIMER) },
-                active = sleepRunning,
-            )
-            PlayerControl.INFO -> CtrlButton(MobileIcons.Info, stringResource(R.string.player_tool_info), {
-                onOpenSheet(PlayerSheet.INFO)
-            })
-            // H1's decision: the television's rule, on both apps. A report is about what Info is
-            // showing, there is nothing to report without it, and the great majority of users
-            // never file one - so keeping it out of the bar keeps the bar short.
-            // H3 - the television's share glyph, not a bug.
-            PlayerControl.REPORT -> if (infoOpen) {
-                CtrlButton(MobileIcons.Share, stringResource(R.string.player_tool_report), onReport)
-            }
-        }
-    }
-
-    val media = PlayerControl.clusterFor(tv = false, cluster = ControlCluster.MEDIA)
-    val tools = PlayerControl.clusterFor(tv = false, cluster = ControlCluster.TOOLS)
-    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-
-    if (landscape) {
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(MobileDimens.GapTiny),
-            ) {
-                media.forEach { render(it) }
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(MobileDimens.GapTiny),
-            ) {
-                tools.forEach { render(it) }
-            }
-        }
-    } else {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(MobileDimens.GapTiny),
-        ) {
-            (media + tools).forEach { render(it) }
+    // Deliberately four clear actions at most. Brightness remains a gesture and all track/display
+    // choices live under one Settings sheet; recording, sleep, sound-only, engine switching,
+    // diagnostics and an in-app mini-player do not belong on the touch player's primary bar.
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        CtrlButton(
+            MobileIcons.VolumeUp,
+            stringResource(R.string.player_tool_volume),
+            { onOpenSheet(PlayerSheet.VOLUME) },
+        )
+        CtrlButton(
+            MobileIcons.Tune,
+            stringResource(R.string.zenplay_player_playback_settings),
+            { onOpenSheet(PlayerSheet.PLAYBACK_SETTINGS) },
+        )
+        CtrlButton(
+            icon = if (favorite) MobileIcons.Favorite else MobileIcons.FavoriteBorder,
+            label = stringResource(if (favorite) R.string.content_favorited else R.string.content_favorite),
+            onClick = onToggleFavorite,
+            active = favorite,
+        )
+        if (isLive && onMultiview != null) {
+            CtrlButton(MobileIcons.GridView, stringResource(R.string.multiview_button), onMultiview)
         }
     }
 }
-
-/** The engine chip's own name for ExoPlayer, as the player publishes it. */
-private const val EXO = "EXO"
 
 /** "Normal" at 1x, "1.5x" otherwise — the same wording the television uses. */
 @Composable

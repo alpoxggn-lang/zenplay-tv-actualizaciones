@@ -10,7 +10,9 @@ import kotlinx.coroutines.launch
 import tv.own.owntv.core.database.dao.ProfileDao
 import tv.own.owntv.core.database.entity.ProfileEntity
 import tv.own.owntv.core.profile.ProfileManager
-import tv.own.owntv.core.util.Pin
+import tv.own.owntv.core.profile.ProfileAuthorization
+import tv.own.owntv.core.profile.ProfileManagementAction
+import tv.own.owntv.core.profile.ProfileManagementRequirement
 import tv.own.owntv.core.settings.SettingsRepository
 
 /**
@@ -46,11 +48,22 @@ class ProfilesViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Make [profile] active (routes the app into the shell) once the preference write commits. */
-    fun switchTo(profile: ProfileEntity, onSwitched: () -> Unit = {}) {
+    fun switchTo(
+        profile: ProfileEntity,
+        authorization: ProfileAuthorization? = null,
+        onResult: (Boolean) -> Unit = {},
+    ) {
         viewModelScope.launch {
-            manager.switchTo(profile.id)
-            onSwitched()
+            onResult(manager.switchTo(profile.id, authorization))
         }
+    }
+
+    fun managementRequirement(
+        action: ProfileManagementAction,
+        target: ProfileEntity? = null,
+        onResult: (ProfileManagementRequirement) -> Unit,
+    ) {
+        viewModelScope.launch { onResult(manager.managementRequirement(action, target?.id)) }
     }
 
     fun verifyPin(profile: ProfileEntity, pin: String): Boolean = manager.verifyPin(profile, pin)
@@ -59,31 +72,39 @@ class ProfilesViewModel(
      * Create a new profile. New profiles inherit the existing sources (single-account, multi-viewer)
      * so they immediately have content; favorites/history stay per-profile.
      */
-    fun create(name: String, avatarId: Int, isKids: Boolean, pin: String?, defaultName: String, onCreated: (Long) -> Unit = {}) {
+    fun create(
+        name: String,
+        avatarId: Int,
+        isKids: Boolean,
+        pin: String?,
+        defaultName: String,
+        authorization: ProfileAuthorization? = null,
+        onCreated: (Long?) -> Unit = {},
+    ) {
         viewModelScope.launch {
-            onCreated(manager.create(name, avatarId, isKids, pin, defaultName))
+            onCreated(manager.create(name, avatarId, isKids, pin, defaultName, authorization))
         }
     }
 
     /** Apply edits from the editor dialog. [pin]: null = keep the existing PIN, "" = remove it. */
-    fun edit(profile: ProfileEntity, name: String, avatarId: Int, isKids: Boolean, pin: String?) {
-        viewModelScope.launch { manager.edit(profile, name, avatarId, isKids, pin) }
+    fun edit(
+        profile: ProfileEntity,
+        name: String,
+        avatarId: Int,
+        isKids: Boolean,
+        pin: String?,
+        authorization: ProfileAuthorization? = null,
+        onResult: (Boolean) -> Unit = {},
+    ) {
+        viewModelScope.launch { onResult(manager.edit(profile, name, avatarId, isKids, pin, authorization)) }
     }
 
-    fun rename(profile: ProfileEntity, name: String) {
-        viewModelScope.launch { profileDao.update(profile.copy(name = name.ifBlank { profile.name })) }
-    }
-
-    fun setKids(profile: ProfileEntity, isKids: Boolean) {
-        viewModelScope.launch { profileDao.update(profile.copy(isKids = isKids)) }
-    }
-
-    fun setPin(profile: ProfileEntity, pin: String?) {
-        viewModelScope.launch { profileDao.setPin(profile.id, pin?.takeIf { it.isNotBlank() }?.let { Pin.hash(it) }) }
-    }
-
-    fun delete(profile: ProfileEntity) {
-        viewModelScope.launch { manager.delete(profile) }
+    fun delete(
+        profile: ProfileEntity,
+        authorization: ProfileAuthorization? = null,
+        onResult: (Boolean) -> Unit = {},
+    ) {
+        viewModelScope.launch { onResult(manager.delete(profile, authorization)) }
     }
 }
 

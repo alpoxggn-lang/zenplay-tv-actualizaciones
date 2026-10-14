@@ -71,6 +71,8 @@ class ExoSubtitleEngine(
         fun onSubtitleSelected(selected: Boolean) {}
         /** N11 — the picture heights this file offers (see [VideoQuality.heights]). */
         fun onVideoQualities(heights: List<Int>) {}
+        /** The requested height was not an actual playable Exo track and fell back to Auto. */
+        fun onVideoQualityPick(height: Int?) {}
         fun onVideoFps(fps: Float)
         /** This file declares no video track at all (music-only VOD). The HUD says so on screen — sound
          *  over black is otherwise indistinguishable from a broken player. */
@@ -259,6 +261,22 @@ class ExoSubtitleEngine(
             rebuildAudioTracks(tracks)
             rebuildTextTracks(tracks)
             applyPendingSubtitle(tracks)
+            // An mpv -> Exo handoff carries the user's exact manual height. A different manifest view
+            // can expose a different set of playable variants, so never leave the shared HUD claiming
+            // a height that Exo cannot actually override to. Wait for a real video group before
+            // normalising; an initial empty Tracks snapshot is not evidence that the choice is absent.
+            qualityPick?.let { requested ->
+                if (
+                    tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO } &&
+                    VideoQuality.overrideFor(tracks, requested) == null
+                ) {
+                    qualityPick = null
+                    qualityPickUrl = currentUrl
+                    // Also remove any stale override installed against the outgoing engine/item.
+                    applyVideoQuality()
+                    callbacks.onVideoQualityPick(null)
+                }
+            }
             callbacks.onVideoQualities(VideoQuality.heightsOf(tracks))
             if (qualityPick != null && player?.trackSelectionParameters?.overrides?.keys?.none { it.type == C.TRACK_TYPE_VIDEO } == true &&
                 tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO }
@@ -681,9 +699,26 @@ class ExoSubtitleEngine(
 
     fun play() { player?.play() }
     fun pause() { player?.pause() }
-    fun togglePlayPause() { player?.let { if (it.isPlaying) it.pause() else it.play() } }
+    /** User intent stays true while Media3 buffers; [Player.isPlaying] deliberately does not. */
+    fun wantsToPlay(): Boolean = player?.playWhenReady == true
+    fun togglePlayPause() { player?.let { if (it.playWhenReady) it.pause() else it.play() } }
 
-    fun seekTo(positionMs: Long) { player?.seekTo(positionMs.coerceAtLeast(0)); emitPositionDuration() }
+    /** Absolute seek for a direct timeline gesture. Preserve playWhenReady rather than isPlaying:
+     * isPlaying is false while Exo buffers the seek, even when the user never asked it to pause. */
+    fun seekTo(positionMs: Long) {
+        val p = player ?: return
+        val plan = VodSeekPolicy.planTo(
+            currentMs = p.currentPosition,
+            targetMs = positionMs,
+            durationMs = p.duration.let { if (it == C.TIME_UNSET) 0L else it },
+            wasPlaying = p.playWhenReady,
+        )
+        if (!plan.moves) return
+        p.setSeekParameters(SeekParameters.EXACT)
+        p.seekTo(plan.targetMs)
+        if (plan.resumeAfterSeek) p.play()
+        emitPositionDuration()
+    }
 
     /** A D-pad step. Always snap in the direction requested by the user. CLOSEST_SYNC can legally
      *  choose a keyframe behind the current position when moving forward (or ahead when rewinding),
@@ -692,14 +727,24 @@ class ExoSubtitleEngine(
      *  player back to EXACT straight afterwards so resume and absolute seeks remain precise. */
     fun seekBy(deltaMs: Long) {
         val p = player ?: return
+        val plan = VodSeekPolicy.plan(
+            currentMs = p.currentPosition,
+            deltaMs = deltaMs,
+            durationMs = p.duration.let { if (it == C.TIME_UNSET) 0L else it },
+            // playWhenReady is the intent. isPlaying becomes false while a seek buffers, even though
+            // the user never paused; using it here is how a buffering seek could stay stopped.
+            wasPlaying = p.playWhenReady,
+        )
+        if (!plan.moves) return
         val parameters = when {
             deltaMs > 0L -> SeekParameters.NEXT_SYNC
             deltaMs < 0L -> SeekParameters.PREVIOUS_SYNC
             else -> SeekParameters.EXACT
         }
         p.setSeekParameters(parameters)
-        p.seekTo((p.currentPosition + deltaMs).coerceAtLeast(0))
+        p.seekTo(plan.targetMs)
         p.setSeekParameters(SeekParameters.EXACT)
+        if (plan.resumeAfterSeek) p.play()
         emitPositionDuration()
     }
 

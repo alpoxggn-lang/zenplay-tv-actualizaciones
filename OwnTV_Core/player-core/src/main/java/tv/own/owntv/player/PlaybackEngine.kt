@@ -140,6 +140,9 @@ interface PlaybackEngine {
     fun subtitleTimingAvailable(): Boolean = false
     fun previous() {}
     fun next() {}
+    /** Seek to one stable media timestamp. Timeline/scrubber UIs must use this instead of deriving a
+     * delta from a position flow that can advance between pointer-up and command dispatch. */
+    fun seekTo(positionMs: Long) {}
     fun seekBy(deltaMs: Long) {}
     /** HUD "Cancel" on the next-episode countdown — suppress the automatic advance for the current item. */
     fun cancelAutoNext() {}
@@ -218,6 +221,7 @@ class MpvPlaybackEngine(private val p: OwnTVPlayer) : PlaybackEngine {
     override fun toggleRememberAudioDelay() = p.toggleRememberAudioDelay()
     override fun previous() = p.previous()
     override fun next() = p.next()
+    override fun seekTo(positionMs: Long) = p.seekTo(positionMs)
     override fun seekBy(deltaMs: Long) = p.seekBy(deltaMs)
     override val seekStepMs get() = p.seekStepMs
     override fun cancelAutoNext() = p.cancelAutoNext()

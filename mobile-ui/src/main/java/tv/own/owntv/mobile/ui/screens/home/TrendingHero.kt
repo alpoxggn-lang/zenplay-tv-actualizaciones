@@ -43,18 +43,23 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
 import tv.own.owntv.core.database.entity.MovieEntity
+import tv.own.owntv.core.home.shouldAutoAdvanceTrending
+import tv.own.owntv.core.home.wrappedTrendingIndex
 import tv.own.owntv.mobile.R
 import tv.own.owntv.mobile.ui.components.MobileIcons
 import tv.own.owntv.mobile.ui.theme.MobileDimens
 
-/** The six newest provider additions released in 2026, with touch controls and ten-second rotation. */
+/** The newest provider additions, with swipe navigation and unobtrusive ten-second rotation. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TrendingHero(
@@ -67,7 +72,6 @@ fun TrendingHero(
     // A sync can replace a title without changing the count: key the saved selection to actual IDs.
     val itemIds = items.map { it.id }
     var activeIndex by rememberSaveable(itemIds) { mutableIntStateOf(0) }
-    var manuallyPaused by remember { mutableStateOf(false) }
     var touching by remember { mutableStateOf(false) }
     var resetClock by remember { mutableIntStateOf(0) }
     var progress by remember(itemIds) { mutableFloatStateOf(0f) }
@@ -75,15 +79,17 @@ fun TrendingHero(
     var unavailable by remember(item.id) { mutableStateOf(false) }
 
     fun navigate(delta: Int) {
-        activeIndex = (activeIndex + delta + items.size) % items.size
+        activeIndex = wrappedTrendingIndex(activeIndex, delta, items.size)
         progress = 0f
         resetClock++
     }
     // pointerInput survives recomposition; a swipe must use the current index and catalog.
     val navigateOnSwipe by rememberUpdatedState<(Int) -> Unit> { delta -> navigate(delta) }
 
-    LaunchedEffect(itemIds, activeIndex, manuallyPaused, touching, resetClock) {
-        if (manuallyPaused || touching || items.size < 2) return@LaunchedEffect
+    LaunchedEffect(itemIds, activeIndex, touching, resetClock) {
+        // Any finger-down pauses the clock without resetting it. A tap on Play/Details therefore
+        // cannot change the featured title underneath the user, while a released swipe resumes.
+        if (!shouldAutoAdvanceTrending(items.size, touching)) return@LaunchedEffect
         val startProgress = progress.coerceIn(0f, 1f)
         val duration = (INTERVAL_MS * (1f - startProgress)).toLong().coerceAtLeast(1L)
         val startedAt = System.nanoTime()
@@ -94,11 +100,21 @@ fun TrendingHero(
             delay(TICK_MS)
         }
         progress = 0f
-        activeIndex = (activeIndex + 1) % items.size
+        activeIndex = wrappedTrendingIndex(activeIndex, 1, items.size)
     }
 
     val backdrop = item.backdropUrl?.takeIf { it.isNotBlank() } ?: item.posterUrl
     val surface = MaterialTheme.colorScheme.surfaceContainerLowest
+    val configuration = LocalConfiguration.current
+    val wideTablet = configuration.smallestScreenWidthDp >= 600 &&
+        configuration.screenWidthDp > configuration.screenHeightDp
+    val artworkAspect = if (wideTablet) 21f / 9f else 16f / 9f
+    val posterWidth = if (configuration.smallestScreenWidthDp >= 600) 116.dp else PosterWidth
+    val positionLabel = stringResource(
+        R.string.zenplay_home_carousel_position,
+        activeIndex + 1,
+        items.size,
+    )
 
     Column(
         modifier = modifier
@@ -130,7 +146,7 @@ fun TrendingHero(
                 }
             },
     ) {
-        Box(modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+        Box(modifier = Modifier.fillMaxWidth().aspectRatio(artworkAspect)) {
             if (!backdrop.isNullOrBlank()) {
                 AsyncImage(
                     model = backdrop,
@@ -157,7 +173,7 @@ fun TrendingHero(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(MobileDimens.GapMedium)
-                    .width(PosterWidth)
+                    .width(posterWidth)
                     .aspectRatio(2f / 3f)
                     .clip(RoundedCornerShape(MobileDimens.PosterArtCorner))
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
@@ -185,13 +201,17 @@ fun TrendingHero(
 
         Column(modifier = Modifier.padding(MobileDimens.GapMedium)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(7.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+                Box(
+                    Modifier.width(5.dp).height(27.dp).clip(CircleShape).background(
+                        Brush.verticalGradient(listOf(ZenPlayBlue, ZenPlayPurple)),
+                    ),
+                )
                 Spacer(Modifier.width(MobileDimens.GapSmall))
                 Text(
                     text = stringResource(R.string.zenplay_home_trending),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = ZenPlaySilver,
+                    fontWeight = FontWeight.ExtraBold,
                 )
             }
             Spacer(Modifier.height(MobileDimens.GapSmall))
@@ -263,43 +283,33 @@ fun TrendingHero(
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = MobileDimens.GapSmall),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = MobileDimens.GapSmall)
+                .semantics { stateDescription = positionLabel },
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (items.size > 1) {
-                TrendingControlButton(
-                    icon = MobileIcons.SkipPrevious,
-                    description = stringResource(R.string.home_trending_previous),
-                    onClick = { navigate(-1) },
+            items.indices.forEach { index ->
+                Box(
+                    Modifier
+                        .width(if (index == activeIndex) 20.dp else 7.dp)
+                        .height(6.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (index == activeIndex) {
+                                Brush.horizontalGradient(listOf(ZenPlayBlue, ZenPlayPurple))
+                            } else {
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.34f),
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.34f),
+                                    ),
+                                )
+                            },
+                        ),
                 )
-            }
-            Text(
-                text = stringResource(R.string.zenplay_home_carousel_position, activeIndex + 1, items.size),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = MobileDimens.GapSmall),
-            )
-            if (items.size > 1) {
-                TrendingControlButton(
-                    icon = if (manuallyPaused) MobileIcons.PlayArrow else MobileIcons.Pause,
-                    description = stringResource(
-                        if (manuallyPaused) R.string.home_trending_resume else R.string.home_trending_pause,
-                    ),
-                    onClick = {
-                        manuallyPaused = !manuallyPaused
-                        if (!manuallyPaused) {
-                            progress = 0f
-                            resetClock++
-                        }
-                    },
-                )
-                Spacer(Modifier.width(MobileDimens.GapSmall))
-                TrendingControlButton(
-                    icon = MobileIcons.SkipNext,
-                    description = stringResource(R.string.home_trending_next),
-                    onClick = { navigate(1) },
-                )
+                if (index != items.lastIndex) Spacer(Modifier.width(6.dp))
             }
         }
         if (items.size > 1) {
@@ -342,32 +352,12 @@ private fun TrendingActionButton(
     }
 }
 
-@Composable
-private fun TrendingControlButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    description: String,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .size(MobileDimens.TouchTarget)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = description,
-            tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(20.dp),
-        )
-    }
-}
-
 private const val INTERVAL_MS = 10_000L
 private const val TICK_MS = 80L
 private const val SWIPE_SLOP_PX = 60f
 private val PosterWidth = 96.dp
 private val ProgressHeight = 3.dp
 private val RatingColor = Color(0xFFFFE071)
+private val ZenPlaySilver = Color(0xFFE8EDF7)
+private val ZenPlayBlue = Color(0xFF62AAFF)
+private val ZenPlayPurple = Color(0xFFB77CFF)

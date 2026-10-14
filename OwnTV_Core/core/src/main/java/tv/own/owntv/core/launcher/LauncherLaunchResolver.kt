@@ -8,8 +8,8 @@ import tv.own.owntv.core.database.dao.MovieDao
 import tv.own.owntv.core.database.dao.ProgressDao
 import tv.own.owntv.core.database.dao.SeriesDao
 import tv.own.owntv.core.database.dao.SourceDao
-import tv.own.owntv.core.database.dao.CategoryDao
-import tv.own.owntv.core.database.dao.ProfileDao
+import tv.own.owntv.core.content.ContentAccessPolicy
+import tv.own.owntv.core.customize.CustomizeKeys
 import tv.own.owntv.core.database.entity.EpisodeEntity
 import tv.own.owntv.core.database.entity.SeriesEntity
 import tv.own.owntv.core.model.MediaType
@@ -20,8 +20,7 @@ class LauncherLaunchResolver(
     private val movieDao: MovieDao,
     private val seriesDao: SeriesDao,
     private val progressDao: ProgressDao,
-    private val categoryDao: CategoryDao,
-    private val profileDao: ProfileDao,
+    private val contentAccess: ContentAccessPolicy,
 ) {
     suspend fun resolveLaunch(profileId: Long, deepLink: LauncherDeepLink): LauncherLaunch? = withContext(Dispatchers.IO) {
         val sources = sourceDao.observeForProfile(profileId).first()
@@ -50,7 +49,7 @@ class LauncherLaunchResolver(
         } ?: return null
         if (sourceId != null && movie.sourceId != sourceId) return null
         if (movie.sourceId !in sourceIds) return null
-        if (!tv.own.owntv.core.content.AdultCategoryClassifier.allows(profileId, movie.categoryId, profileDao, categoryDao)) return null
+        if (!contentAccess.allows(profileId, MediaType.MOVIE, CustomizeKeys.movie(movie), movie.categoryId, movie.sourceId)) return null
         return LauncherLaunch.Movie(movie, progressDao.get(profileId, MediaType.MOVIE, movie.id)?.positionMs ?: 0L)
     }
 
@@ -66,7 +65,7 @@ class LauncherLaunchResolver(
         } ?: return null
         if (sourceId != null && channel.sourceId != sourceId) return null
         if (channel.sourceId !in sourceIds) return null
-        if (!tv.own.owntv.core.content.AdultCategoryClassifier.allows(profileId, channel.categoryId, profileDao, categoryDao)) return null
+        if (!contentAccess.allows(profileId, MediaType.LIVE, CustomizeKeys.channel(channel), channel.categoryId, channel.sourceId)) return null
         return LauncherLaunch.Live(channel)
     }
 
@@ -76,7 +75,11 @@ class LauncherLaunchResolver(
         sourceIds: Set<Long>,
     ): LauncherLaunch? {
         val show = resolveSeries(deepLink, sourceIds) ?: return null
-        if (!tv.own.owntv.core.content.AdultCategoryClassifier.allows(profileId, show.categoryId, profileDao, categoryDao)) return null
+        if (!contentAccess.allows(profileId, MediaType.SERIES, CustomizeKeys.series(show), show.categoryId, show.sourceId)) return null
+        deepLink.episodeItemId?.let { episodeItemId ->
+            val explicitEpisode = seriesDao.getEpisodeById(episodeItemId)
+            if (!isAuthorizedEpisodeItem(deepLink, show.id, explicitEpisode)) return null
+        }
         val episodes = orderedEpisodes(show.id)
         if (episodes.isEmpty()) return LauncherLaunch.Series(show)
 
@@ -142,3 +145,15 @@ class LauncherLaunchResolver(
     private fun isCompleted(positionMs: Long, durationMs: Long): Boolean =
         durationMs > 0 && positionMs >= (durationMs * 0.95f).toLong()
 }
+
+/**
+ * An explicit episode row id is only meaningful inside the series that the rest of the deep link
+ * resolved and authorized. Keeping this check independent from fallback selection prevents a
+ * crossed deep link from opening an episode belonging to a different series.
+ */
+internal fun isAuthorizedEpisodeItem(
+    deepLink: LauncherDeepLink.Episode,
+    authorizedSeriesId: Long,
+    episode: EpisodeEntity?,
+): Boolean = deepLink.episodeItemId == null ||
+    (episode?.id == deepLink.episodeItemId && episode.seriesId == authorizedSeriesId)

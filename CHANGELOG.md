@@ -7,6 +7,64 @@
 > Issue numbers that are part of a title are fine; explanatory parentheticals are not. The detail —
 > what, why, files and verification — belongs in the commit message, never here.
 
+## v2.2.3 — 2026-10-14
+
+### ✨ Funciones nuevas
+- **Selector TV de perfiles con acciones Entrar, Editar y Eliminar**
+
+### 🐛 Correcciones
+- **Eliminar un perfil en TV siempre solicita confirmación**
+
+## v2.2.2 — 2026-10-14
+
+### ✨ Funciones nuevas
+- **Encabezado móvil fijo y navegación glass adaptativa**
+- **Logotipo horizontal ZenPlay optimizado**
+- **Recarga de contenido desde el menú superior de TV**
+- **Selector de calidad real en el reproductor de TV**
+- **Edición y eliminación segura de perfiles**
+- **Control parental reforzado en TV, celular y tableta**
+- **Personalización protegida por el PIN adulto**
+
+### 🐛 Correcciones
+- **Adelantar conserva la reproducción y recupera streams bloqueados**
+- **Continuar viendo respeta la posición guardada**
+- **La calidad elegida se conserva al cambiar de reproductor**
+- **El cambio de superficie conserva la imagen del reproductor**
+- **Salir y abrir otro título no detiene la nueva reproducción**
+- **Búsqueda y accesos directos respetan los filtros infantiles**
+- **Reproducción, descargas y grabaciones respetan el perfil activo**
+- **PIN parental protegido contra intentos repetidos**
+- **Icono de grabación REC claro en TV**
+
+## v2.2.1 — 2026-10-14
+
+### ✨ Funciones nuevas
+- **Logotipo horizontal ZenPlay adaptado al encabezado de TV, celular y tableta**
+- **Cambio entre ExoPlayer y MPV desde los ajustes del reproductor**
+- **Audio e imagen activados de forma predeterminada en la vista previa de canales**
+
+### 🐛 Correcciones
+- **El encabezado móvil concentra configuración y perfil dentro de Más**
+- **El control remoto vuelve al menú superior desde TV en vivo, Películas y Series**
+- **Adelantar películas y episodios conserva y recupera la reproducción**
+- **Seleccionar o ampliar un canal conserva la reproducción sin quedar cargando**
+
+## v2.2.0 — 2026-10-14
+
+### ✨ Funciones nuevas
+- **ZenPlay Universal para Android TV, Google TV, Fire TV, celulares y tabletas**
+- **Ediciones Normal y Legacy con archivos de actualización separados**
+- **Inicio cinematográfico adaptado a televisión, celular y tableta**
+- **Avisos de vencimiento de cuenta dentro de la app y mediante notificaciones**
+- **Controles adaptados a TV en vivo, películas, series y capacidades del dispositivo**
+
+### 🐛 Correcciones
+- **El inicio de sesión vertical conserva campos legibles y abre el teclado táctil**
+- **La rotación en celular y tableta conserva la navegación y la reproducción**
+- **Los controles de canales siguen accesibles mediante tacto y control remoto**
+- **Los controles de series ya no se superponen con la línea de reproducción**
+
 ## v5.0.4 — 2026-09-26
 
 ### 🐛 Fixes

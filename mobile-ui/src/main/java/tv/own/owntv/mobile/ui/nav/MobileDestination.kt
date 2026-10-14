@@ -13,7 +13,7 @@ import tv.own.owntv.mobile.R
  * least one of its sections is in `NavVisibility.visibleSections()`. Movies and Series are separate
  * destinations on phones and tablets. Library remains only to restore older navigation state.
  *
- * MORE is always reachable through the top-left gear, independently of the visible content tabs.
+ * MORE is the fifth primary destination on phones and tablets.
  */
 enum class MobileDestination(
     val route: String,
@@ -31,7 +31,7 @@ enum class MobileDestination(
     ),
     // ZenPlay: the Guide slot is the sports agenda now ("Agenda deportiva de hoy").
     GUIDE("guide", R.string.zenplay_agenda_short, MobileIcons.CalendarMonth, setOf(MainSection.LIVE_TV)),
-    MORE("more", R.string.common_nav_more, MobileIcons.Settings, emptySet()),
+    MORE("more", R.string.common_nav_more, MobileIcons.MoreHoriz, emptySet()),
 
     // Movies and Series each have their own content tab. Downloads stays inside the gear menu.
     MOVIES("movies", R.string.common_nav_movies, MobileIcons.Movie, setOf(MainSection.MOVIES)),
@@ -48,9 +48,8 @@ enum class MobileDestination(
     FAVORITES("zen_favorites", R.string.zenplay_nav_favorites, MobileIcons.FavoriteBorder, emptySet());
 
     companion object {
-        /** Four destinations; the shell adds a refresh action after them. Guide opens from Live TV. */
-        // ZenPlay: Favoritos and Descargas sit right after Series; "Actualizar" moved to the top bar.
-        val bottomBar: List<MobileDestination> = listOf(HOME, LIVE, MOVIES, SERIES, FAVORITES, DOWNLOADS)
+        /** The five primary ZenPlay destinations. Guide opens from Live TV. */
+        val bottomBar: List<MobileDestination> = listOf(HOME, LIVE, MOVIES, SERIES, MORE)
 
         /**
          * Tablets use the same content destinations as phones, and the same gear menu.

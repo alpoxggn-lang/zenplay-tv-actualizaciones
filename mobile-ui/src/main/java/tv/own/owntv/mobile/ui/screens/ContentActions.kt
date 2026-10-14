@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import tv.own.owntv.core.content.AdultCategoryClassifier
+import tv.own.owntv.core.content.ContentAccessPolicy
 import tv.own.owntv.core.customize.CustomizationStore
 import tv.own.owntv.core.customize.CustomizeKeys
 import tv.own.owntv.core.database.dao.CategoryDao
@@ -46,6 +47,7 @@ class ContentActions(
     private val userDataWriter: tv.own.owntv.core.backup.UserDataWriter,
     private val customize: CustomizationStore,
     private val downloadManager: DownloadManager,
+    private val contentAccess: ContentAccessPolicy,
 ) {
 
     /** The favourites of one kind, for the profile that is active now. */
@@ -80,40 +82,46 @@ class ContentActions(
     /** Download a film, or every episode of a show — the same layout on disk the library writes. */
     suspend fun download(type: MediaType, itemId: Long) {
         val pid = profileId() ?: return
-        if (type == MediaType.MOVIE) {
-            val movie = movieDao.getById(itemId) ?: return
-            if (!AdultCategoryClassifier.allows(pid, movie.categoryId, profileDao, categoryDao)) return
-            downloadManager.enqueue(
-                profileId = pid,
-                mediaType = MediaType.MOVIE,
-                itemId = movie.id,
-                title = movie.name,
-                posterUrl = movie.posterUrl,
-                streamUrl = movie.streamUrl,
-                relativeDir = MOVIES_DIR,
-                fileName = "${StorageAccess.sanitize(movie.name)}." +
-                    (movie.containerExt ?: StorageAccess.extOf(movie.streamUrl)),
-            )
-        } else {
-            val show = seriesDao.getSeriesById(itemId) ?: return
-            if (!AdultCategoryClassifier.allows(pid, show.categoryId, profileDao, categoryDao)) return
-            seriesDao.episodesBySeriesOnce(show.id).forEach { episode ->
+        when (type) {
+            MediaType.MOVIE -> {
+                val movie = movieDao.getById(itemId) ?: return
+                if (!contentAccess.allows(pid, movie)) return
                 downloadManager.enqueue(
                     profileId = pid,
-                    mediaType = MediaType.EPISODE,
-                    itemId = episode.id,
-                    title = episode.name.takeIf { it.isNotBlank() } ?: show.name,
-                    posterUrl = show.posterUrl,
-                    streamUrl = episode.streamUrl,
-                    relativeDir = episodeDir(show.name, episode.seasonNumber),
-                    fileName = episodeFileName(
-                        episode.name,
-                        episode.episodeNumber,
-                        episode.containerExt,
-                        episode.streamUrl,
-                    ),
+                    mediaType = MediaType.MOVIE,
+                    itemId = movie.id,
+                    title = movie.name,
+                    posterUrl = movie.posterUrl,
+                    streamUrl = movie.streamUrl,
+                    relativeDir = MOVIES_DIR,
+                    fileName = "${StorageAccess.sanitize(movie.name)}." +
+                        (movie.containerExt ?: StorageAccess.extOf(movie.streamUrl)),
                 )
             }
+            MediaType.SERIES -> {
+                val show = seriesDao.getSeriesById(itemId) ?: return
+                if (!contentAccess.allows(pid, show)) return
+                seriesDao.episodesBySeriesOnce(show.id).forEach { episode ->
+                    downloadManager.enqueue(
+                        profileId = pid,
+                        mediaType = MediaType.EPISODE,
+                        itemId = episode.id,
+                        title = episode.name.takeIf { it.isNotBlank() } ?: show.name,
+                        posterUrl = show.posterUrl,
+                        streamUrl = episode.streamUrl,
+                        relativeDir = episodeDir(show.name, episode.seasonNumber),
+                        fileName = episodeFileName(
+                            episode.name,
+                            episode.episodeNumber,
+                            episode.containerExt,
+                            episode.streamUrl,
+                        ),
+                    )
+                }
+            }
+            MediaType.LIVE,
+            MediaType.EPISODE,
+            -> return
         }
     }
 

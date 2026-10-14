@@ -10,6 +10,7 @@ import android.content.res.Configuration
 fun Context.resolveDeviceCapabilities(
     widthDp: Int,
     heightDp: Int,
+    smallestWidthDp: Int,
     legacyBuild: Boolean,
 ): DeviceCapabilities {
     val packageManager = packageManager
@@ -23,6 +24,7 @@ fun Context.resolveDeviceCapabilities(
     return DeviceCapabilities(
         widthDp = widthDp,
         heightDp = heightDp,
+        smallestWidthDp = smallestWidthDp,
         televisionUi = televisionUi,
         touchscreen = touchscreen,
         dpad = televisionUi || !touchscreen,

@@ -50,6 +50,7 @@ future_work/
 # purpose: the baseline profiles under app/src/main/generated/ are .txt and ARE committed.
 /*.txt
 /*.log
+/*.apk
 
 # JVM crash dumps from a Gradle daemon (never worth committing)
 hs_err_pid*.log

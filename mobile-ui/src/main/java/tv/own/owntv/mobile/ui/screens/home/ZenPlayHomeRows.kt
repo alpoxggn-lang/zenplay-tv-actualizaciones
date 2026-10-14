@@ -38,7 +38,7 @@ data class ZenPlayHomeState(
     val featured: List<FeaturedItem> = emptyList(),
 )
 
-internal enum class ZenPlayHomeSection { TRENDING, RECENT_MOVIES, RECENT_SERIES }
+internal enum class ZenPlayHomeSection { TRENDING }
 
 /** Mobile poster interactions stay identical to the library: tap for details, hold for actions. */
 @Composable

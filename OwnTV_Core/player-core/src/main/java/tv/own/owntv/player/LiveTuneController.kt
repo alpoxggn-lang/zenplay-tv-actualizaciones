@@ -155,6 +155,12 @@ class LiveTuneController(
 
     private var tuneJob: Job? = null
     private var previewJob: Job? = null
+    /**
+     * Ownership token for the non-fullscreen preview. Cancellation alone is insufficient because a
+     * provider resolver may finish in a non-cancellable HTTP section. Such a late result must never
+     * reopen ExoPlayer over a newer mpv tune or reapply the preview's mute to promoted playback.
+     */
+    private var previewEpoch = 0L
     private var exoResolveJob: Job? = null
     private var exoWatchJob: Job? = null
     private var mpvOutcomeJob: Job? = null
@@ -184,7 +190,7 @@ class LiveTuneController(
      * rung reuses it and only later rungs mint again.
      */
     suspend fun start(channel: ChannelEntity, source: SourceEntity?, resolved: String? = null) {
-        previewJob?.cancel()
+        invalidatePreview()
         cancelLadderJobs()
         current = channel
         recall.onWatched(channel)
@@ -244,31 +250,37 @@ class LiveTuneController(
             // The pane already shows this channel from its saved copy (Back from full screen): it keeps
             // saving, because the user has not left the channel.
             if (session.channelKey == timeshiftKey(channel) && TimeshiftServer.isLocal(engines.exoUrl) && !engines.exoFailed) {
-                previewJob?.cancel()
+                invalidatePreview()
                 engines.exoSetMuted(muted)
                 return
             }
             // Browsing to another channel is leaving this one.
             parkTimeshift()
         }
-        previewJob?.cancel()
+        invalidatePreview()
+        val epoch = previewEpoch
         previewJob = scope.launch {
             val source = host.sourceOf(channel.sourceId)
+            if (!previewOwns(epoch)) return@launch
             if (host.needsResolve(source)) {
                 if (exoStalkerCmd == channel.streamUrl && !engines.exoFailed) {
+                    if (!previewOwns(epoch)) return@launch
                     engines.exoSetMuted(muted)
                     return@launch
                 }
                 val url = host.resolve(source!!, channel.streamUrl) ?: return@launch
-                if (_liveOnExo.value) return@launch // promoted to full-screen while resolving
+                if (!previewOwns(epoch)) return@launch
                 if (blockedBySingleSession(url)) return@launch
+                if (!previewOwns(epoch)) return@launch
                 exoStalkerCmd = channel.streamUrl
                 setReconnect(channel, source)
                 engines.exoPlay(url, muted, request(channel, source))
                 return@launch
             }
             val url = exoUrlFor(channel, source)
+            if (!previewOwns(epoch)) return@launch
             if (blockedBySingleSession(url)) return@launch
+            if (!previewOwns(epoch)) return@launch
             if (engines.exoUrl == url && !engines.exoFailed) {
                 engines.exoSetMuted(muted) // already previewing it (a re-focus) — just re-apply the mute
                 return@launch
@@ -308,7 +320,7 @@ class LiveTuneController(
 
     /** Stop ExoPlayer (the preview, or a detached stream) without touching mpv. */
     fun stopExo() {
-        previewJob?.cancel()
+        invalidatePreview()
         exoResolveJob?.cancel()
         exoWatchJob?.cancel()
         exoStalkerCmd = null
@@ -803,6 +815,14 @@ class LiveTuneController(
     // --- Small helpers ----------------------------------------------------------------------------
 
     private fun isCurrent(channel: ChannelEntity): Boolean = current?.id == channel.id
+
+    private fun invalidatePreview() {
+        previewEpoch++
+        previewJob?.cancel()
+        previewJob = null
+    }
+
+    private fun previewOwns(epoch: Long): Boolean = epoch == previewEpoch && !_liveOnExo.value
 
     private fun isStillExo(channel: ChannelEntity): Boolean = _liveOnExo.value && isCurrent(channel)
 

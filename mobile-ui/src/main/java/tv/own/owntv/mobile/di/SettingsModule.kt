@@ -71,6 +71,7 @@ val settingsModule = module {
             customCategoryDao = get(),
             contentOrderDao = get(),
             customize = get(),
+            customizationAccess = get(),
         )
     }
     viewModel {
@@ -83,6 +84,7 @@ val settingsModule = module {
             contentOrderDao = get(),
             customCategoryDao = get(),
             customize = get(),
+            customizationAccess = get(),
         )
     }
     viewModel { OpenSubtitlesViewModel(settings = get(), accounts = get()) }

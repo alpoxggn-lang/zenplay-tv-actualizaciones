@@ -23,10 +23,10 @@ class LocaleStoreTest {
     private fun newPrefs(): FakeSharedPreferences = FakeSharedPreferences()
 
     @Test
-    fun `readBlocking returns the empty tag when nothing is stored`() {
+    fun `readBlocking starts a fresh ZenPlay install in Spanish`() {
         val store = LocaleStore(newPrefs(), null)
-        assertEquals("", store.readBlocking())
-        assertEquals("", store.currentTag.value)
+        assertEquals("es-US", store.readBlocking())
+        assertEquals("es-US", store.currentTag.value)
     }
 
     @Test
@@ -58,17 +58,17 @@ class LocaleStoreTest {
     }
 
     @Test
-    fun `corrupt stored locale falls back to system default`() {
+    fun `corrupt stored locale falls back to ZenPlay Spanish`() {
         val prefs = newPrefs().apply { edit().putString("ui_language", "und").commit() }
         val store = LocaleStore(prefs, null)
-        assertEquals("", store.readBlocking())
-        assertEquals("", store.currentTag.value)
+        assertEquals("es-US", store.readBlocking())
+        assertEquals("es-US", store.currentTag.value)
     }
 
     @Test
     fun `wrong SharedPreferences value type cannot crash bootstrap read`() {
         val prefs = newPrefs().apply { putRaw("ui_language", 42) }
-        assertEquals("", LocaleStore(prefs, null).readBlocking())
+        assertEquals("es-US", LocaleStore(prefs, null).readBlocking())
     }
 
     @Test
@@ -97,8 +97,8 @@ class LocaleStoreTest {
         assertThrows(IllegalStateException::class.java) {
             runBlocking { store.set("de") }
         }
-        // The in-memory StateFlow is only updated after a successful commit, so it stays empty.
-        assertEquals("", store.currentTag.value)
+        // The in-memory StateFlow is only updated after a successful commit, so it stays Spanish.
+        assertEquals("es-US", store.currentTag.value)
     }
 
     @Test

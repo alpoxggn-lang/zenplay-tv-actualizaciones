@@ -59,6 +59,7 @@ val universalHostModules: List<Module> = listOf(
                 userDataWriter = get(),
                 cast = get(),
                 recordings = get(),
+                contentAccess = get(),
                 exo = get(),
                 forceMpvStore = get(),
                 player = get(),

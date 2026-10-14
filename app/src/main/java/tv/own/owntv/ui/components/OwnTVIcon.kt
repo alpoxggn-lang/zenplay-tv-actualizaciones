@@ -31,7 +31,7 @@ enum class OwnTVIcon {
     WEATHER, NETWORK, TEXT_SIZE, BACKUP, REFRESH, POWER, MOTION, GLOW, WARNING, LIST_GRID,
     // Marks that exist so one glyph stops doing two jobs: NETWORK was both proxy and DNS, EXPAND was
     // both panel width and focus highlight, SKIP_NEXT was both channel paging and autoplay-next.
-    DNS, PANEL_WIDTH, FOCUS_HIGHLIGHT, CH_NAV, AUTOPLAY_NEXT, LIVE_DOT, SEEK_BACK, SEEK_FORWARD, MORE,
+    DNS, PANEL_WIDTH, FOCUS_HIGHLIGHT, CH_NAV, AUTOPLAY_NEXT, LIVE_DOT, RECORD, SEEK_BACK, SEEK_FORWARD, MORE,
     REMOTE_CHANNEL_UP, REMOTE_CHANNEL_DOWN, PAGE_TOWARD_FIRST, PAGE_TOWARD_LAST,
     // Where the files go. A gear said "settings for this screen"; the question this button actually
     // asks is "which folder?", and a folder is the one mark that says so without a word.
@@ -630,6 +630,10 @@ fun OwnTVIcon(
                 drawArc(tint, 60f, 90f, false, p(5.5f, 5.5f), Size(13f * s, 13f * s), style = stroke)
                 drawArc(tint, -125f, 100f, false, p(1.8f, 1.8f), Size(20.4f * s, 20.4f * s), style = stroke)
                 drawArc(tint, 55f, 100f, false, p(1.8f, 1.8f), Size(20.4f * s, 20.4f * s), style = stroke)
+            }
+            OwnTVIcon.RECORD -> { // Universal REC mark: a solid recording lamp inside a protective ring.
+                drawCircleStroke(p(12f, 12f), 8.5f * s, tint, stroke)
+                drawCircle(tint, 4.7f * s, p(12f, 12f))
             }
             OwnTVIcon.MORE -> { // ⋯ — the rest of the controls, when the window is too small for them.
                 drawCircle(tint, 1.7f * s, p(5.5f, 12f))

@@ -40,7 +40,28 @@ import tv.own.owntv.ui.components.FocusableSurface
 import tv.own.owntv.ui.components.OwnTVPopup
 import tv.own.owntv.ui.theme.OwnTVTheme
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
+import java.util.TimeZone
+
+/** Returns null when "Hoy" points to a time that has already passed; it never rolls into tomorrow. */
+internal fun zenScheduleStartMs(
+    nowMs: Long,
+    tomorrow: Boolean,
+    hour: Int,
+    minute: Int,
+    timeZone: TimeZone = TimeZone.getDefault(),
+): Long? {
+    val target = Calendar.getInstance(timeZone).apply {
+        timeInMillis = nowMs
+        if (tomorrow) add(Calendar.DAY_OF_YEAR, 1)
+        set(Calendar.HOUR_OF_DAY, hour.coerceIn(0, 23))
+        set(Calendar.MINUTE, minute.coerceIn(0, 59))
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+    return target.takeIf { it > nowMs }
+}
 
 /** ZenPlay's red "record" dot. */
 @Composable
@@ -163,27 +184,168 @@ internal fun ZenRecordDurationDialog(
     }
 }
 
+/** Manual timer opened from the fullscreen live player; video remains visible behind its glass. */
+@Composable
+internal fun ZenScheduleRecordingDialog(
+    channelName: String,
+    existing: tv.own.owntv.core.database.entity.RecordingEntity?,
+    onSchedule: (startMs: Long, minutes: Int) -> Unit,
+    onCancelExisting: (tv.own.owntv.core.database.entity.RecordingEntity) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = OwnTVTheme.colors
+    val locale = LocalLocale.current.platformLocale
+    val first = remember { FocusRequester() }
+    val initial = remember {
+        Calendar.getInstance().apply {
+            add(Calendar.HOUR_OF_DAY, 1)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+    }
+    var tomorrow by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var hour by remember { mutableIntStateOf(initial.get(Calendar.HOUR_OF_DAY)) }
+    var minute by remember { mutableIntStateOf(initial.get(Calendar.MINUTE)) }
+    var duration by remember { mutableIntStateOf(60) }
+    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+
+    OwnTVPopup(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .width(620.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color(0xE612152A))
+                .padding(28.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ZenRecordDot(16)
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    stringResource(R.string.zenplay_record_schedule_title),
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(channelName, fontSize = 15.sp, color = Color.White.copy(alpha = 0.7f))
+            Spacer(Modifier.height(20.dp))
+
+            if (existing != null) {
+                val start = SimpleDateFormat("EEE d MMM · HH:mm", locale).format(Date(existing.startMs))
+                val stop = SimpleDateFormat("HH:mm", locale).format(Date(existing.stopMs))
+                Text(
+                    stringResource(R.string.zenplay_record_scheduled),
+                    color = colors.primary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text("$start – $stop", color = Color.White, fontSize = 18.sp)
+                Spacer(Modifier.height(18.dp))
+                ZenRecordChoice(
+                    label = stringResource(R.string.zenplay_record_cancel_schedule),
+                    modifier = Modifier.fillMaxWidth().focusRequester(first),
+                    onClick = { onCancelExisting(existing) },
+                )
+            } else {
+                Text(stringResource(R.string.zenplay_record_start_day), color = colors.primary, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ZenRecordChoice(
+                        label = stringResource(R.string.zenplay_record_today),
+                        modifier = Modifier.width(150.dp).focusRequester(first),
+                        accent = !tomorrow,
+                        onClick = { tomorrow = false },
+                    )
+                    ZenRecordChoice(
+                        label = stringResource(R.string.zenplay_record_tomorrow),
+                        modifier = Modifier.width(150.dp),
+                        accent = tomorrow,
+                        onClick = { tomorrow = true },
+                    )
+                }
+                Spacer(Modifier.height(18.dp))
+                Text(stringResource(R.string.zenplay_record_start_time), color = colors.primary, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ZenRecordChoice("−", Modifier.width(58.dp), onClick = { hour = (hour + 23) % 24 })
+                    Text(String.format(locale, "%02d", hour), color = Color.White, fontSize = 22.sp, modifier = Modifier.width(52.dp), textAlign = TextAlign.Center)
+                    ZenRecordChoice("+", Modifier.width(58.dp), onClick = { hour = (hour + 1) % 24 })
+                    Text(":", color = Color.White, fontSize = 22.sp)
+                    ZenRecordChoice("−", Modifier.width(58.dp), onClick = { minute = (minute + 45) % 60 })
+                    Text(String.format(locale, "%02d", minute), color = Color.White, fontSize = 22.sp, modifier = Modifier.width(52.dp), textAlign = TextAlign.Center)
+                    ZenRecordChoice("+", Modifier.width(58.dp), onClick = { minute = (minute + 15) % 60 })
+                }
+                Spacer(Modifier.height(18.dp))
+                Text(stringResource(R.string.zenplay_record_duration), color = colors.primary, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                val selectedStart = zenScheduleStartMs(
+                    nowMs = System.currentTimeMillis(),
+                    tomorrow = tomorrow,
+                    hour = hour,
+                    minute = minute,
+                )
+                if (selectedStart == null) {
+                    Text(
+                        stringResource(R.string.zenplay_record_today_time_passed),
+                        color = Color(0xFFFFB4AB),
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(bottom = 10.dp),
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ZenRecordChoice("−", Modifier.width(64.dp), onClick = { duration = (duration - 15).coerceAtLeast(15) })
+                    Text(zenDurationLabel(duration), color = Color.White, fontSize = 20.sp, modifier = Modifier.width(150.dp), textAlign = TextAlign.Center)
+                    ZenRecordChoice("+", Modifier.width(64.dp), onClick = { duration = (duration + 15).coerceAtMost(12 * 60) })
+                    Spacer(Modifier.width(8.dp))
+                    ZenRecordChoice(
+                        label = stringResource(R.string.zenplay_record_schedule),
+                        modifier = Modifier.width(210.dp),
+                        accent = true,
+                        enabled = selectedStart != null,
+                        onClick = {
+                            selectedStart?.let { onSchedule(it, duration) }
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun ZenRecordChoice(
     label: String,
     modifier: Modifier = Modifier,
     accent: Boolean = false,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     val colors = OwnTVTheme.colors
     FocusableSurface(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier.height(50.dp),
         shape = RoundedCornerShape(12.dp),
         focusedContainerColor = colors.primary,
-        unfocusedContainerColor = if (accent) Color(0xFFB91C1C) else Color.White.copy(alpha = 0.08f),
+        unfocusedContainerColor = when {
+            !enabled -> Color.White.copy(alpha = 0.04f)
+            accent -> Color(0xFFB91C1C)
+            else -> Color.White.copy(alpha = 0.08f)
+        },
         contentAlignment = Alignment.Center,
     ) { focused ->
         Text(
             label,
             fontSize = 17.sp,
             fontWeight = FontWeight.Bold,
-            color = if (focused) colors.onPrimary else Color.White,
+            color = when {
+                !enabled -> Color.White.copy(alpha = 0.38f)
+                focused -> colors.onPrimary
+                else -> Color.White
+            },
             maxLines = 1,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 10.dp),

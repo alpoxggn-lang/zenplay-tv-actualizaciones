@@ -157,7 +157,7 @@ private fun LoginForm(vm: ZenPlayLoginViewModel, modifier: Modifier = Modifier) 
     val enter: () -> Unit = {
         focusManager.clearFocus()
         keyboard?.hide()
-        if (profilePin.isEmpty() || profilePin.length >= 4) {
+        if (profilePin.isEmpty() || tv.own.owntv.core.util.Pin.isValid(profilePin)) {
             profileStep = false
             vm.signIn(profileNameInput.trim().ifBlank { profileName }, 0, profileKids, profilePin.takeIf { it.isNotBlank() })
         }
@@ -238,14 +238,18 @@ private fun LoginForm(vm: ZenPlayLoginViewModel, modifier: Modifier = Modifier) 
             }
             MobileTextField(
                 value = profilePin,
-                onValueChange = { if (it.length <= 8 && it.all(Char::isDigit)) profilePin = it },
+                onValueChange = {
+                    if (it.length <= tv.own.owntv.core.util.Pin.MAX_LENGTH && it.all(Char::isDigit)) {
+                        profilePin = it
+                    }
+                },
                 label = stringResource(R.string.zenplay_profile_pin),
                 placeholder = stringResource(R.string.zenplay_profile_pin_hint),
                 keyboardType = KeyboardType.NumberPassword,
                 isPassword = true,
                 imeAction = ImeAction.Done,
                 onImeDone = enter,
-                isError = profilePin.isNotEmpty() && profilePin.length < 4,
+                isError = profilePin.isNotEmpty() && !tv.own.owntv.core.util.Pin.isValid(profilePin),
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),

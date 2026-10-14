@@ -27,6 +27,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import tv.own.owntv.core.customize.SectionCustomizations
+import tv.own.owntv.core.content.ContentAccessPolicy
 import tv.own.owntv.core.database.dao.ChannelDao
 import tv.own.owntv.core.database.dao.EpgDao
 import tv.own.owntv.core.database.dao.ProfileDao
@@ -133,6 +134,7 @@ class EpgViewModel(
     /** The provider-guide half of a row, for channels whose stored guide stops short — the app-wide
      *  reader Live TV uses too (T18), so both screens share one cache. */
     private val liveEpgReader: tv.own.owntv.core.live.LiveEpgReader,
+    private val contentAccess: ContentAccessPolicy,
 ) : ViewModel() {
 
     /** The one candidate set the picker and both auto-match paths read — see [GuideCandidates]. */
@@ -173,12 +175,13 @@ class EpgViewModel(
     fun record(channel: ChannelEntity, programme: EpgProgrammeEntity) {
         viewModelScope.launch {
             val pid = currentProfileId() ?: return@launch
-            val source = sourceDao.getById(channel.sourceId) ?: return@launch
+            val storedChannel = authorizedStoredChannel(channel, pid) ?: return@launch
+            val source = sourceDao.getById(storedChannel.sourceId) ?: return@launch
             val now = System.currentTimeMillis()
             if (programme.stopMs <= now) {
                 recordings.recordFromArchive(
                     profileId = pid,
-                    channel = channel,
+                    channel = storedChannel,
                     programme = programme,
                     source = source,
                     timeZone = settings.resolveCatchupTimeZone(source),
@@ -190,13 +193,13 @@ class EpgViewModel(
             recordings.schedule(
                 tv.own.owntv.core.database.entity.RecordingEntity(
                     profileId = pid,
-                    sourceId = channel.sourceId,
-                    channelId = channel.id,
-                    channelName = channel.name,
-                    channelIconUrl = channel.logoUrl,
-                    epgChannelId = channel.epgChannelId,
-                    streamUrl = channel.streamUrl,
-                    httpHeaders = channel.httpHeaders,
+                    sourceId = storedChannel.sourceId,
+                    channelId = storedChannel.id,
+                    channelName = storedChannel.name,
+                    channelIconUrl = storedChannel.logoUrl,
+                    epgChannelId = storedChannel.epgChannelId,
+                    streamUrl = storedChannel.streamUrl,
+                    httpHeaders = storedChannel.httpHeaders,
                     title = programme.title,
                     description = programme.description,
                     programmeStartMs = programme.startMs,
@@ -234,7 +237,8 @@ class EpgViewModel(
     fun recordSeries(channel: ChannelEntity, programme: EpgProgrammeEntity) {
         viewModelScope.launch {
             val pid = currentProfileId() ?: return@launch
-            recordings.addSeriesRule(pid, channel, programme.title)
+            val storedChannel = authorizedStoredChannel(channel, pid) ?: return@launch
+            recordings.addSeriesRule(pid, storedChannel, programme.title)
         }
     }
 
@@ -547,20 +551,20 @@ class EpgViewModel(
     /** Hand an archive programme to an external app (VLC, MX Player) instead of the in-app player. */
     fun playCatchupExternal(channel: ChannelEntity, programme: EpgProgrammeEntity) {
         viewModelScope.launch {
-            val profileId = settings.activeProfileId.first()
-            if (!tv.own.owntv.core.content.AdultCategoryClassifier.allows(profileId, channel.categoryId, profileDao, categoryDao)) return@launch
-            val url = withContext(kotlinx.coroutines.Dispatchers.IO) { catchupUrlFor(channel, programme) }
+            val profileId = currentProfileId() ?: return@launch
+            val storedChannel = authorizedStoredChannel(channel, profileId) ?: return@launch
+            val url = withContext(kotlinx.coroutines.Dispatchers.IO) { catchupUrlFor(storedChannel, programme) }
             if (url == null) {
                 _matchSummary.value = EpgMatchSummary.CatchupUnavailable
                 return@launch
             }
-            val source = withContext(kotlinx.coroutines.Dispatchers.IO) { sourceDao.getById(channel.sourceId) }
+            val source = withContext(kotlinx.coroutines.Dispatchers.IO) { sourceDao.getById(storedChannel.sourceId) }
             externalPlayerLauncher.launch(
                 url = url,
-                title = channel.name,
+                title = storedChannel.name,
                 subtitle = programme.title,
                 userAgent = source?.userAgent,
-                httpHeaders = tv.own.owntv.core.settings.SourceOverrides.headersWithReferer(channel.httpHeaders, source),
+                httpHeaders = tv.own.owntv.core.settings.SourceOverrides.headersWithReferer(storedChannel.httpHeaders, source),
             )
         }
     }
@@ -1073,6 +1077,21 @@ class EpgViewModel(
         val preferred = settings.activeProfileId.first()
         return if (preferred >= 0) profileDao.resolveExistingProfileId(preferred) else null
     }
+
+    private suspend fun authorizedStoredChannel(channel: ChannelEntity, profileId: Long): ChannelEntity? {
+        // Guide rows may be renamed UI copies; authorize the stable provider identity stored in Room.
+        val stored = channelDao.getById(channel.id)?.takeIf { it.sourceId == channel.sourceId } ?: return null
+        return stored.takeIf { contentAccess.allows(
+            profileId = profileId,
+            type = MediaType.LIVE,
+            itemKey = CustomizeKeys.channel(stored),
+            categoryId = stored.categoryId,
+            sourceId = stored.sourceId,
+        ) }
+    }
+
+    private suspend fun canAccess(channel: ChannelEntity, profileId: Long): Boolean =
+        authorizedStoredChannel(channel, profileId) != null
 
     companion object {
         // A sync writes the guide in batches, so every batch is reported. This must be longer than

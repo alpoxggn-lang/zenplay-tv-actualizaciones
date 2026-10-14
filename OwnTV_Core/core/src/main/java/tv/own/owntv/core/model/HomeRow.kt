@@ -8,12 +8,20 @@ import org.json.JSONObject
 enum class HomeRow {
     TRENDING,
     HERO,
+    RECENT_MOVIES,
+    RECENT_SERIES,
     RECENT_CHANNELS,
     FAVORITE_CHANNELS,
     CONTINUE_MOVIES,
     CONTINUE_SERIES;
 
-    val implemented: Boolean get() = true
+    /**
+     * The two media-specific Continue rows are kept only so old settings/backups still parse. The
+     * mixed HERO row is ZenPlay's single Continue watching section; exposing these again would let
+     * a restored or edited config duplicate the same progress on Home.
+     */
+    val implemented: Boolean
+        get() = this != CONTINUE_MOVIES && this != CONTINUE_SERIES
 }
 
 enum class HomeLiveRowMode {
@@ -42,7 +50,9 @@ enum class HeroKind {
 @Immutable
 data class HomeConfig(
     val order: List<HomeRow> = HomeRow.entries.toList(),
-    val hidden: Set<HomeRow> = setOf(HomeRow.RECENT_CHANNELS),
+    // HERO is the single mixed "Continuar viendo" row. The two media-specific legacy rows remain
+    // in persisted data only; `implemented` keeps them out of both Home and its settings.
+    val hidden: Set<HomeRow> = setOf(HomeRow.CONTINUE_MOVIES, HomeRow.CONTINUE_SERIES),
     val heroIncludeLive: Boolean = true,
     val heroIncludeMovies: Boolean = true,
     val heroIncludeSeries: Boolean = true,
@@ -77,8 +87,19 @@ data class HomeConfig(
             if (raw.isNullOrBlank()) return HomeConfig()
             val obj = runCatching { JSONObject(raw) }.getOrNull() ?: return HomeConfig()
             val storedOrder = obj.optJSONArray("order").toHomeRows()
-            val hidden = if (obj.has("hidden")) obj.optJSONArray("hidden").toHomeRows().toSet()
+            val legacySchema = storedOrder.isNotEmpty() &&
+                HomeRow.RECENT_MOVIES !in storedOrder && HomeRow.RECENT_SERIES !in storedOrder
+            val storedHidden = if (obj.has("hidden")) obj.optJSONArray("hidden").toHomeRows().toSet()
                 else HomeConfig().hidden
+            val hidden = if (legacySchema) {
+                // Old defaults hid recent channels and showed two extra Continue rows. Migrate to
+                // the one mixed Continue section followed by recents and TV, while preserving any
+                // other explicit hidden choices.
+                (storedHidden - HomeRow.RECENT_CHANNELS) +
+                    setOf(HomeRow.CONTINUE_MOVIES, HomeRow.CONTINUE_SERIES)
+            } else {
+                storedHidden
+            }
             return HomeConfig(
                 order = mergeOrder(storedOrder),
                 hidden = hidden,
@@ -107,6 +128,17 @@ data class HomeConfig(
 }
 
 fun mergeOrder(stored: List<HomeRow>): List<HomeRow> {
+    // Before the ZenPlay editorial rows existed, a persisted default put both live rows before the
+    // two continuation rows. Merely inserting the new values by enum index would preserve that old
+    // grouping and yield TV → recently added → Continue watching after an app update. Old-schema
+    // configurations are migrated once to the new product order; configurations already containing
+    // either new row retain the order the user chose in Settings.
+    if (stored.isNotEmpty() &&
+        HomeRow.RECENT_MOVIES !in stored &&
+        HomeRow.RECENT_SERIES !in stored
+    ) {
+        return HomeRow.entries.toList()
+    }
     val result = LinkedHashSet<HomeRow>()
     stored.forEach { result += it }
     HomeRow.entries.forEachIndexed { index, row ->

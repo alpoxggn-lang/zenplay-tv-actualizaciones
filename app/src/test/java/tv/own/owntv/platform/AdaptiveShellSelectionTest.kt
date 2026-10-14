@@ -19,6 +19,7 @@ class AdaptiveShellSelectionTest {
         navigation = navigation,
         windowClass = ZenWindowClass.COMPACT,
         remoteFirst = navigation == ZenNavigation.REMOTE,
+        compactHandset = navigation == ZenNavigation.BOTTOM_BAR,
         twoPane = navigation == ZenNavigation.RAIL,
         reducedEffects = false,
         maxMultiviewTiles = 4,

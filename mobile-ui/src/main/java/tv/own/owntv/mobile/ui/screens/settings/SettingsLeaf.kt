@@ -39,6 +39,7 @@ enum class SettingsLeaf(
         R.string.settings_playlists, R.string.settings_search_keywords_playlists,
         R.string.settings_sources_description,
         MobileIcons.PlaylistPlay,
+        listedInGroup = false,
     ),
     EPG_SOURCES(
         SettingsGroup.SOURCES, "epg",

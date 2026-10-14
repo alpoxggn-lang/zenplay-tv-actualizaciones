@@ -5,4 +5,12 @@
     <string name="zenplay_live_choose_category">Elige una categoría para ver sus canales.</string>
     <string name="zenplay_live_back_categories">Volver a categorías</string>
     <string name="zenplay_live_load_failed">No se pudieron cargar los canales. Inténtalo de nuevo.</string>
+    <string name="zenplay_player_channels_short">Canales</string>
+    <string name="zenplay_player_channel_list">Lista de canales</string>
+    <string name="zenplay_player_next_short">Siguiente</string>
+    <string name="zenplay_player_next_channel">Siguiente canal</string>
+    <string name="zenplay_player_back_categories">← Categorías</string>
+    <string name="zenplay_player_playback_settings">Ajustes de reproducción</string>
+    <string name="zenplay_player_quality_available">%1$s · disponibles: %2$s</string>
+    <string name="zenplay_player_quality_4k">4K</string>
 </resources>

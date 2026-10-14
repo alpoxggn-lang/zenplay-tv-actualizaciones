@@ -8,11 +8,11 @@
     <string name="profiles_avatar">AVATAR</string>
     <string name="profiles_avatar_own_picture">Tu propia imagen</string>
     <string name="profiles_kids">Perfil infantil</string>
-    <string name="profiles_kids_description">Navegación simplificada y segura</string>
+    <string name="profiles_kids_description">El control parental oculta categorías para adultos y bloquea su reproducción directa</string>
     <string name="profiles_remove_pin">Quitar bloqueo con PIN</string>
     <string name="profiles_no_pin">Este perfil se abre sin PIN</string>
-    <string name="profiles_change_pin">Cambiar PIN (en blanco = conservar)</string>
-    <string name="profiles_optional_pin">PIN (opcional)</string>
+    <string name="profiles_change_pin">Cambiar PIN parental (en blanco = conservar)</string>
+    <string name="profiles_optional_pin">PIN parental (opcional)</string>
     <string name="profiles_pin_digits">4–6 dígitos</string>
     <string name="profiles_pin_placeholder">····</string>
     <string name="profiles_name_taken">Este nombre ya está en uso — elige otro nombre.</string>
@@ -20,15 +20,23 @@
     <string name="profiles_save">Guardar</string>
     <string name="profiles_gate_title">¿Quién está viendo?</string>
     <string name="profiles_wrong_pin">PIN incorrecto — inténtalo de nuevo</string>
+    <string name="profiles_management_locked_title">Administración de perfiles bloqueada</string>
+    <string name="profiles_management_locked_message">Un perfil infantil solo puede administrar perfiles con el PIN de un perfil adulto protegido. Cambia a un perfil adulto; si es un adulto heredado sin bloqueo, configura su PIN antes de hacer cualquier otro cambio.</string>
+    <string name="profiles_management_changed_message">El acceso a perfiles cambió antes de terminar esta acción. Inténtalo de nuevo desde un perfil adulto protegido.</string>
+    <string name="profiles_first_adult_required">El primer perfil debe ser de adulto. Configura un PIN antes de crear un perfil infantil.</string>
+    <string name="profiles_adult_pin_required"><xliff:g id="name">%1$s</xliff:g>: ingresa el PIN del perfil adulto</string>
     <string name="profiles_enter_pin"><xliff:g id="name">%1$s</xliff:g> — ingresa el PIN</string>
     <string name="profiles_kids_badge">INFANTIL</string>
     <string name="profiles_add">Agregar perfil</string>
-    <string name="profiles_title">Perfiles</string>
+    <string name="profiles_use_profile">Usar perfil</string>
+    <string name="profiles_delete_unavailable">Cambia a otro perfil antes de eliminar este. Debe quedar al menos un perfil.</string>
+    <string name="profiles_title">Perfiles y control parental</string>
     <string name="profiles_add_button">Agregar perfil</string>
     <string name="profiles_delete_title">¿Eliminar “<xliff:g id="name">%1$s</xliff:g>”?</string>
     <string name="profiles_delete_message">Elimina este perfil, sus favoritos y su historial. Las fuentes se conservan.</string>
     <string name="profiles_kids_tag">Infantil</string>
     <string name="profiles_locked_tag">Bloqueado con PIN</string>
+    <string name="profiles_active_tag">Activo</string>
     <string name="search_title">Búsqueda</string>
     <string name="search_continue">Seguir viendo</string>
     <string name="search_unwatched">No vistos</string>

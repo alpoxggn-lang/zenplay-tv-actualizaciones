@@ -42,6 +42,7 @@ import tv.own.owntv.core.customize.CategoryMove
 import tv.own.owntv.core.customize.CategoryRailEditor
 import tv.own.owntv.core.customize.MoveKind
 import tv.own.owntv.core.customize.railCategories
+import tv.own.owntv.core.content.ContentAccessPolicy
 import tv.own.owntv.core.database.dao.CategoryDao
 import tv.own.owntv.core.database.dao.ContentOrderDao
 import tv.own.owntv.core.database.dao.CustomCategoryDao
@@ -92,6 +93,7 @@ class MovieViewModel(
     private val externalPlayerLauncher: tv.own.owntv.core.player.ExternalPlayerLauncher,
     private val streamUrlResolver: tv.own.owntv.core.stalker.StreamUrlResolver,
     private val subtitleController: tv.own.owntv.core.subtitles.SubtitleController,
+    private val contentAccess: ContentAccessPolicy,
 ) : ViewModel() {
 
     data class MovieMoveState(val items: List<MovieEntity>, val activeIndex: Int, val contextKey: String)
@@ -570,11 +572,26 @@ class MovieViewModel(
         }
     }
 
+    /** Final authorization barrier shared by every internal/external movie playback path. */
+    private suspend fun canPlay(movie: MovieEntity, profileId: Long?): Boolean {
+        profileId ?: return false
+        // Browse rows may carry a profile-specific display-name copy. Re-read the stored identity so
+        // an M3U item (whose stable fallback key is its provider name) cannot evade a newly applied hide.
+        val stored = movieDao.getById(movie.id)?.takeIf { it.sourceId == movie.sourceId } ?: return false
+        return contentAccess.allows(
+            profileId = profileId,
+            type = MediaType.MOVIE,
+            itemKey = CustomizeKeys.movie(stored),
+            categoryId = stored.categoryId,
+            sourceId = stored.sourceId,
+        )
+    }
+
     /** Phase B: long-press "Play with external player" — always external, regardless of the global toggle. */
     fun playExternal(movie: MovieEntity) {
         viewModelScope.launch {
             val pid = currentProfileId()
-            if (pid != null && !tv.own.owntv.core.content.AdultCategoryClassifier.allows(pid, movie.categoryId, profileDao, categoryDao)) return@launch
+            if (!canPlay(movie, pid)) return@launch
             Log.d(TAG, "playExternal movieId=${movie.id}")
             val url = resolvedUrlOrNull(movie) ?: return@launch
             val source = sourceDao.getById(movie.sourceId)
@@ -595,7 +612,7 @@ class MovieViewModel(
     fun play(movie: MovieEntity, startPositionMs: Long = 0) {
         viewModelScope.launch {
             val pid = currentProfileId()
-            if (pid != null && !tv.own.owntv.core.content.AdultCategoryClassifier.allows(pid, movie.categoryId, profileDao, categoryDao)) return@launch
+            if (!canPlay(movie, pid)) return@launch
             // External player (global toggle): hand the stream URL to an external app and skip the
             // in-app engine entirely. History is still recorded (recently-watched); resume position
             // and the playing-movie HUD/progress tick are intentionally not — the external app owns
@@ -687,6 +704,7 @@ class MovieViewModel(
 
     suspend fun playByIdAsync(movieId: Long, startPositionMs: Long = 0): Boolean {
         val movie = movieDao.getById(movieId) ?: return false
+        if (!canPlay(movie, currentProfileId())) return false
         play(movie, startPositionMs)
         return true
     }

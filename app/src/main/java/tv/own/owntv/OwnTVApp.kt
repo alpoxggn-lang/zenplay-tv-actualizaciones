@@ -123,6 +123,15 @@ class OwnTVApp : Application(), SingletonImageLoader.Factory, androidx.work.Conf
             // instances above, so switching layout never creates a second playback or data graph.
             modules(tv.own.owntv.mobile.di.universalHostModules)
         }
+        // The manifest intentionally removes WorkManager's generic Startup initializer so this app
+        // can install TvWorkerFactory. Initialise it here, after Koin (the delegated workers use it),
+        // and before any expiry/catalog work is enqueued.
+        if (runCatching { androidx.work.WorkManager.getInstance(this) }.isFailure) {
+            androidx.work.WorkManager.initialize(this, workManagerConfiguration)
+        }
+        // Account expiry is shared by every adaptive shell. It refreshes on account/source changes,
+        // backs the in-app warning and schedules the local day-before/day-of notification checks.
+        GlobalContext.get().get<tv.own.owntv.zenplay.ZenPlayExpiryMonitor>().start(appScope)
         Perf.stamp("koin-started")
         // Offline movie/episode downloads were removed from the TV product. Cancel work persisted by
         // an older installed release; TvWorkerFactory also makes the upgrade race harmless if Android

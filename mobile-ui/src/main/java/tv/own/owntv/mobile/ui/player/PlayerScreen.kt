@@ -2,9 +2,10 @@ package tv.own.owntv.mobile.ui.player
 
 import tv.own.owntv.core.database.entity.ChannelEntity
 import tv.own.owntv.mobile.ui.components.CategoryPickerSheet
+import android.app.ActivityManager
+import android.content.Context
 import android.content.pm.ActivityInfo
 import android.os.Build
-import android.content.res.Configuration
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -38,7 +39,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.activity.compose.LocalActivity
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -63,6 +63,7 @@ import tv.own.owntv.mobile.cast.CastController
 import tv.own.owntv.mobile.playback.PipController
 import tv.own.owntv.core.epg.displayLogoUrl
 import tv.own.owntv.core.model.MediaType
+import tv.own.owntv.core.CoreBuildInfo
 import tv.own.owntv.core.settings.SettingsRepository
 import tv.own.owntv.core.subtitles.SubtitleController
 import tv.own.owntv.mobile.ui.screens.ContentActions
@@ -72,7 +73,6 @@ import tv.own.owntv.mobile.ui.theme.glassDialogWindow
 import tv.own.owntv.mobile.ui.screens.library.VodTuner
 import tv.own.owntv.mobile.ui.screens.live.LiveTuner
 import tv.own.owntv.player.ErrorInfo
-import tv.own.owntv.player.PlaybackErrorLog
 import tv.own.owntv.player.PlaybackFailure
 import tv.own.owntv.player.ZoomMode
 import tv.own.owntv.player.describe
@@ -96,8 +96,9 @@ private const val NOTCHES = 20
  * has running — going full screen and coming back out is a change of view, never a restart. Back and
  * the swipe down both leave it playing, which is what puts it into the mini player.
  *
- * The screen asks for landscape when it opens and then lets go of the orientation again, so a video
- * lands the right way up without a user who prefers portrait being trapped in landscape.
+ * The screen owns landscape for its complete lifetime and releases it only when the route leaves.
+ * Releasing as soon as the first landscape frame arrived made a portrait-held phone immediately
+ * rotate back, remount the surface and repeat that cycle.
  */
 @Composable
 fun PlayerScreen(
@@ -113,23 +114,18 @@ fun PlayerScreen(
 ) {
     val player = tuner.player
 
-    // L2 - live now has two engines. `liveOnExo` says which one holds the picture, so the stage knows
-    // whose surface to draw and the HUD's engine button knows which way it flips.
-    val liveOnExo by tuner.liveOnExo.collectAsStateWithLifecycle()
-
     // The engine actually holding the stream. For VOD and for live-on-mpv this is a thin delegate
     // over `player`, so nothing changes there; on live-on-ExoPlayer it is the other engine.
     val activeEngine by tuner.activeEngine.collectAsStateWithLifecycle()
+    val liveOnExo by tuner.liveOnExo.collectAsStateWithLifecycle()
+    val vodOnExo by player.exoActiveState.collectAsStateWithLifecycle()
+    val canToggleVodEngine by player.canToggleVodEngine.collectAsStateWithLifecycle()
     val castEngine by cast.engine.collectAsStateWithLifecycle()
     val castDevice by cast.deviceName.collectAsStateWithLifecycle()
     val activity = LocalActivity.current
     val inPip by pip.inPip.collectAsStateWithLifecycle()
-    val res = LocalResources.current
-    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-
     val channel by tuner.channel.collectAsStateWithLifecycle()
     val autoFrameRate by settings.autoFrameRate.collectAsStateWithLifecycle(initialValue = false)
-    val previousChannel by tuner.previousChannel.collectAsStateWithLifecycle()
     val film by vodTuner.playing.collectAsStateWithLifecycle()
     val nowNext by tuner.nowNext.collectAsStateWithLifecycle()
     val siblings by tuner.siblings.collectAsStateWithLifecycle()
@@ -163,12 +159,23 @@ fun PlayerScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // Multiview. Off by default and opt-in, so the button is not even drawn until the user has
-    // switched it on; the grid owns its own engines and stops this one while it is up.
-    val multiviewEnabled by settings.multiviewEnabled.collectAsStateWithLifecycle(false)
+    // Multiview is a first-class live control. The previous settings gate left it invisible on a
+    // fresh install, which made the implemented feature look absent. The requested tile count is
+    // still only a preference: the compatibility edition and low-memory devices impose a lower,
+    // safe decoder ceiling here before any engines are opened.
     val multiviewTiles by settings.multiviewTiles.collectAsStateWithLifecycle(
         tv.own.owntv.core.live.DEFAULT_MULTIVIEW_TILES,
     )
+    val lowRam = remember(context) {
+        (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)?.isLowRamDevice == true
+    }
+    val legacyBuild = CoreBuildInfo.releaseAssetName.contains("legacy", ignoreCase = true)
+    val multiviewTileLimit = when {
+        lowRam -> 1
+        legacyBuild -> 2
+        else -> 4
+    }
+    val effectiveMultiviewTiles = multiviewTiles.coerceIn(1, multiviewTileLimit)
     val enginePool = koinInject<tv.own.owntv.player.LiveEnginePool>()
     val streamRegistry = koinInject<tv.own.owntv.core.live.OpenStreamRegistry>()
     var multiview by remember {
@@ -179,11 +186,13 @@ fun PlayerScreen(
     var multiviewCategory by remember { mutableStateOf<Long?>(null) }
     var multiviewChannels by remember { mutableStateOf<List<ChannelEntity>>(emptyList()) }
     var multiviewCategories by remember { mutableStateOf<List<Pair<Long, String>>>(emptyList()) }
-    // The same two steps for the player's own channel button. Null = showing categories.
+    // The player's channel browser opens in the current category. Its explicit "← Categories"
+    // row moves up one level without closing playback; physical Back follows the same two-step rule.
     var playerCategory by remember { mutableStateOf<Long?>(null) }
     var playerChannels by remember { mutableStateOf<List<ChannelEntity>>(emptyList()) }
     var playerCategories by remember { mutableStateOf<List<Pair<Long, String>>>(emptyList()) }
     var playerCategoriesLoaded by remember { mutableStateOf(false) }
+    var playerShowingCategories by remember { mutableStateOf(false) }
     // Loaded when the picker opens, not when the player does: it is a database read nobody watching
     // a channel has asked for.
     LaunchedEffect(multiviewPickFor) {
@@ -195,9 +204,9 @@ fun PlayerScreen(
     // Channels kept from the Live list (B5's second entry point). Playing any channel is what says
     // "now": the grid opens with them already in it, and the selection is spent.
     val multiviewSelection by tuner.multiviewSelection.collectAsStateWithLifecycle()
-    LaunchedEffect(channel?.id, multiviewSelection.size, multiviewEnabled) {
+    LaunchedEffect(channel?.id, multiviewSelection.size, effectiveMultiviewTiles) {
         val current = channel
-        if (multiviewEnabled && multiview == null && multiviewSelection.isNotEmpty() && current != null) {
+        if (effectiveMultiviewTiles > 1 && multiview == null && multiviewSelection.isNotEmpty() && current != null) {
             val kept = multiviewSelection
             tuner.clearMultiviewSelection()
             // BOTH engines, exactly as the HUD button does. This is the *other* way into the grid —
@@ -211,7 +220,7 @@ fun PlayerScreen(
                 registry = streamRegistry,
                 tuner = tuner,
                 scope = scope,
-                maxTiles = multiviewTiles,
+                maxTiles = effectiveMultiviewTiles,
             )
             var tile = 0
             grid.fill(tile++, current)
@@ -237,8 +246,9 @@ fun PlayerScreen(
     // A line over the picture: the engine swap, the report, a subtitle file that would not load.
     var toast by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(toast) { if (toast != null) { delay(TOAST_MS); toast = null } }
-    val reportSaved = stringResource(R.string.player_report_saved)
     val subtitleFailed = stringResource(R.string.content_subtitle_load_failed)
+    val switchedToExo = stringResource(R.string.player_switch_exo)
+    val switchedToMpv = stringResource(R.string.player_switch_mpv)
 
     // A subtitle file already on the phone. Copied into the cache first: the player opens it by path,
     // and a document-provider Uri is not one.
@@ -313,10 +323,24 @@ fun PlayerScreen(
 
     var controlsVisible by remember { mutableStateOf(true) }
     var sheet by remember { mutableStateOf<PlayerSheet?>(null) }
-    // Closing the sheet forgets which category was open, so the next press starts at the categories.
-    LaunchedEffect(sheet) { if (sheet != PlayerSheet.CHANNELS) playerCategory = null }
-    val recordWatchingEnabled by settings.recordWhatImWatching.collectAsStateWithLifecycle(initialValue = false)
-    val playerRecording by tuner.playerRecording.collectAsStateWithLifecycle()
+    // Enter at the channel's current category, not at a flat cross-provider category index. A
+    // channel without a category is the one case that begins at Categories.
+    LaunchedEffect(sheet, channel?.categoryId) {
+        if (sheet == PlayerSheet.CHANNELS) {
+            val currentCategory = channel?.categoryId
+            playerCategory = currentCategory
+            playerShowingCategories = currentCategory == null
+            if (currentCategory != null) {
+                playerChannels = tuner.channelsInCategoryForPicker(currentCategory)
+            } else if (!playerCategoriesLoaded) {
+                playerCategories = tuner.liveCategoriesForPicker()
+                playerCategoriesLoaded = true
+            }
+        } else {
+            playerCategory = null
+            playerShowingCategories = false
+        }
+    }
     var brightness by remember { mutableFloatStateOf(0.5f) }
     var hud by remember { mutableStateOf<GestureFeedback?>(null) }
     // Which *showing* this is, counted up on every one. Two forward double taps at the same seek step
@@ -403,12 +427,6 @@ fun PlayerScreen(
             }
         }
     }
-    // Once the rotation has actually happened, hand the orientation back: the request above was to
-    // arrive in landscape, not to stay there.
-    LaunchedEffect(landscape) {
-        if (landscape) activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-    }
-
     fun setBrightness(value: Float) {
         brightness = value.coerceIn(0.01f, 1f)
         val window = activity?.window ?: return
@@ -442,8 +460,11 @@ fun PlayerScreen(
     // A stream that outlived a Back press was the app quietly holding one of the provider's allowed
     // connections open with nothing on screen to say so.
     val stopAndExit = {
-        tuner.stop()
-        vodTuner.stop()
+        // Both tuners share OwnTVPlayer. Stopping Live first used to zero/tear down the VOD engine
+        // before VodTuner's asynchronous save read its position, so Continue watching was overwritten
+        // or left at the previous value. Stop exactly the owner visible on this route; VodTuner then
+        // persists movie/episode progress before releasing the player.
+        if (film != null) vodTuner.stop() else tuner.stop()
         onExit()
     }
     BackHandler(onBack = stopAndExit)
@@ -494,7 +515,9 @@ fun PlayerScreen(
                         val window = tuner.archiveWindowSec()
                         if (window > 0) tuner.scrubLive((-carry.scrub * window).toInt())
                     } else if (duration > 0) {
-                        activeEngine.seekBy((carry.scrub * duration).toLong())
+                        val target = (activeEngine.position.value + (carry.scrub * duration).toLong())
+                            .coerceIn(0L, duration)
+                        activeEngine.seekTo(target)
                     }
                     carry.scrub = 0f
                 },
@@ -611,50 +634,20 @@ fun PlayerScreen(
             watchingWallMs = watchingWallMs,
             timelineProgrammes = timelineProgrammes,
             channelNumber = channel?.number?.takeIf { showChannelNumbers },
-            liveOnExo = liveOnExo,
-            // L3 - offered only where a swap makes sense. Rewound into the archive, a swap would
-            // re-open the channel at the live edge and throw the user out of the rewind; a protected
-            // channel has only one engine that can obtain its key, so swapping would trade a playing
-            // picture for a guaranteed failure. `isLive` already excludes a replay.
-            onToggleLiveEngine = tuner::toggleLiveEngine.takeIf {
-                isLive && ((offsetSec ?: 0) <= 1 || hasLocalCopy) && channel?.drmConfig == null
-            },
             onBack = stopAndExit,
-            onGoLive = tuner::goToLive,
             onScrubLive = tuner::scrubLive,
             onSkipLive = tuner::skipLive.takeIf { tuner.archiveWindowSec() > 0 },
             liveGaps = tuner::timeshiftGaps,
             onOpenSheet = { sheet = it },
-            // Shrink the picture without stopping it: the stream carries on in the mini player, docked
-            // or floating as the user set it. This is the app's own small window and stays inside the
-            // app — the system one that floats over *other* apps is what pressing Home gives.
-            onMini = onExit,
-            // A stream with no video track has nothing to go back to, so for that one the button
-            // only ever reports the state it is already in. Every other stream is showing its
-            // picture here, because full screen is never sound-only — so the button is only ever
-            // one way round.
-            audioOnly = audioOnlyMedia,
-            // Sound only is a way of leaving the picture, so it leaves the full screen with it —
-            // otherwise the user is staring at a black rectangle they asked to stop drawing. What it
-            // leaves behind is the docked bar, there being no picture to float.
-            onAudioOnly = {
-                if (!audioOnlyMedia) {
-                    tuner.setAudioOnly(true)
-                    onExit()
-                }
-            },
             favorite = favoriteId != null && favoriteId in favoriteIds,
             onToggleFavorite = {
                 val type = favoriteType ?: return@PlayerControls
                 val id = favoriteId ?: return@PlayerControls
                 scope.launch { actions.toggleFavorite(type, id) }
             },
-            // Only a live channel whose provider keeps an archive has anything to go back into.
-            onCatchup = if (catchup != null) ({ sheet = PlayerSheet.CATCHUP }) else null,
-            onPreviousChannel = if (isLive && previousChannel != null) tuner::tunePrevious else null,
-            // Live channels only, and only once Multiview is switched on. The channel on screen
-            // becomes tile 1 and the grid takes over from this player.
-            onMultiview = if (multiviewEnabled && isLive && channel != null) {
+            // Live channels only, whenever this device can sustain at least two decoders. The
+            // channel on screen becomes tile 1 and the grid takes over from this player.
+            onMultiview = if (effectiveMultiviewTiles > 1 && isLive && channel != null) {
                 {
                     // The fullscreen stream goes first: tile 1 opens its own engine, and a playlist
                     // that allows two streams would otherwise be asked for three.
@@ -670,7 +663,7 @@ fun PlayerScreen(
                         registry = streamRegistry,
                         tuner = tuner,
                         scope = scope,
-                        maxTiles = multiviewTiles,
+                        maxTiles = effectiveMultiviewTiles,
                     )
                     current?.let { grid.fill(0, it) }
                     multiview = grid
@@ -678,34 +671,9 @@ fun PlayerScreen(
             } else {
                 null
             },
-            onReport = {
-                val meta = activeEngine.currentMeta.value
-                scope.launch {
-                    val snapshot = activeEngine.streamInfo().joinToString("\n") { row ->
-                        "  ${res.getString(row.label.titleRes)}: ${row.value.displayText(res)}"
-                    }
-                    PlaybackErrorLog.report(
-                        context = context,
-                        engine = player.engineChip.value ?: "?",
-                        live = isLive,
-                        title = meta.title,
-                        snapshot = snapshot,
-                    )
-                }
-                // Acknowledged at once: the user pressed a button, and the gathering takes a moment.
-                toast = reportSaved
-            },
-            onToast = { toast = it },
+            onChannels = if (isLive && channel != null) ({ sheet = PlayerSheet.CHANNELS }) else null,
+            onNextChannel = if (isLive && siblings.size > 1) ({ tuner.step(1) }) else null,
             gestureScrubMs = scrubFraction?.takeIf { duration > 0 }?.let { (it * duration).toLong() },
-            // H1 — Report is offered only while Info is open, the television's rule on both apps.
-            infoOpen = sheet == PlayerSheet.INFO,
-            // D3 — live channels only, and only once the setting is on. Null hides the button.
-            onRecordThis = if (recordWatchingEnabled && isLive && channel != null) {
-                { tuner.togglePlayerRecording() }
-            } else {
-                null
-            },
-            recordingThis = playerRecording != null,
         )
 
         // Independent of the controls, so it still appears after they have faded out on their own.
@@ -807,11 +775,9 @@ fun PlayerScreen(
         }
     }
 
-    // The channel button goes through the categories first, like Multiview's picker: the phone's
-    // sheet used to open on one category's channels, so a channel in any *other* category — or any
-    // other playlist — could not be reached from the player at all. The category the user is
-    // watching is pre-selected, so the common case is still one tap.
-    if (sheet == PlayerSheet.CHANNELS && !inPip && multiview == null && playerCategory == null) {
+    // "← Categories" is an explicit level in the glass overlay, not a separate screen. The live
+    // picture remains composed underneath while its rows are read.
+    if (sheet == PlayerSheet.CHANNELS && !inPip && multiview == null && playerShowingCategories) {
         LaunchedEffect(Unit) {
             if (!playerCategoriesLoaded) {
                 playerCategories = tuner.liveCategoriesForPicker()
@@ -823,8 +789,8 @@ fun PlayerScreen(
     // and the host went on drawing the lambda it was first given: opened while the categories were
     // still being read, it showed its search field and an empty list for ever — until a rotation
     // rebuilt everything. Waiting for the data costs one database read and cannot go stale.
-    if (sheet == PlayerSheet.CHANNELS && !inPip && multiview == null && playerCategory == null &&
-        playerCategoriesLoaded && playerCategories.isNotEmpty()
+    if (sheet == PlayerSheet.CHANNELS && !inPip && multiview == null && playerShowingCategories &&
+        playerCategoriesLoaded
     ) {
         CategoryPickerSheet(
             labels = playerCategories.map { it.second },
@@ -832,6 +798,7 @@ fun PlayerScreen(
             onSelect = { index ->
                 playerCategories.getOrNull(index)?.first?.let { catId ->
                     playerCategory = catId
+                    playerShowingCategories = false
                     scope.launch { playerChannels = tuner.channelsInCategoryForPicker(catId) }
                 }
             },
@@ -840,15 +807,47 @@ fun PlayerScreen(
         )
     }
 
-    sheet.takeIf { !inPip && multiview == null && (it != PlayerSheet.CHANNELS || playerCategory != null) }?.let { open ->
+    sheet.takeIf { !inPip && multiview == null && (it != PlayerSheet.CHANNELS || !playerShowingCategories) }?.let { open ->
         PlayerSheetHost(
             sheet = open,
             player = activeEngine,
+            isLive = isLive,
+            onToggleEngine = when {
+                isLive && channel?.drmConfig == null && (offsetSec == null || hasLocalCopy) -> {
+                    {
+                        toast = if (liveOnExo) switchedToMpv else switchedToExo
+                        tuner.toggleLiveEngine()
+                    }
+                }
+                film != null && canToggleVodEngine -> {
+                    {
+                        toast = if (vodOnExo) switchedToMpv else switchedToExo
+                        player.toggleVodEngine()
+                    }
+                }
+                else -> null
+            },
             channels = if (open == PlayerSheet.CHANNELS) playerChannels else siblings,
             brightness = brightness,
             onBrightness = { setBrightness(it) },
-            onPickChannel = { tuner.switchTo(it) },
+            onPickChannel = {
+                tuner.switchTo(it)
+                sheet = null
+            },
             onOpenSheet = { sheet = it },
+            onShowChannelCategories = if (open == PlayerSheet.CHANNELS) {
+                {
+                    playerShowingCategories = true
+                    if (!playerCategoriesLoaded) {
+                        scope.launch {
+                            playerCategories = tuner.liveCategoriesForPicker()
+                            playerCategoriesLoaded = true
+                        }
+                    }
+                }
+            } else {
+                null
+            },
             // A live channel has nothing to match a subtitle against, and no file to hash.
             canAddSubtitles = film != null,
             onPickLocalSubtitle = { pickSubtitle.launch(arrayOf("*/*")) },
@@ -857,8 +856,20 @@ fun PlayerScreen(
             onTuneToNumber = if (showChannelNumbers) tuner::tuneByNumber else null,
             catchup = catchup,
             programmeEndMs = if (channel != null) nowNext?.now?.stopMs else null,
-            // Back out of a channel list returns to the categories, not out of the player's sheets.
-            onDismiss = { if (open == PlayerSheet.CHANNELS) playerCategory = null else sheet = null },
+            // Back out of channels returns to Categories; Back once more closes the overlay.
+            onDismiss = {
+                if (open == PlayerSheet.CHANNELS) {
+                    playerShowingCategories = true
+                    if (!playerCategoriesLoaded) {
+                        scope.launch {
+                            playerCategories = tuner.liveCategoriesForPicker()
+                            playerCategoriesLoaded = true
+                        }
+                    }
+                } else {
+                    sheet = null
+                }
+            },
         )
     }
 }

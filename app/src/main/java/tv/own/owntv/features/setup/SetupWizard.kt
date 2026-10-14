@@ -59,6 +59,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import tv.own.owntv.R
 import tv.own.owntv.core.database.entity.SourceEntity
+import tv.own.owntv.core.profile.ProfileAuthorization
 import tv.own.owntv.core.setup.SourceImporter
 import tv.own.owntv.core.sync.importProgressDisplay
 import tv.own.owntv.core.theme.GlassSurface
@@ -92,23 +93,44 @@ import tv.own.owntv.ui.theme.OwnTVTheme
 
 private enum class Step { ZENPLAY_LOGIN, WELCOME, DISPLAY_SIZE, DISCLAIMER, SETUP_CHOICE, SYNC_DEVICE, CREATE_PROFILE, ADD_CONTENT, ADD_SOURCE_CHOOSER, ADD_SOURCE_REMOTE, ADD_SOURCE, IMPORTING, EXISTING, IMPORT_BACKUP_CHOOSER, IMPORT_BACKUP_REMOTE, IMPORT_BACKUP }
 
+private val Step.isZenPlayStep: Boolean
+    get() = this == Step.ZENPLAY_LOGIN || this == Step.CREATE_PROFILE || this == Step.IMPORTING
+
 /**
  * Onboarding for one profile. [firstRun] shows language/welcome/disclaimer; otherwise it starts at profile
  * creation (used by "Add profile"). [onDone] receives the newly active profile id and enters the
  * app; [onCancel] backs out (to the gate).
  */
 @Composable
-fun Onboarding(firstRun: Boolean, onDone: (Long?) -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
+fun Onboarding(
+    firstRun: Boolean,
+    onDone: (Long?) -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+    profileAuthorization: ProfileAuthorization? = null,
+    onProfileAuthorizationConsumed: () -> Unit = {},
+) {
     val vm: SetupViewModel = koinViewModel()
     val resources = androidx.compose.ui.platform.LocalResources.current
     val defaultProfileName = stringResource(R.string.setup_default_profile)
     val defaultIptvName = stringResource(R.string.setup_default_iptv)
     val defaultPlaylistName = stringResource(R.string.setup_name_default_playlist)
     val defaultPortalName = stringResource(R.string.setup_default_portal)
-    // ZenPlay: a first run opens straight on the Básica / Avanzado / Premium sign-in.
-    var step by rememberSaveable(firstRun) { mutableStateOf(if (firstRun) Step.ZENPLAY_LOGIN else Step.CREATE_PROFILE) }
+    // ZenPlay: a first run opens straight on the fixed-service sign-in.
+    // The extra schema input invalidates saved generic OwnTV wizard states from older installs
+    // (ADD_CONTENT / RESTORE / ADD_SOURCE). A restored ZenPlay onboarding can only resume a state
+    // written by this fixed-source flow.
+    var step by rememberSaveable(firstRun, ZENPLAY_SETUP_SCHEMA) {
+        mutableStateOf(if (firstRun) Step.ZENPLAY_LOGIN else Step.CREATE_PROFILE)
+    }
+    val activeStep = step.takeIf { it.isZenPlayStep }
+        ?: if (firstRun) Step.ZENPLAY_LOGIN else Step.CREATE_PROFILE
+    LaunchedEffect(step, firstRun) {
+        if (step != activeStep) step = activeStep
+    }
     // The profile created during onboarding, so a retry after a failed sign-in does not create another.
     var zenProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var profileCreationDenied by remember { mutableStateOf(false) }
     // The plan and credentials typed on the sign-in screen, waiting for the profile step.
     var zenLogin by remember { mutableStateOf<ZenPlayLogin?>(null) }
     val importState by vm.state.collectAsStateWithLifecycle()
@@ -143,10 +165,14 @@ fun Onboarding(firstRun: Boolean, onDone: (Long?) -> Unit, onCancel: () -> Unit,
     val restoreDeviceSettings = remember { mutableStateOf(false) }
 
     // Refresh the "existing playlists" availability whenever we land on the add-content step.
-    LaunchedEffect(step) { if (step == Step.ADD_CONTENT) existing = runCatching { vm.availableExistingSources() }.getOrDefault(emptyList()) }
+    LaunchedEffect(activeStep) {
+        if (activeStep == Step.ADD_CONTENT) {
+            existing = runCatching { vm.availableExistingSources() }.getOrDefault(emptyList())
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize().background(OwnTVTheme.colors.background)) {
-        when (step) {
+        when (activeStep) {
             Step.ZENPLAY_LOGIN -> ZenPlayLoginScreen(
                 onLogin = { plan, username, password ->
                     zenLogin = ZenPlayLogin(plan, username, password)
@@ -186,7 +212,12 @@ fun Onboarding(firstRun: Boolean, onDone: (Long?) -> Unit, onCancel: () -> Unit,
             Step.CREATE_PROFILE -> ProfileEditorDialog(
                 initial = null,
                 onConfirm = { name, avatar, kids, pin ->
-                    vm.createProfile(name.ifBlank { defaultProfileName }, avatar, kids, pin) { id ->
+                    vm.createProfile(name.ifBlank { defaultProfileName }, avatar, kids, pin, profileAuthorization) { id ->
+                        if (id == null) {
+                            profileCreationDenied = true
+                            return@createProfile
+                        }
+                        onProfileAuthorizationConsumed()
                         zenProfileId = id
                         val login = zenLogin
                         if (login != null) {
@@ -317,8 +348,19 @@ fun Onboarding(firstRun: Boolean, onDone: (Long?) -> Unit, onCancel: () -> Unit,
             onDismiss = vm::dismissPendingEpg,
             onBackground = { vm.syncEpgInBackground(onDone) }, // enter the app; guide keeps downloading
         )
+        if (profileCreationDenied) {
+            tv.own.owntv.features.settings.ConfirmDialog(
+                title = stringResource(R.string.profiles_management_locked_title),
+                message = stringResource(R.string.profiles_first_adult_required),
+                confirmLabel = R.string.common_ok,
+                onConfirm = { profileCreationDenied = false },
+                onDismiss = { profileCreationDenied = false },
+            )
+        }
     }
 }
+
+private const val ZENPLAY_SETUP_SCHEMA = "zenplay-fixed-source-v1"
 
 @Composable
 private fun WelcomeScreen(onNext: () -> Unit) {

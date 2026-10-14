@@ -31,6 +31,37 @@ fun Modifier.trapVerticalFocusExit(): Modifier = focusProperties {
 }
 
 /**
+ * Keeps a lazy browse pane from falling out of its bottom edge while deliberately leaving its top
+ * edge open. TV browse screens use this variant because D-pad Up is the supported route back to the
+ * global navigation bar; trapping both vertical directions made Movies, Series and Live TV dead-end
+ * below that bar.
+ */
+fun Modifier.trapDownFocusExit(): Modifier = focusProperties {
+    onExit = {
+        if (requestedFocusDirection == FocusDirection.Down) {
+            cancelFocusChange()
+        }
+    }
+}
+
+/**
+ * Routes an Up exit from the active TV destination to its selected global-navigation item.
+ *
+ * Apply this to the focus group that contains one destination (not to each card). Internal Up moves
+ * still happen normally; only an exit through the top edge is redirected. This mirrors the app's
+ * existing `onEnter` focus hand-offs: a successful explicit request replaces the spatial result,
+ * while a temporarily unattached top item cancels the exit instead of losing focus altogether.
+ */
+fun Modifier.returnToTopNavigationOnUp(topNavigationFocus: FocusRequester): Modifier = focusProperties {
+    onExit = {
+        if (requestedFocusDirection == FocusDirection.Up) {
+            val moved = runCatching { topNavigationFocus.requestFocus() }.getOrDefault(false)
+            if (!moved) cancelFocusChange()
+        }
+    }
+}
+
+/**
  * Traps D-pad focus inside this group for ALL directions (Up/Down/Left/Right). Apply to a full-screen
  * modal scrim so a directional press can never escape into the UI behind it. Back is NOT affected — it
  * must still be handled by a BackHandler above (onExit only blocks directional exits).

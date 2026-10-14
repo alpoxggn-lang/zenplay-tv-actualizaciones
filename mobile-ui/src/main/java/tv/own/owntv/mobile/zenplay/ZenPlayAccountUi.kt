@@ -11,8 +11,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -33,8 +33,9 @@ fun ZenPlayExpiryChip(modifier: Modifier = Modifier) {
     val settings: SettingsRepository = koinInject()
     val activeId by settings.defaultSourceId.collectAsStateWithLifecycle(initialValue = -1L)
     val profileId by settings.activeProfileId.collectAsStateWithLifecycle(initialValue = -1L)
-    val expiry by produceState<Long?>(initialValue = null, activeId, profileId) { value = account.expiryMs() }
-    val ms = expiry ?: return
+    val expiry by account.expiry.collectAsStateWithLifecycle()
+    LaunchedEffect(activeId, profileId) { account.refresh() }
+    val ms = (expiry as? ZenPlayExpiryState.Dated)?.expiryMs ?: return
     val expired = ms <= System.currentTimeMillis()
     val date = remember(ms) { DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(ms)) }
     Text(
@@ -51,18 +52,37 @@ fun ZenPlayExpiryChip(modifier: Modifier = Modifier) {
     )
 }
 
-/** "Vence el 21 sep 2027" / "Suscripción vencida" for the plan in use, or null while unknown. */
+/** Localized, terminal subscription text. Loading is the only temporary state. */
 @Composable
-fun rememberZenPlayExpiryText(): String? {
+fun rememberZenPlayExpiryText(): String {
     val account: ZenPlayAccount = koinInject()
     val settings: SettingsRepository = koinInject()
     val activeId by settings.defaultSourceId.collectAsStateWithLifecycle(initialValue = -1L)
     val profileId by settings.activeProfileId.collectAsStateWithLifecycle(initialValue = -1L)
-    val expiry by produceState<Long?>(initialValue = null, activeId, profileId) { value = account.expiryMs() }
-    val ms = expiry ?: return null
-    val date = remember(ms) { DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(ms)) }
-    return if (ms <= System.currentTimeMillis()) stringResource(R.string.zenplay_expiry_expired)
-    else stringResource(R.string.zenplay_expiry_until, date)
+    val expiry by account.expiry.collectAsStateWithLifecycle()
+    LaunchedEffect(activeId, profileId) { account.refresh() }
+    return when (val value = expiry) {
+        ZenPlayExpiryState.Loading -> stringResource(R.string.zenplay_expiry_loading)
+        is ZenPlayExpiryState.Dated -> {
+            val date = remember(value.expiryMs) {
+                DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(value.expiryMs))
+            }
+            if (value.expiryMs <= System.currentTimeMillis()) stringResource(R.string.zenplay_expiry_expired)
+            else stringResource(R.string.zenplay_expiry_until, date)
+        }
+        ZenPlayExpiryState.Unlimited -> stringResource(R.string.zenplay_expiry_unlimited)
+        ZenPlayExpiryState.ExpiredWithoutDate -> stringResource(R.string.zenplay_expiry_expired)
+        ZenPlayExpiryState.Revoked -> stringResource(R.string.zenplay_expiry_revoked)
+        ZenPlayExpiryState.Unavailable -> stringResource(R.string.zenplay_expiry_unavailable)
+        ZenPlayExpiryState.NoAccount -> stringResource(R.string.zenplay_expiry_no_account)
+    }
+}
+
+@Composable
+fun rememberZenPlayExpiryRetryable(): Boolean {
+    val account: ZenPlayAccount = koinInject()
+    val expiry by account.expiry.collectAsStateWithLifecycle()
+    return expiry == ZenPlayExpiryState.Unavailable
 }
 
 /** "¿Cerrar sesión?" with what it removes spelled out. */
@@ -90,5 +110,14 @@ fun ZenPlayLogoutDialog(onDismiss: () -> Unit) {
  * the app as part of it; the next launch opens on the sign-in screen.
  */
 fun zenPlayLogout(context: Context) {
+    // The universal host owns these workers, while this reusable UI module cannot depend back on
+    // the app module. Cancel their stable unique names before Android clears the remaining data.
+    runCatching {
+        androidx.work.WorkManager.getInstance(context).run {
+            cancelUniqueWork("zenplay-subscription-expiry-periodic")
+            cancelUniqueWork("zenplay-subscription-expiry-now")
+        }
+    }
+    androidx.core.app.NotificationManagerCompat.from(context).cancel(0x5A31)
     (context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).clearApplicationUserData()
 }

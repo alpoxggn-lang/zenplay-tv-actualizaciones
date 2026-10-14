@@ -66,6 +66,7 @@ import tv.own.owntv.ui.components.RailPanelFill
 import tv.own.owntv.ui.components.roundedPanel
 import tv.own.owntv.ui.theme.Dimens
 import tv.own.owntv.core.theme.GlassSurface
+import tv.own.owntv.features.shell.tvRailBrowseSections
 import tv.own.owntv.ui.theme.OwnTVTheme
 import tv.own.owntv.ui.theme.animationsOn
 import tv.own.owntv.ui.theme.glass
@@ -120,14 +121,15 @@ fun Sidebar(
     // first visible browse item (or Settings if every browse item is hidden) so the rail always has a target.
     // Plan Z — Settings no longer has a rail item of its own: it lives behind More, so the rail's
     // target for both of them is the More item.
+    val railBrowseSections = tvRailBrowseSections(visibleSections)
     val focusSection = when {
         selected == MainSection.SEARCH -> MainSection.HOME
         // ZenPlay: the Guide opens from the top bar now, so its rail target is Live TV.
         selected == MainSection.EPG ->
             if (MainSection.LIVE_TV in visibleSections) MainSection.LIVE_TV else MainSection.HOME
         selected == MainSection.SETTINGS || selected == MainSection.MORE -> MainSection.MORE
-        selected in visibleSections -> selected
-        else -> MainSection.browseOrder.firstOrNull { it in visibleSections } ?: MainSection.MORE
+        selected in railBrowseSections -> selected
+        else -> railBrowseSections.firstOrNull() ?: MainSection.MORE
     }
 
     Column(
@@ -187,7 +189,7 @@ fun Sidebar(
 
             Column(modifier = Modifier.fillMaxWidth()) {
                 // ZenPlay: no Downloads in the rail (downloads are off on the television).
-                MainSection.browseOrder.filter { it in visibleSections && it != MainSection.EPG && it != MainSection.DOWNLOADS }.forEach { section ->
+                railBrowseSections.forEach { section ->
                     NavItem(
                         section = section,
                         active = section == selected,

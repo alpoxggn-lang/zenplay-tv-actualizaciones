@@ -1,23 +1,49 @@
 package tv.own.owntv
 
+import android.Manifest
+import android.app.PendingIntent
+import android.app.PictureInPictureParams
+import android.app.RemoteAction
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.res.Configuration
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.drawable.Icon
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
+import android.util.Rational
 import androidx.room.useWriterConnection
 import android.view.WindowManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,11 +57,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import org.koin.android.ext.android.get
@@ -51,6 +79,9 @@ import tv.own.owntv.features.setup.Onboarding
 import tv.own.owntv.features.shell.OwnTVShell
 import tv.own.owntv.features.shell.ShellViewModel
 import tv.own.owntv.mobile.ui.components.MobileSheetHost
+import tv.own.owntv.mobile.cast.CastController
+import tv.own.owntv.mobile.playback.PipController
+import tv.own.owntv.mobile.ui.screens.live.LiveTuner
 import tv.own.owntv.mobile.ui.shell.MobileShell
 import tv.own.owntv.mobile.ui.theme.MobileTheme
 import tv.own.owntv.platform.ZenShell
@@ -70,6 +101,9 @@ import tv.own.owntv.core.theme.UiFontScale
 import tv.own.owntv.core.theme.UiZoom
 import tv.own.owntv.ui.theme.stackBlur
 import tv.own.owntv.ui.theme.supportsBackdropBlur
+import tv.own.owntv.zenplay.ZenPlayExpiryMonitor
+import tv.own.owntv.zenplay.ZenPlaySubscriptionState
+import tv.own.owntv.zenplay.daysUntilExpiry
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -77,7 +111,8 @@ import kotlin.math.min
 /** Logcat tag for the background-image loader (top-level helper outside MainActivity). */
 private const val BG_TAG = "BgImage"
 
-open class MainActivity : ComponentActivity() {
+@OptIn(ExperimentalCoroutinesApi::class)
+open class MainActivity : FragmentActivity() {
     companion object {
         private const val TAG = "OwnTVHome"
 
@@ -93,6 +128,19 @@ open class MainActivity : ComponentActivity() {
          * strictly less work than before.
          */
         private const val SPLASH_TIMEOUT_MS = 2_000L
+
+        const val EXTRA_OPEN_PLAYER = "open_player"
+        private const val ACTION_PIP = "tv.zenplay.universal.PIP"
+        private const val EXTRA_PIP_ACTION = "pip_action"
+        private const val PIP_TOGGLE = "toggle"
+        private const val PIP_BACK = "back"
+        private const val PIP_FORWARD = "forward"
+        private const val PIP_SEEK_MS = 10_000L
+        private const val DEFAULT_ASPECT = 16f / 9f
+        private const val MIN_PIP_ASPECT = 0.43f
+        private const val MAX_PIP_ASPECT = 2.35f
+        private const val NOTIFICATION_PERMISSION_PREFS = "zenplay_notification_permission"
+        private const val NOTIFICATION_PERMISSION_ASKED = "asked"
     }
 
     /**
@@ -113,7 +161,35 @@ open class MainActivity : ComponentActivity() {
     private val shellViewModel: ShellViewModel by viewModel()
     // The sole locale authority (SharedPreferences-backed; see docs/internationalization.md 0b).
     private val localeStore: tv.own.owntv.core.i18n.LocaleStore by inject()
+    private val mobileTuner: LiveTuner by inject()
+    private val pip: PipController by inject()
+    private val cast: CastController by inject()
+    private val settings: tv.own.owntv.core.settings.SettingsRepository by inject()
+    private val expiryMonitor: ZenPlayExpiryMonitor by inject()
     private var pendingDeepLink by mutableStateOf<LauncherDeepLink?>(null)
+
+    private val mobileEngine get() = mobileTuner.currentEngine
+    private var pipEnabled = true
+    private var backgroundPlayback = true
+    private var audioOnScreenOff = true
+    private var pausedForBackground = false
+    private var droppedVideoForBackground = false
+    private var wasInPipWindow = false
+    private var pipReceiverRegistered = false
+    private var notificationPermissionRequested = false
+
+    private val notificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    private val pipActions = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.getStringExtra(EXTRA_PIP_ACTION)) {
+                PIP_TOGGLE -> mobileEngine.togglePlayPause()
+                PIP_BACK -> mobileEngine.seekBy(-PIP_SEEK_MS)
+                PIP_FORWARD -> mobileEngine.seekBy(PIP_SEEK_MS)
+            }
+        }
+    }
 
     /**
      * Wrap the Activity base with the selected locale so its own `Resources` resolve correctly —
@@ -129,29 +205,176 @@ open class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_OPEN_PLAYER, false)) pip.openPlayerRequested.value = true
         pendingDeepLink = LauncherDeepLink.parse(intent.data)
         Log.d(TAG, "onNewIntent deepLinkHost=${intent.data?.host} deepLinkType=${pendingDeepLink?.javaClass?.simpleName ?: "none"}")
     }
 
     override fun onStop() {
         super.onStop()
-        // Backgrounded (Home / another app), exited, or logged out: stop playback and free the demuxer
-        // cache + decoder buffers — holding them while invisible got the process LMK-killed on real TVs.
-        // Every engine: mpv, the Live engine (its audio must stop too), each Multiview tile and the hero.
-        if (!isChangingConfigurations) engines.onAppBackgrounded()
+        if (isChangingConfigurations) return
+        if (usesTouchShell()) {
+            // A PiP activity is still drawing video. Releasing every playback engine here made Home
+            // show the launcher without a floating window and returned to a black/restarted player.
+            if (wasInPipWindow) {
+                wasInPipWindow = false
+                closePipPlayback()
+                return
+            }
+            if (pip.inPip.value || !mobileTuner.hasStream) return
+            val playing = mobileEngine
+            if (!backgroundPlayback) {
+                if (playing.isPlaying.value) {
+                    pausedForBackground = true
+                    playing.togglePlayPause()
+                }
+            } else if (audioOnScreenOff && !playing.audioOnly.value) {
+                droppedVideoForBackground = true
+                playing.enterAudioOnly()
+            }
+        } else {
+            // TV/Fire TV keeps the existing low-memory release/restore contract.
+            engines.onAppBackgrounded()
+        }
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     override fun onStart() {
         super.onStart()
-        // Paired with onStop: bring back what was freed while backgrounded (notably the TV screensaver, which
-        // kicks in during a long pause) — a VOD restored paused at its position, and a live channel re-tuned
-        // to the live edge — so Play resumes instead of sitting on a dead/empty stream. No-op on fresh launch.
-        engines.onAppForegrounded()
+        if (usesTouchShell()) {
+            if (droppedVideoForBackground) {
+                droppedVideoForBackground = false
+                mobileEngine.exitAudioOnly()
+            }
+            if (pausedForBackground) {
+                pausedForBackground = false
+                if (mobileTuner.hasStream && !mobileEngine.isPlaying.value) mobileEngine.togglePlayPause()
+            }
+        } else {
+            engines.onAppForegrounded()
+        }
         // Staleness-based auto refresh on resume (interval modes only — STARTUP is cold-start only). The
         // ViewModel throttles this internally so a quick toggle doesn't re-run the check.
         shellViewModel.checkAutoRefresh(includeStartup = false)
+        lifecycleScope.launch {
+            expiryMonitor.refresh()
+            tv.own.owntv.zenplay.ZenPlayExpiryWork.checkNow(this@MainActivity)
+        }
     }
+
+    override fun onResume() {
+        super.onResume()
+        wasInPipWindow = false
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (!usesTouchShell() || !pipEnabled || !pip.playerOnScreen.value) return
+        if (cast.engine.value != null) return
+        val playing = mobileEngine
+        if (!playing.isPlaying.value || playing.audioOnly.value || playing.audioOnlyMedia.value) return
+        runCatching { enterPictureInPictureMode(pipParams()) }
+            .onFailure { Log.w(TAG, "Could not enter Picture-in-Picture", it) }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        pip.inPip.value = isInPictureInPictureMode
+        if (isInPictureInPictureMode) {
+            wasInPipWindow = true
+            if (!pipReceiverRegistered) {
+                ContextCompat.registerReceiver(
+                    this,
+                    pipActions,
+                    IntentFilter(ACTION_PIP),
+                    ContextCompat.RECEIVER_NOT_EXPORTED,
+                )
+                pipReceiverRegistered = true
+            }
+        } else {
+            unregisterPipReceiver()
+            if (isFinishing) {
+                wasInPipWindow = false
+                closePipPlayback()
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        unregisterPipReceiver()
+        super.onDestroy()
+    }
+
+    private fun unregisterPipReceiver() {
+        if (!pipReceiverRegistered) return
+        runCatching { unregisterReceiver(pipActions) }
+        pipReceiverRegistered = false
+    }
+
+    private fun closePipPlayback() {
+        if (!mobileTuner.hasStream) return
+        val playing = mobileEngine
+        if (!playing.audioOnly.value) {
+            droppedVideoForBackground = true
+            playing.enterAudioOnly()
+        }
+        if (playing.isPlaying.value) playing.togglePlayPause()
+    }
+
+    private fun usesTouchShell(): Boolean {
+        val config = resources.configuration
+        return applicationContext.resolveDeviceCapabilities(
+            widthDp = config.screenWidthDp,
+            heightDp = config.screenHeightDp,
+            smallestWidthDp = config.smallestScreenWidthDp,
+            legacyBuild = BuildConfig.LEGACY_BUILD,
+        ).toAdaptiveDeviceProfile().shell == ZenShell.TOUCH
+    }
+
+    private fun applyPipParams() {
+        runCatching { setPictureInPictureParams(pipParams()) }
+    }
+
+    private fun pipParams(): PictureInPictureParams {
+        val localized = tv.own.owntv.core.i18n.AppLocale.wrap(this, localeStore.currentTag.value)
+        val playing = mobileEngine.isPlaying.value
+        val builder = PictureInPictureParams.Builder()
+            .setAspectRatio(pipAspect())
+            .setActions(
+                listOf(
+                    pipAction(android.R.drawable.ic_media_rew, localized.getString(R.string.player_skip_back), PIP_BACK),
+                    pipAction(
+                        if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
+                        localized.getString(R.string.settings_remote_action_play_pause),
+                        PIP_TOGGLE,
+                    ),
+                    pipAction(android.R.drawable.ic_media_ff, localized.getString(R.string.player_skip_forward), PIP_FORWARD),
+                ),
+            )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) builder.setAutoEnterEnabled(false)
+        pip.videoBounds?.takeIf { !it.isEmpty }?.let(builder::setSourceRectHint)
+        return builder.build()
+    }
+
+    private fun pipAspect(): Rational {
+        val aspect = (mobileTuner.videoAspect ?: DEFAULT_ASPECT)
+            .takeIf { it.isFinite() && it > 0f }
+            ?.coerceIn(MIN_PIP_ASPECT, MAX_PIP_ASPECT)
+            ?: DEFAULT_ASPECT
+        return Rational((aspect * 1000).toInt(), 1000)
+    }
+
+    private fun pipAction(icon: Int, label: String, action: String): RemoteAction = RemoteAction(
+        Icon.createWithResource(this, icon),
+        label,
+        label,
+        PendingIntent.getBroadcast(
+            this,
+            action.hashCode(),
+            Intent(ACTION_PIP).setPackage(packageName).putExtra(EXTRA_PIP_ACTION, action),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        ),
+    )
 
     /**
      * Probe the database before anything touches it. Room opens lazily, so a failed migration would
@@ -186,6 +409,27 @@ open class MainActivity : ComponentActivity() {
         // postSplashScreenTheme (Theme.OwnTV), so the activity ends up in the same theme as before.
         val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
+        if (intent.getBooleanExtra(EXTRA_OPEN_PLAYER, false)) pip.openPlayerRequested.value = true
+        if (usesTouchShell()) {
+            lifecycleScope.launch {
+                mobileTuner.activeEngine
+                    .flatMapLatest { it.isPlaying }
+                    .collectLatest { if (pip.inPip.value) applyPipParams() }
+            }
+            lifecycleScope.launch { settings.pipEnabled.collect { pipEnabled = it } }
+            lifecycleScope.launch { settings.backgroundPlayback.collect { backgroundPlayback = it } }
+            lifecycleScope.launch { settings.audioOnScreenOff.collect { audioOnScreenOff = it } }
+            lifecycleScope.launch {
+                mobileTuner.activeEngine.flatMapLatest { playing ->
+                    combine(playing.isPlaying, playing.audioOnly, playing.audioOnlyMedia) { on, off, radio ->
+                        on && !off && !radio
+                    }
+                }.distinctUntilChanged().collect { keep ->
+                    if (keep) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+            }
+        }
         val splashDeadline = SystemClock.uptimeMillis() + SPLASH_TIMEOUT_MS
         splash.setKeepOnScreenCondition { !contentReady && SystemClock.uptimeMillis() < splashDeadline }
         pendingDeepLink = LauncherDeepLink.parse(intent.data)
@@ -248,15 +492,37 @@ open class MainActivity : ComponentActivity() {
             val visibleSections by viewModel.visibleSections.collectAsStateWithLifecycle()
             val activeProfileId by viewModel.activeProfileId.collectAsStateWithLifecycle()
             val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
+            val expiryState by expiryMonitor.state.collectAsStateWithLifecycle()
+            val mobilePlayerOnScreen by pip.playerOnScreen.collectAsStateWithLifecycle()
+            LaunchedEffect(expiryState) {
+                // Ask only after a verified ZenPlay account response, never over first-run login.
+                if (!notificationPermissionRequested &&
+                    expiryState is ZenPlaySubscriptionState.Dated &&
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    !getSharedPreferences(NOTIFICATION_PERMISSION_PREFS, MODE_PRIVATE)
+                        .getBoolean(NOTIFICATION_PERMISSION_ASKED, false) &&
+                    ContextCompat.checkSelfPermission(
+                        this@MainActivity,
+                        Manifest.permission.POST_NOTIFICATIONS,
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    notificationPermissionRequested = true
+                    getSharedPreferences(NOTIFICATION_PERMISSION_PREFS, MODE_PRIVATE)
+                        .edit().putBoolean(NOTIFICATION_PERMISSION_ASKED, true).apply()
+                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
             val configuration = LocalConfiguration.current
             val deviceProfile = remember(
                 configuration.screenWidthDp,
                 configuration.screenHeightDp,
+                configuration.smallestScreenWidthDp,
                 BuildConfig.LEGACY_BUILD,
             ) {
                 applicationContext.resolveDeviceCapabilities(
                     widthDp = configuration.screenWidthDp,
                     heightDp = configuration.screenHeightDp,
+                    smallestWidthDp = configuration.smallestScreenWidthDp,
                     legacyBuild = BuildConfig.LEGACY_BUILD,
                 ).toAdaptiveDeviceProfile()
             }
@@ -412,6 +678,26 @@ open class MainActivity : ComponentActivity() {
                         Box(modifier = Modifier.fillMaxSize()) {
                         val profile = activeProfileId
                         when {
+                            // Touch devices own their complete access flow inside MobileShell. This
+                            // branch must come before the shared TV onboarding branches: mounting the
+                            // ten-foot Onboarding on a portrait phone forced its two-column login into
+                            // a few pixels of width (and its remote-first text field did not reliably
+                            // summon the software keyboard). MobileShell uses the same capability-
+                            // selected layout for phones and both tablet orientations, and its
+                            // Material text fields are IME-aware. TV / Fire TV stays on the remote
+                            // wizard below.
+                            deviceProfile.shell == ZenShell.TOUCH -> MobileTheme(applyDensityScaling = false) {
+                                MobileSheetHost {
+                                    MobileShell(
+                                        windowWidthDp = configuration.screenWidthDp,
+                                        windowHeightDp = configuration.screenHeightDp,
+                                        compactHandset = deviceProfile.compactHandset,
+                                        hostManagesAccess = false,
+                                        onRefreshContent = { viewModel.refreshAllNow() },
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+                            }
                             profile == null || !profilesLoaded -> Unit // active id / Room list loading
                             // Adding a profile from the gate → onboard the new profile.
                             addingProfile -> Onboarding(
@@ -419,6 +705,8 @@ open class MainActivity : ComponentActivity() {
                                 onDone = { profileId -> gateSession.completeAddingProfile(profileId) },
                                 onCancel = { gateSession.cancelAddingProfile() },
                                 modifier = Modifier.fillMaxSize(),
+                                profileAuthorization = gateSession.addingProfileAuthorization,
+                                onProfileAuthorizationConsumed = gateSession::clearAddingProfileAuthorization,
                             )
                             // First run (no profile yet) → full onboarding.
                             profile < 0L -> Onboarding(
@@ -441,7 +729,7 @@ open class MainActivity : ComponentActivity() {
                             // which is the only way to switch when there's a single unpinned profile.
                             gateRequired && !authenticatedForActiveProfile -> ProfileGate(
                                 onEnter = { profileId -> gateSession.authenticateProfile(profileId) },
-                                onAddProfile = { gateSession.startAddingProfile() },
+                                onAddProfile = { authorization -> gateSession.startAddingProfile(authorization) },
                                 modifier = Modifier.fillMaxSize(),
                             )
                             shellReady && deviceProfile.shell == ZenShell.REMOTE -> OwnTVShell(
@@ -481,20 +769,17 @@ open class MainActivity : ComponentActivity() {
                                 },
                                 modifier = Modifier.fillMaxSize(),
                             )
-                            shellReady -> MobileTheme(applyDensityScaling = false) {
-                                MobileSheetHost {
-                                    MobileShell(
-                                        windowWidthDp = configuration.screenWidthDp,
-                                        hostManagesAccess = true,
-                                        onRefreshContent = { viewModel.refreshAllNow() },
-                                        modifier = Modifier.fillMaxSize(),
-                                    )
-                                }
-                            }
                             // No unexpected combination of asynchronous state may fall through to
                             // the shell. The known loading/onboarding/gate cases are above; a blank
                             // frame is safer than rendering protected content if a new state is added.
                             else -> Unit
+                        }
+                        if (!mobilePlayerOnScreen) {
+                            ZenPlayExpiryBanner(
+                                state = expiryState,
+                                monitor = expiryMonitor,
+                                modifier = Modifier.align(Alignment.TopCenter),
+                            )
                         }
                         } // end foreground Box (above the background layer)
                     }
@@ -502,6 +787,46 @@ open class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+}
+
+/** Mandatory local warning on platforms where the system notification may be denied or unavailable. */
+@androidx.compose.runtime.Composable
+private fun ZenPlayExpiryBanner(
+    state: ZenPlaySubscriptionState,
+    monitor: ZenPlayExpiryMonitor,
+    modifier: Modifier = Modifier,
+) {
+    val dated = state as? ZenPlaySubscriptionState.Dated ?: return
+    val now = System.currentTimeMillis()
+    val days = remember(dated.expiryMs, now / 86_400_000L) {
+        daysUntilExpiry(now, dated.expiryMs)
+    }
+    if (days !in 0L..1L) return
+    var visible by remember(dated.expiryMs, days) {
+        mutableStateOf(monitor.shouldShowInApp(dated.expiryMs, now))
+    }
+    if (!visible) return
+    LaunchedEffect(dated.expiryMs, days) {
+        monitor.markInAppShown(dated.expiryMs)
+    }
+    val message = androidx.compose.ui.res.stringResource(
+        if (days == 1L) R.string.zenplay_expiry_tomorrow else R.string.zenplay_expiry_today,
+    )
+    Box(
+        modifier = modifier
+            .statusBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .widthIn(max = 560.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xEE171B35))
+            .clickable { visible = false }
+            .padding(horizontal = 22.dp, vertical = 14.dp),
+    ) {
+        androidx.tv.material3.Text(
+            text = message,
+            color = Color.White,
+        )
     }
 }
 

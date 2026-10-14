@@ -42,6 +42,7 @@ import tv.own.owntv.core.customize.CategoryRailEditor
 import tv.own.owntv.core.customize.MoveKind
 import tv.own.owntv.core.customize.railCategories
 import tv.own.owntv.core.customize.CustomizeKeys
+import tv.own.owntv.core.content.ContentAccessPolicy
 import tv.own.owntv.core.database.dao.CategoryDao
 import tv.own.owntv.core.database.dao.ContentOrderDao
 import tv.own.owntv.core.database.dao.CustomCategoryDao
@@ -98,6 +99,7 @@ class SeriesViewModel(
     private val externalPlayerLauncher: tv.own.owntv.core.player.ExternalPlayerLauncher,
     private val streamUrlResolver: tv.own.owntv.core.stalker.StreamUrlResolver,
     private val subtitleController: tv.own.owntv.core.subtitles.SubtitleController,
+    private val contentAccess: ContentAccessPolicy,
 ) : ViewModel() {
 
     data class SeriesMoveState(val items: List<SeriesEntity>, val activeIndex: Int, val contextKey: String)
@@ -858,7 +860,7 @@ class SeriesViewModel(
         val show = seriesDao.getSeriesById(showId) ?: return false
         if (episode.seriesId != show.id) return false
         val pid = currentProfileId() ?: return false
-        if (!tv.own.owntv.core.content.AdultCategoryClassifier.allows(pid, show.categoryId, profileDao, categoryDao)) return false
+        if (!canPlay(show, episode, pid)) return false
         seriesRepository.loadEpisodes(show)
         val queue = seriesDao.episodesBySeries(show.id).first()
         if (queue.isEmpty()) return false
@@ -898,12 +900,26 @@ class SeriesViewModel(
         }
     }
 
+    /** Episodes inherit the parent show's visibility and manual Series customizations. */
+    private suspend fun canPlay(show: SeriesEntity, episode: EpisodeEntity, profileId: Long?): Boolean {
+        profileId ?: return false
+        if (episode.seriesId != show.id) return false
+        val storedEpisode = seriesDao.getEpisodeById(episode.id)
+            ?.takeIf { it.seriesId == show.id } ?: return false
+        val storedShow = seriesDao.getSeriesById(show.id)
+            ?.takeIf { it.sourceId == show.sourceId } ?: return false
+        if (storedEpisode.seriesId != storedShow.id) return false
+        // The policy resolves the stored parent itself, so episodes cannot supply a different
+        // category/source/key than the series they actually belong to.
+        return contentAccess.allows(profileId, storedEpisode)
+    }
+
     fun playEpisodeExternal(episode: EpisodeEntity) {
-        _lastPlayedEpisodeId.value = episode.id
         viewModelScope.launch {
             val pid = currentProfileId()
             val show = seriesDao.getSeriesById(episode.seriesId) ?: return@launch
-            if (pid != null && !tv.own.owntv.core.content.AdultCategoryClassifier.allows(pid, show.categoryId, profileDao, categoryDao)) return@launch
+            if (!canPlay(show, episode, pid)) return@launch
+            _lastPlayedEpisodeId.value = episode.id
             Log.d(TAG, "playEpisodeExternal episodeId=${episode.id}")
             val url = resolvedEpisodeUrlOrNull(episode) ?: return@launch
             val source = sourceDao.getById(show.sourceId)
@@ -934,12 +950,15 @@ class SeriesViewModel(
     }
 
     fun playEpisodeQueue(show: SeriesEntity, queue: List<EpisodeEntity>, episode: EpisodeEntity, startPositionMs: Long = 0) {
-        _openedSeries.value = show
-        _playingSeries.value = show
-        _lastPlayedEpisodeId.value = episode.id
         viewModelScope.launch {
+            if (episode.seriesId != show.id) return@launch
             val pid = currentProfileId()
-            if (pid != null && !tv.own.owntv.core.content.AdultCategoryClassifier.allows(pid, show.categoryId, profileDao, categoryDao)) return@launch
+            if (!canPlay(show, episode, pid)) return@launch
+            val authorizedQueue = queue.filter { it.seriesId == show.id }
+            if (authorizedQueue.none { it.id == episode.id }) return@launch
+            _openedSeries.value = show
+            _playingSeries.value = show
+            _lastPlayedEpisodeId.value = episode.id
             // External player (global toggle): launch only the selected episode (external players are
             // single-item — no prev/next queue). History is still recorded; resume position and the
             // in-app HUD/progress tick are not, since OwnTV can't observe the external app.
@@ -967,8 +986,8 @@ class SeriesViewModel(
                 }
                 return@launch
             }
-            val startIndex = queue.indexOfFirst { it.id == episode.id }.coerceAtLeast(0)
-            Log.d(TAG, "playEpisodeQueue seriesId=${show.id} episodeId=${episode.id} profile=$pid queue=${queue.size} startIndex=$startIndex startPositionMs=$startPositionMs")
+            val startIndex = authorizedQueue.indexOfFirst { it.id == episode.id }
+            Log.d(TAG, "playEpisodeQueue seriesId=${show.id} episodeId=${episode.id} profile=$pid queue=${authorizedQueue.size} startIndex=$startIndex startPositionMs=$startPositionMs")
             val source = sourceDao.getById(show.sourceId)
             val sourceUa = source?.userAgent
             // Stalker (D-2): every queue item resolves its playable URL right before IT loads — the
@@ -981,7 +1000,7 @@ class SeriesViewModel(
                 )
             }
             player.playEpisodes(
-                items = queue.map { ep ->
+                items = authorizedQueue.map { ep ->
                     PlaylistItem(
                         url = ep.streamUrl,
                         meta = MediaMeta(
@@ -1014,7 +1033,7 @@ class SeriesViewModel(
                 val parentTmdbId = runCatching { metadata.resolveSeries(show)?.tmdbId?.toLong() }.getOrNull()
                 subtitleController.setEpisode(pid, show, episode, parentTmdbId)
                 // Remember the queue so player-driven advances re-point the context (Phase 5, init).
-                playingQueue = PlayingQueue(show, queue, pid, parentTmdbId)
+                playingQueue = PlayingQueue(show, authorizedQueue, pid, parentTmdbId)
             }
             if (pid != null) {
                 runCatching {

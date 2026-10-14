@@ -21,6 +21,8 @@ enum class MoreLeaf(
     @param:StringRes val titleRes: Int,
     @param:StringRes val summaryRes: Int?,
     val icon: ImageVector,
+    /** Kept in the route registry so saved navigation state from older builds restores safely. */
+    val enabled: Boolean = true,
 ) {
     PROFILES("profiles", R.string.profiles_title, null, MobileIcons.People),
     FAVORITES("favorites", R.string.content_category_favorites, null, MobileIcons.Favorite),
@@ -30,8 +32,15 @@ enum class MoreLeaf(
         R.string.settings_backup_title,
         R.string.settings_backup_restore_description,
         MobileIcons.Save,
+        enabled = false,
     ),
-    LOCAL_SYNC("localsync", R.string.local_sync_title, R.string.local_sync_description, MobileIcons.Sync),
+    LOCAL_SYNC(
+        "localsync",
+        R.string.local_sync_title,
+        R.string.local_sync_description,
+        MobileIcons.Sync,
+        enabled = false,
+    ),
     ERROR_LOG(
         "errorlog",
         R.string.settings_playback_error_log,

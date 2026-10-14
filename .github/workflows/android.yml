@@ -187,8 +187,8 @@ jobs:
             fi
           else
             # Non-tag artifacts mirror app/build.gradle.kts and are never published as Releases.
-            NAME="2.1.8"
-            CODE=120108
+            NAME="2.2.3"
+            CODE=120203
           fi
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
@@ -325,6 +325,18 @@ jobs:
             cp "$LEGACY_SRC" "dist/ZenPlayLegacy.apk"
           fi
 
+      - name: Generate and verify APK checksums
+        if: env.IS_TAG == 'true'
+        run: |
+          cd dist
+          sha256sum \
+            "$NORMAL_OUT" \
+            "$LEGACY_OUT" \
+            ZenPlay.apk \
+            ZenPlayLegacy.apk \
+            > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
@@ -376,6 +388,7 @@ jobs:
             dist/${{ env.LEGACY_OUT }}
             dist/ZenPlay.apk
             dist/ZenPlayLegacy.apk
+            dist/SHA256SUMS.txt
           body_path: dist/RELEASE_NOTES.md
           # Must stay false: it appends GitHub's auto commit/PR list under the body, which buries the
           # short in-app notes the updater dialog shows.

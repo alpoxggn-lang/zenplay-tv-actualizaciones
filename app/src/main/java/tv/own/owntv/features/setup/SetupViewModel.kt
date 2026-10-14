@@ -11,6 +11,7 @@ import tv.own.owntv.core.database.entity.SourceEntity
 import tv.own.owntv.core.backup.BackupManager
 import tv.own.owntv.core.setup.SourceImporter
 import tv.own.owntv.core.settings.PlaylistRefresh
+import tv.own.owntv.core.profile.ProfileAuthorization
 import tv.own.owntv.core.sync.SyncScopeChoice
 import java.io.File
 
@@ -150,8 +151,15 @@ class SetupViewModel(
     }
 
     /** Creates the profile (not active yet); the rest of onboarding attaches content to it. */
-    fun createProfile(name: String, avatarId: Int, isKids: Boolean, pin: String?, onCreated: (Long) -> Unit = {}) {
-        viewModelScope.launch { onCreated(importer.createProfile(name, avatarId, isKids, pin)) }
+    fun createProfile(
+        name: String,
+        avatarId: Int,
+        isKids: Boolean,
+        pin: String?,
+        authorization: ProfileAuthorization? = null,
+        onCreated: (Long?) -> Unit = {},
+    ) {
+        viewModelScope.launch { onCreated(importer.createProfile(name, avatarId, isKids, pin, authorization)) }
     }
 
     fun startXtream(

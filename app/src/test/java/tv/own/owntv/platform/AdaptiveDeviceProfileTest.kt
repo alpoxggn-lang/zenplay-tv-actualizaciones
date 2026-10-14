@@ -33,11 +33,21 @@ class AdaptiveDeviceProfileTest {
     }
 
     @Test
-    fun portraitTabletUsesRailWithoutForcingTwoPanes() {
+    fun rotatedPhoneNeverBecomesATabletRail() {
+        val profile = capabilities(width = 915, height = 412, smallestWidth = 412)
+            .toAdaptiveDeviceProfile()
+
+        assertEquals(ZenNavigation.BOTTOM_BAR, profile.navigation)
+        assertTrue(profile.compactHandset)
+        assertFalse(profile.twoPane)
+    }
+
+    @Test
+    fun portraitTabletUsesBottomNavigationWithoutForcingTwoPanes() {
         val profile = capabilities(width = 800, height = 1280).toAdaptiveDeviceProfile()
 
         assertEquals(ZenWindowClass.MEDIUM, profile.windowClass)
-        assertEquals(ZenNavigation.RAIL, profile.navigation)
+        assertEquals(ZenNavigation.BOTTOM_BAR, profile.navigation)
         assertFalse(profile.twoPane)
     }
 
@@ -85,9 +95,11 @@ class AdaptiveDeviceProfileTest {
         dpad: Boolean = false,
         lowRam: Boolean = false,
         legacy: Boolean = false,
+        smallestWidth: Int = minOf(width, height),
     ) = DeviceCapabilities(
         widthDp = width,
         heightDp = height,
+        smallestWidthDp = smallestWidth,
         televisionUi = television,
         touchscreen = touchscreen,
         dpad = dpad,

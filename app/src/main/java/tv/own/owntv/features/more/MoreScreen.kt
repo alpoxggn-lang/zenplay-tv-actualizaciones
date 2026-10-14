@@ -58,8 +58,6 @@ import tv.own.owntv.core.i18n.SupportedLocales
 import tv.own.owntv.core.model.MediaType
 import tv.own.owntv.core.settings.SettingsRepository
 import tv.own.owntv.core.theme.GlassSurface
-import tv.own.owntv.features.settings.BackupScreen
-import tv.own.owntv.features.settings.LocalSyncScreen
 import tv.own.owntv.features.settings.SettingsViewModel
 import tv.own.owntv.features.settings.sectionLabelRes
 import tv.own.owntv.features.shell.components.AboutDialog
@@ -81,20 +79,33 @@ import tv.own.owntv.ui.components.roundedPanel
 import tv.own.owntv.ui.format.formatBestDateTime
 import tv.own.owntv.ui.theme.OwnTVTheme
 import tv.own.owntv.ui.theme.glass
+import tv.own.owntv.zenplay.ZenPlaySubscriptionState
 
 /** Which of More's own pages is on screen. [ROOT] is the hub itself. */
-private enum class MorePage { ROOT, FAVORITES, HISTORY, BACKUP, LOCAL_SYNC, PLANS }
+private enum class MorePage {
+    ROOT,
+    FAVORITES,
+    HISTORY,
+    // Legacy rememberSaveable values: retained for deserialization, never rendered.
+    PLANS,
+    BACKUP,
+    LOCAL_SYNC,
+}
+
+private val MorePage.isRetiredZenPlayPage: Boolean
+    get() = this == MorePage.PLANS || this == MorePage.BACKUP || this == MorePage.LOCAL_SYNC
 
 /** The rows, in the order the spine shows them. */
 private enum class MoreRow {
     PROFILE,
-    PLANS,
     FAVORITES,
     HISTORY,
     RECORDINGS,
     AGENDA,
     REFRESH,
     SETTINGS,
+    // Legacy rememberSaveable values: retained for deserialization, never listed.
+    PLANS,
     BACKUP,
     LOCAL_SYNC,
     ERROR_LOG,
@@ -102,12 +113,15 @@ private enum class MoreRow {
     LOGOUT,
 }
 
+private val MoreRow.isRetiredZenPlayRow: Boolean
+    get() = this == MoreRow.PLANS || this == MoreRow.BACKUP || this == MoreRow.LOCAL_SYNC
+
 /**
  * The hub the rail's last item opens — everything that is neither a channel nor a preference.
  *
- * It exists because Settings was the only door: Backup, Local sync, the error log and About are a
- * place, a place, a log and a page of facts, and none of them is a setting. They are rows here, and
- * Settings is a row here too.
+ * It exists because Settings was the only door. Backup/restore and local device sharing are parked
+ * for this release: ZenPlay uses one fixed source, and cross-device sharing belongs to a later
+ * update. The internal implementations remain available without exposing a user-facing door.
  *
  * **The shape is Settings' own** (Plan M), and so are the parts: the spine rows are
  * [SpineItem] and the pane is headed by [SheetHeader] — the same composables the Settings root
@@ -121,16 +135,15 @@ private enum class MoreRow {
  * **Focus lands on Settings**, so the most-used destination is rail → More → OK: one extra press
  * over what it used to be, and never a hunt.
  *
- * There is deliberately no Downloads row and no Profiles row. Both already have a rail slot —
- * Downloads in `browseOrder`, the profile card at the rail's foot — and one door each is the rule
- * this screen exists to enforce.
+ * There is deliberately no Downloads row: offline films and episodes are a phone/tablet feature.
+ * There is no Profiles row either, because the profile card at the rail's foot is its single door.
  */
 @Composable
 fun MoreScreen(
     onOpenSettings: () -> Unit,
     profileName: String,
     planName: String,
-    subscriptionExpiryMs: Long?,
+    subscriptionState: ZenPlaySubscriptionState,
     onSwitchProfile: () -> Unit,
     onOpenRecordings: () -> Unit,
     onOpenAgenda: () -> Unit,
@@ -144,6 +157,10 @@ fun MoreScreen(
     settingsVm: SettingsViewModel = koinViewModel(),
 ) {
     var page by rememberSaveable { mutableStateOf(MorePage.ROOT) }
+    val activePage = page.takeUnless { it.isRetiredZenPlayPage } ?: MorePage.ROOT
+    LaunchedEffect(page) {
+        if (page.isRetiredZenPlayPage) page = MorePage.ROOT
+    }
     var showAbout by remember { mutableStateOf(false) }
     var showErrorLog by remember { mutableStateOf(false) }
     var showLogout by remember { mutableStateOf(false) }
@@ -151,8 +168,6 @@ fun MoreScreen(
     val history by counts.history.collectAsStateWithLifecycle()
     val quickPinned by settingsVm.quickPinnedKeys.collectAsStateWithLifecycle()
     val quickPreview = quickPreviewRows(settingsVm)
-    val sync by counts.sync.collectAsStateWithLifecycle()
-    val lastBackup by counts.lastBackup.collectAsStateWithLifecycle()
     val favoriteItems by counts.favoriteItems.collectAsStateWithLifecycle()
     val historyItems by counts.historyItems.collectAsStateWithLifecycle()
 
@@ -165,8 +180,12 @@ fun MoreScreen(
     // Which row the pane is describing. Focus drives it, the same way Settings' spine selects a
     // group on focus rather than on OK — so walking the list reads the list.
     var selected by rememberSaveable { mutableStateOf(MoreRow.PROFILE) }
+    val activeSelection = selected.takeUnless { it.isRetiredZenPlayRow } ?: MoreRow.SETTINGS
+    LaunchedEffect(selected) {
+        if (selected.isRetiredZenPlayRow) selected = MoreRow.SETTINGS
+    }
 
-    when (page) {
+    when (activePage) {
         MorePage.FAVORITES -> {
             FavoritesScreen(
                 onFullscreen = onFullscreen,
@@ -187,18 +206,7 @@ fun MoreScreen(
             )
             return
         }
-        MorePage.BACKUP -> {
-            Toned(TileTone.TERTIARY) { BackupScreen(onBack = { page = MorePage.ROOT }, modifier = modifier) }
-            return
-        }
-        MorePage.LOCAL_SYNC -> {
-            Toned(TileTone.TERTIARY) { LocalSyncScreen(onBack = { page = MorePage.ROOT }, modifier = modifier) }
-            return
-        }
-        MorePage.PLANS -> {
-            tv.own.owntv.features.setup.ZenPlayPlansScreen(onBack = { page = MorePage.ROOT }, modifier = modifier)
-            return
-        }
+        MorePage.PLANS, MorePage.BACKUP, MorePage.LOCAL_SYNC -> Unit
         MorePage.ROOT -> Unit
     }
 
@@ -223,12 +231,22 @@ fun MoreScreen(
 
     val colors = OwnTVTheme.colors
     val paneShape = SettingsSkin.PaneShape
-    val backupAge = lastBackup?.let { relativeShort(it.at) }
-    val syncValue = stringResource(if (sync.listening) R.string.common_on else R.string.common_off)
-    val neverBadge = stringResource(R.string.common_never)
-    val expiryText = subscriptionExpiryMs?.let {
-        stringResource(R.string.zenplay_expiry_until, formatBestDateTime(context, "dMMMyyyy", it))
-    } ?: stringResource(R.string.zenplay_account_no_expiry)
+    val expiryText = when (val expiry = subscriptionState) {
+        ZenPlaySubscriptionState.Loading -> stringResource(R.string.zenplay_expiry_loading)
+        is ZenPlaySubscriptionState.Dated -> if (expiry.expiryMs <= System.currentTimeMillis()) {
+            stringResource(R.string.zenplay_expiry_expired)
+        } else {
+            stringResource(
+                R.string.zenplay_expiry_until,
+                formatBestDateTime(context, "dMMMyyyy", expiry.expiryMs),
+            )
+        }
+        ZenPlaySubscriptionState.Unlimited -> stringResource(R.string.zenplay_expiry_unlimited)
+        ZenPlaySubscriptionState.ExpiredWithoutDate -> stringResource(R.string.zenplay_expiry_expired)
+        ZenPlaySubscriptionState.Revoked -> stringResource(R.string.zenplay_expiry_revoked)
+        ZenPlaySubscriptionState.Unavailable -> stringResource(R.string.zenplay_expiry_unavailable)
+        ZenPlaySubscriptionState.NoAccount -> stringResource(R.string.zenplay_expiry_no_account)
+    }
     val accountSummary = listOf(profileName, planName, expiryText)
         .filter { it.isNotBlank() }
         .joinToString(stringResource(R.string.content_epg_bits_separator))
@@ -295,23 +313,11 @@ fun MoreScreen(
                     title = stringResource(R.string.zenplay_profiles_title),
                     summary = stringResource(R.string.zenplay_profiles_summary),
                     badge = profileName,
-                    selected = selected,
+                    selected = activeSelection,
                     focus = rowFocus.getValue(MoreRow.PROFILE),
                     onSelected = { selected = it },
                     onClick = { focusRow(MoreRow.PROFILE); onSwitchProfile() },
                 )
-                SpineRow(
-                    row = MoreRow.PLANS,
-                    icon = OwnTVIcon.PLAYLIST,
-                    title = stringResource(R.string.zenplay_plans_title),
-                    summary = stringResource(R.string.zenplay_plans_summary),
-                    badge = planName,
-                    selected = selected,
-                    focus = rowFocus.getValue(MoreRow.PLANS),
-                    onSelected = { selected = it },
-                    onClick = { focusRow(MoreRow.PLANS); page = MorePage.PLANS },
-                )
-
                 SpineGroup(stringResource(R.string.settings_group_data))
                 SpineRow(
                     row = MoreRow.FAVORITES,
@@ -319,7 +325,7 @@ fun MoreScreen(
                     title = stringResource(R.string.content_category_favorites),
                     summary = stringResource(R.string.more_spine_favorites_summary),
                     badge = favorites.total.toString(),
-                    selected = selected,
+                    selected = activeSelection,
                     focus = rowFocus.getValue(MoreRow.FAVORITES),
                     onSelected = { selected = it },
                     onClick = { focusRow(MoreRow.FAVORITES); page = MorePage.FAVORITES },
@@ -330,7 +336,7 @@ fun MoreScreen(
                     title = stringResource(R.string.content_category_history),
                     summary = stringResource(R.string.more_spine_history_summary),
                     badge = history.total.toString(),
-                    selected = selected,
+                    selected = activeSelection,
                     focus = rowFocus.getValue(MoreRow.HISTORY),
                     onSelected = { selected = it },
                     onClick = { focusRow(MoreRow.HISTORY); page = MorePage.HISTORY },
@@ -341,7 +347,7 @@ fun MoreScreen(
                     title = stringResource(R.string.zenplay_recordings_title),
                     summary = stringResource(R.string.zenplay_recordings_summary),
                     badge = "",
-                    selected = selected,
+                    selected = activeSelection,
                     focus = rowFocus.getValue(MoreRow.RECORDINGS),
                     onSelected = { selected = it },
                     onClick = { focusRow(MoreRow.RECORDINGS); onOpenRecordings() },
@@ -352,7 +358,7 @@ fun MoreScreen(
                     title = stringResource(R.string.zenplay_agenda_title),
                     summary = stringResource(R.string.zenplay_agenda_summary),
                     badge = "",
-                    selected = selected,
+                    selected = activeSelection,
                     focus = rowFocus.getValue(MoreRow.AGENDA),
                     onSelected = { selected = it },
                     onClick = { focusRow(MoreRow.AGENDA); onOpenAgenda() },
@@ -363,7 +369,7 @@ fun MoreScreen(
                     title = stringResource(R.string.zenplay_refresh_label),
                     summary = stringResource(R.string.zenplay_refresh_summary),
                     badge = "",
-                    selected = selected,
+                    selected = activeSelection,
                     focus = rowFocus.getValue(MoreRow.REFRESH),
                     onSelected = { selected = it },
                     onClick = { focusRow(MoreRow.REFRESH); onRefresh() },
@@ -376,35 +382,11 @@ fun MoreScreen(
                     title = stringResource(R.string.common_nav_settings),
                     summary = stringResource(R.string.more_spine_settings_summary),
                     badge = quickPinned.size.toString(),
-                    selected = selected,
+                    selected = activeSelection,
                     focus = rowFocus.getValue(MoreRow.SETTINGS),
                     onSelected = { selected = it },
                     onClick = { focusRow(MoreRow.SETTINGS); onOpenSettings() },
                 )
-                SpineRow(
-                    row = MoreRow.BACKUP,
-                    icon = OwnTVIcon.BACKUP,
-                    title = stringResource(R.string.settings_backup_restore),
-                    summary = stringResource(R.string.more_spine_backup_summary),
-                    // How long ago, or a dash while no backup has ever been taken.
-                    badge = backupAge ?: neverBadge,
-                    selected = selected,
-                    focus = rowFocus.getValue(MoreRow.BACKUP),
-                    onSelected = { selected = it },
-                    onClick = { focusRow(MoreRow.BACKUP); page = MorePage.BACKUP },
-                )
-                SpineRow(
-                    row = MoreRow.LOCAL_SYNC,
-                    icon = OwnTVIcon.REFRESH,
-                    title = stringResource(R.string.local_sync_title),
-                    summary = stringResource(R.string.more_spine_local_sync_summary),
-                    badge = syncValue,
-                    selected = selected,
-                    focus = rowFocus.getValue(MoreRow.LOCAL_SYNC),
-                    onSelected = { selected = it },
-                    onClick = { focusRow(MoreRow.LOCAL_SYNC); page = MorePage.LOCAL_SYNC },
-                )
-
                 SpineGroup(stringResource(R.string.settings_app_group))
                 SpineRow(
                     row = MoreRow.ERROR_LOG,
@@ -412,7 +394,7 @@ fun MoreScreen(
                     title = stringResource(R.string.settings_playback_error_log),
                     summary = stringResource(R.string.more_spine_error_log_summary),
                     badge = (logEntries?.size ?: 0).toString(),
-                    selected = selected,
+                    selected = activeSelection,
                     focus = rowFocus.getValue(MoreRow.ERROR_LOG),
                     onSelected = { selected = it },
                     onClick = { focusRow(MoreRow.ERROR_LOG); showErrorLog = true },
@@ -423,7 +405,7 @@ fun MoreScreen(
                     title = stringResource(R.string.settings_about),
                     summary = stringResource(R.string.more_spine_about_summary),
                     badge = BuildConfig.VERSION_NAME,
-                    selected = selected,
+                    selected = activeSelection,
                     focus = rowFocus.getValue(MoreRow.ABOUT),
                     onSelected = { selected = it },
                     onClick = { focusRow(MoreRow.ABOUT); showAbout = true },
@@ -438,7 +420,7 @@ fun MoreScreen(
                     title = stringResource(R.string.zenplay_logout_title),
                     summary = stringResource(R.string.zenplay_logout_summary),
                     badge = "",
-                    selected = selected,
+                    selected = activeSelection,
                     focus = rowFocus.getValue(MoreRow.LOGOUT),
                     onSelected = { selected = it },
                     onClick = { focusRow(MoreRow.LOGOUT); showLogout = true },
@@ -456,17 +438,16 @@ fun MoreScreen(
                     .glass(surface = GlassSurface.CARDS, baseFill = colors.surfaceContainerLow, shape = paneShape)
                     .border(1.dp, colors.outlineVariant, paneShape),
             ) {
-                val destination = when (selected) {
+                val destination = when (activeSelection) {
                     MoreRow.PROFILE -> stringResource(R.string.zenplay_profiles_title)
-                    MoreRow.PLANS -> stringResource(R.string.zenplay_plans_title)
                     MoreRow.RECORDINGS -> stringResource(R.string.zenplay_recordings_title)
                     MoreRow.AGENDA -> stringResource(R.string.zenplay_agenda_title)
                     MoreRow.REFRESH -> stringResource(R.string.zenplay_refresh_label)
                     MoreRow.SETTINGS -> stringResource(R.string.common_nav_settings)
                     MoreRow.FAVORITES -> stringResource(R.string.content_category_favorites)
                     MoreRow.HISTORY -> stringResource(R.string.content_category_history)
-                    MoreRow.BACKUP -> stringResource(R.string.settings_backup_restore)
-                    MoreRow.LOCAL_SYNC -> stringResource(R.string.local_sync_title)
+                    MoreRow.PLANS, MoreRow.BACKUP, MoreRow.LOCAL_SYNC ->
+                        stringResource(R.string.common_nav_settings)
                     MoreRow.ERROR_LOG -> stringResource(R.string.settings_playback_error_log)
                     MoreRow.ABOUT -> stringResource(R.string.settings_about)
                     MoreRow.LOGOUT -> stringResource(R.string.zenplay_logout_title)
@@ -477,31 +458,28 @@ fun MoreScreen(
                     // The pane takes the LONG description where one exists — the spine's short
                     // summary is short because the spine is 294 dp, not because the app has nothing
                     // more to say.
-                    summary = when (selected) {
+                    summary = when (activeSelection) {
                         MoreRow.PROFILE -> stringResource(R.string.zenplay_profiles_summary)
-                        MoreRow.PLANS -> stringResource(R.string.zenplay_plans_subtitle)
                         MoreRow.RECORDINGS -> stringResource(R.string.zenplay_recordings_summary)
                         MoreRow.AGENDA -> stringResource(R.string.zenplay_agenda_summary)
                         MoreRow.REFRESH -> stringResource(R.string.zenplay_refresh_summary)
                         MoreRow.SETTINGS -> stringResource(R.string.more_spine_settings_summary)
                         MoreRow.FAVORITES -> stringResource(R.string.more_pane_favorites_summary)
                         MoreRow.HISTORY -> stringResource(R.string.more_pane_history_summary)
-                        MoreRow.BACKUP -> stringResource(R.string.settings_backup_restore_description)
-                        MoreRow.LOCAL_SYNC -> stringResource(R.string.local_sync_description)
+                        MoreRow.PLANS, MoreRow.BACKUP, MoreRow.LOCAL_SYNC ->
+                            stringResource(R.string.more_spine_settings_summary)
                         MoreRow.ERROR_LOG -> stringResource(R.string.settings_playback_error_description)
                         MoreRow.ABOUT -> stringResource(R.string.settings_about_description)
                         MoreRow.LOGOUT -> stringResource(R.string.zenplay_logout_description)
                     },
-                    tag = when (selected) {
+                    tag = when (activeSelection) {
                         MoreRow.PROFILE -> profileName
-                        MoreRow.PLANS -> planName
                         MoreRow.RECORDINGS, MoreRow.AGENDA, MoreRow.REFRESH -> ""
                         MoreRow.SETTINGS ->
                             pluralStringResource(R.plurals.settings_pinned_count, quickPinned.size, quickPinned.size)
                         MoreRow.FAVORITES -> favorites.total.toString()
                         MoreRow.HISTORY -> history.total.toString()
-                        MoreRow.BACKUP -> backupAge ?: neverBadge
-                        MoreRow.LOCAL_SYNC -> syncValue
+                        MoreRow.PLANS, MoreRow.BACKUP, MoreRow.LOCAL_SYNC -> ""
                         MoreRow.ERROR_LOG -> (logEntries?.size ?: 0).toString()
                         MoreRow.ABOUT -> BuildConfig.VERSION_NAME
                         MoreRow.LOGOUT -> ""
@@ -513,17 +491,15 @@ fun MoreScreen(
                         .weight(1f)
                         .padding(horizontal = 18.dp, vertical = 6.dp),
                 ) {
-                    when (selected) {
+                    when (activeSelection) {
                         MoreRow.PROFILE -> AccountPane(profileName, planName, expiryText)
-                        MoreRow.PLANS -> PaneNote(stringResource(R.string.zenplay_plans_subtitle))
                         MoreRow.RECORDINGS -> PaneNote(stringResource(R.string.zenplay_recordings_summary))
                         MoreRow.AGENDA -> PaneNote(stringResource(R.string.zenplay_agenda_summary))
                         MoreRow.REFRESH -> PaneNote(stringResource(R.string.zenplay_refresh_summary))
                         MoreRow.SETTINGS -> SettingsPane(quickPreview)
                         MoreRow.FAVORITES -> CountsPane(favorites, favoriteItems)
                         MoreRow.HISTORY -> CountsPane(history, historyItems)
-                        MoreRow.BACKUP -> BackupPane(lastBackup)
-                        MoreRow.LOCAL_SYNC -> LocalSyncPane(sync)
+                        MoreRow.PLANS, MoreRow.BACKUP, MoreRow.LOCAL_SYNC -> SettingsPane(quickPreview)
                         MoreRow.ERROR_LOG -> ErrorLogPane(logEntries)
                         MoreRow.ABOUT -> AboutPane()
                         MoreRow.LOGOUT -> PaneNote(stringResource(R.string.zenplay_logout_warning))
@@ -605,6 +581,7 @@ private fun ZenPlayLogoutDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
  * the app as part of it; the next launch opens on the sign-in screen.
  */
 private fun zenPlayLogout(context: android.content.Context) {
+    tv.own.owntv.zenplay.ZenPlayExpiryWork.cancel(context)
     val am = context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
     am.clearApplicationUserData()
 }

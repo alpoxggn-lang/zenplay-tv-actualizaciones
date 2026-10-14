@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
@@ -56,6 +57,7 @@ import tv.own.owntv.core.customize.CategoryMove
 import tv.own.owntv.core.customize.CategoryRailEditor
 import tv.own.owntv.core.customize.MoveKind
 import tv.own.owntv.core.customize.railCategories
+import tv.own.owntv.core.content.ContentAccessPolicy
 import tv.own.owntv.core.database.dao.CategoryDao
 import tv.own.owntv.core.database.dao.ChannelDao
 import tv.own.owntv.core.database.dao.ContentOrderDao
@@ -130,6 +132,7 @@ class LiveViewModel(
     private val epgRepository: tv.own.owntv.core.repository.EpgRepository,
     private val externalPlayerLauncher: tv.own.owntv.core.player.ExternalPlayerLauncher,
     private val recordings: tv.own.owntv.core.recording.RecordingManager,
+    private val contentAccess: ContentAccessPolicy,
 ) : ViewModel() {
 
     // --- "Record what I'm watching" (Plan D, D3 mode b) -----------------------------------------
@@ -140,10 +143,45 @@ class LiveViewModel(
      * Held here rather than derived from the table because this recording belongs to *this* playing
      * stream: it ends when the stream does, and nothing in the database says which stream that was.
      */
-    private val _playerRecording =
-        MutableStateFlow<tv.own.owntv.core.database.entity.RecordingEntity?>(null)
+    private val _playerRecordings =
+        MutableStateFlow<Map<Long, tv.own.owntv.core.database.entity.RecordingEntity>>(emptyMap())
 
-    val playerRecording: StateFlow<tv.own.owntv.core.database.entity.RecordingEntity?> = _playerRecording
+    /** Active player-started recordings keyed by channel id, never one global cross-channel flag. */
+    val playerRecordings: StateFlow<Map<Long, tv.own.owntv.core.database.entity.RecordingEntity>> =
+        _playerRecordings.asStateFlow()
+
+    private val playerRecordingExpiryJobs = mutableMapOf<Long, Job>()
+
+    init {
+        // Room clears the HUD state when the worker completes, fails or cancels a timed recording.
+        // The explicit expiry job installed by trackPlayerRecording() is the fallback when a worker
+        // update is delayed by the platform after the stop time.
+        viewModelScope.launch {
+            settings.activeProfileId
+                .flatMapLatest { profileId ->
+                    if (profileId < 0L) {
+                        flowOf(profileId to emptyList())
+                    } else {
+                        recordings.observe(profileId).map { profileId to it }
+                    }
+                }
+                .collect { (profileId, stored) ->
+                    val previous = _playerRecordings.value
+                    val trackedForProfile = previous.filterValues {
+                        it.profileId == profileId
+                    }
+                    val reconciled = reconcilePlayerRecordings(
+                        tracked = trackedForProfile,
+                        stored = stored,
+                        nowMs = System.currentTimeMillis(),
+                    )
+                    (previous.keys - reconciled.keys).forEach { channelId ->
+                        playerRecordingExpiryJobs.remove(channelId)?.cancel()
+                    }
+                    _playerRecordings.value = reconciled
+                }
+        }
+    }
 
     /**
      * Start or stop recording the channel on screen, from its start time of *now*.
@@ -162,14 +200,14 @@ class LiveViewModel(
      */
     fun togglePlayerRecording(channel: ChannelEntity) {
         viewModelScope.launch {
-            val open = _playerRecording.value
+            val open = _playerRecordings.value[channel.id]
             if (open != null) {
                 recordings.stop(open)
-                _playerRecording.value = null
+                untrackPlayerRecording(channel.id, open.id)
                 return@launch
             }
             val pid = currentProfileId() ?: return@launch
-            _playerRecording.value = startRecordingNow(channel, pid, nowNext.value?.now)
+            startRecordingNow(channel, pid, nowNext.value?.now)?.let(::trackPlayerRecording)
         }
     }
 
@@ -205,7 +243,7 @@ class LiveViewModel(
     suspend fun startPlayerRecordingFor(channel: ChannelEntity, minutes: Int): Boolean {
         val pid = currentProfileId() ?: return false
         val rec = startRecordingNow(channel, pid, nowNext.value?.now, minutes)
-        _playerRecording.value = rec
+        rec?.let(::trackPlayerRecording)
         return rec != null
     }
 
@@ -213,12 +251,84 @@ class LiveViewModel(
     suspend fun programmeEndMs(channel: ChannelEntity): Long? =
         runCatching { epgReader.nowNext(channel, custom.value, epgOffset.value)?.now?.stopMs }.getOrNull()
 
+    /** Schedule a manual recording from the fullscreen player without leaving for the EPG. */
+    suspend fun schedulePlayerRecordingFor(
+        channel: ChannelEntity,
+        startMs: Long,
+        minutes: Int,
+    ): tv.own.owntv.core.database.entity.RecordingEntity? {
+        val pid = currentProfileId() ?: return null
+        if (!canAccess(channel, pid)) return null
+        // Invalid "Hoy" times are rejected by the dialog and again here. Never silently turn a
+        // past time into tomorrow (or into "one minute from now") behind the user's back.
+        if (startMs <= System.currentTimeMillis()) return null
+        val safeStart = startMs
+        val safeMinutes = minutes.coerceIn(15, 12 * 60)
+        val stopMs = safeStart + safeMinutes * 60_000L
+        return recordings.schedule(
+            tv.own.owntv.core.database.entity.RecordingEntity(
+                profileId = pid,
+                sourceId = channel.sourceId,
+                channelId = channel.id,
+                channelName = channel.name,
+                channelIconUrl = channel.logoUrl,
+                epgChannelId = channel.epgChannelId,
+                streamUrl = channel.streamUrl,
+                httpHeaders = channel.httpHeaders,
+                title = channel.name,
+                programmeStartMs = safeStart,
+                programmeStopMs = stopMs,
+                startMs = safeStart,
+                stopMs = stopMs,
+            ),
+        )
+    }
+
+    /** Nearest active timer for this channel, shown and cancellable in the in-player dialog. */
+    suspend fun scheduledPlayerRecordingFor(
+        channel: ChannelEntity,
+    ): tv.own.owntv.core.database.entity.RecordingEntity? {
+        val pid = currentProfileId() ?: return null
+        val now = System.currentTimeMillis()
+        return recordings.observe(pid).first()
+            .asSequence()
+            .filter { it.channelId == channel.id && it.stopMs > now }
+            .filter {
+                it.status == tv.own.owntv.core.model.RecordingStatus.SCHEDULED ||
+                    it.status == tv.own.owntv.core.model.RecordingStatus.RECORDING
+            }
+            .minByOrNull { it.startMs }
+    }
+
+    fun cancelPlayerRecordingSchedule(recording: tv.own.owntv.core.database.entity.RecordingEntity) {
+        if (recording.status == tv.own.owntv.core.model.RecordingStatus.RECORDING) recordings.stop(recording)
+        else recordings.cancel(recording)
+        untrackPlayerRecording(recording.channelId, recording.id)
+    }
+
+    private fun trackPlayerRecording(recording: tv.own.owntv.core.database.entity.RecordingEntity) {
+        val channelId = recording.channelId
+        playerRecordingExpiryJobs.remove(channelId)?.cancel()
+        _playerRecordings.value = _playerRecordings.value + (channelId to recording)
+        playerRecordingExpiryJobs[channelId] = viewModelScope.launch {
+            delay((recording.stopMs - System.currentTimeMillis()).coerceAtLeast(0L) + 1_000L)
+            untrackPlayerRecording(channelId, recording.id)
+        }
+    }
+
+    private fun untrackPlayerRecording(channelId: Long, recordingId: Long) {
+        if (_playerRecordings.value[channelId]?.id != recordingId) return
+        playerRecordingExpiryJobs.remove(channelId)?.cancel()
+        _playerRecordings.value = _playerRecordings.value - channelId
+    }
+
     private suspend fun startRecordingNow(
         channel: ChannelEntity,
         profileId: Long,
         programme: tv.own.owntv.core.parser.XtEpgEntry?,
         durationMinutes: Int? = null,
     ): tv.own.owntv.core.database.entity.RecordingEntity? {
+        if (!canAccess(channel, profileId)) return null
         if (recordings.canRecordOn(channel.sourceId) !is StreamGrant.Allowed) return null
         val startMs = System.currentTimeMillis()
         // Start now: the programme is already under way and a live edge cannot be rewound, so the
@@ -275,7 +385,7 @@ class LiveViewModel(
     }
 
     private val livePreviewAudio: StateFlow<Boolean> = settings.livePreviewAudio
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     /** Settings → "Channel numbers": shows the provider number in the lists and the player, and enables
      *  typing one to tune. Off hides every number without touching the stored data. Eager so a playback
@@ -875,11 +985,19 @@ class LiveViewModel(
     val previewBlockedSingleSession: StateFlow<Boolean> = live.previewBlockedSingleSession
 
     /** In-pane preview playback (no history) — triggered by the UI after the focus settles. */
+    private var previewAuthorizationJob: Job? = null
+
     fun playPreview(channel: ChannelEntity) {
-        if (channel.categoryId != null && channel.categoryId in hiddenCategoryIds.value) return
-        // Core keeps the preview off a promoted full-screen stream, re-mutes on a re-focus instead of
-        // reloading, mints a Stalker link, and holds back on a one-session panel while mpv plays.
-        live.preview(channel, muted = !livePreviewAudio.value)
+        previewAuthorizationJob?.cancel()
+        previewAuthorizationJob = viewModelScope.launch {
+            if (!canAccess(channel)) {
+                live.stopExo()
+                return@launch
+            }
+            // Core keeps the preview off a promoted full-screen stream, re-mutes on a re-focus instead of
+            // reloading, mints a Stalker link, and holds back on a one-session panel while mpv plays.
+            live.preview(channel, muted = !livePreviewAudio.value)
+        }
     }
 
     // --- Multiview: channels kept from the browse screen ------------------------------------------
@@ -891,9 +1009,12 @@ class LiveViewModel(
 
     /** Keep [channel] for the grid, up to [limit] tiles. Adding one twice does nothing. */
     fun addToMultiview(channel: ChannelEntity, limit: Int) {
-        val current = _multiviewSelection.value
-        if (current.any { it.id == channel.id } || current.size >= limit) return
-        _multiviewSelection.value = current + channel
+        viewModelScope.launch {
+            if (!canAccess(channel)) return@launch
+            val current = _multiviewSelection.value
+            if (current.any { it.id == channel.id } || current.size >= limit) return@launch
+            _multiviewSelection.value = current + channel
+        }
     }
 
     fun clearMultiviewSelection() {
@@ -917,7 +1038,13 @@ class LiveViewModel(
      * grid would drift the first time one of them changed.
      */
     fun tuneTile(engine: tv.own.owntv.player.LivePreviewEngine, channel: ChannelEntity, muted: Boolean) {
-        viewModelScope.launch { live.playTile(engine, channel, muted) }
+        viewModelScope.launch {
+            if (!canAccess(channel)) {
+                engine.stop()
+                return@launch
+            }
+            live.playTile(engine, channel, muted)
+        }
     }
 
     // The ordered channel list the player zaps within (CH+/CH-, D-pad up/down) and shows in the
@@ -1057,15 +1184,7 @@ class LiveViewModel(
     }
 
     /** Final startup/deep-entry visibility check, including profile source and Customize policy. */
-    suspend fun isVisibleToActiveProfile(channel: ChannelEntity): Boolean {
-        val current = ctx.first { it.profileId >= 0L }
-        if (channel.sourceId !in current.sourceIds) return false
-        if (!tv.own.owntv.core.content.AdultCategoryClassifier.allows(current.profileId, channel.categoryId, profileDao, categoryDao)) return false
-        val customizations = customize.observe(current.profileId, MediaType.LIVE).first()
-        if (CustomizeKeys.channel(channel) in customizations.hiddenItems) return false
-        val category = channel.categoryId?.let { categoryDao.getById(it) }
-        return category == null || CustomizeKeys.category(category) !in customizations.hiddenCategories
-    }
+    suspend fun isVisibleToActiveProfile(channel: ChannelEntity): Boolean = canAccess(channel)
 
     /** Open a channel fullscreen, preserving the browse context it was launched from. The channel's
      *  provider category is metadata (used by [previewCategoryName]); it must not replace Favorites,
@@ -1223,6 +1342,7 @@ class LiveViewModel(
             if (_previewChannel.value?.id != currentChannel.id ||
                 ctx.value.sourceIds != snapshotSourceIds
             ) return tv.own.owntv.player.DirectTuneResult.Cancelled
+            if (!canAccess(tuned)) return tv.own.owntv.player.DirectTuneResult.NotFound(number)
 
             // If the tuned channel is already playing, skip playback + rebuild to avoid a stream
             // restart. Still return Found so the HUD shows normal success feedback.
@@ -1293,7 +1413,7 @@ class LiveViewModel(
     fun playExternal(channel: ChannelEntity) {
         viewModelScope.launch {
             val pid = currentProfileId() ?: return@launch
-            if (!tv.own.owntv.core.content.AdultCategoryClassifier.allows(pid, channel.categoryId, profileDao, categoryDao)) return@launch
+            if (!canAccess(channel, pid)) return@launch
             val source = withContext(Dispatchers.IO) { sourceDao.getById(channel.sourceId) }
             val url = if (streamUrlResolver.needsResolve(source)) {
                 withContext(Dispatchers.IO) {
@@ -1340,7 +1460,7 @@ class LiveViewModel(
      *  so the in-flight rebuild it owns isn't killed by its own play. */
     private suspend fun playChannel(channel: ChannelEntity) {
         val pid = currentProfileId() ?: return
-        if (!tv.own.owntv.core.content.AdultCategoryClassifier.allows(pid, channel.categoryId, profileDao, categoryDao)) return
+        if (!canAccess(channel, pid)) return
         // Live TV set to play externally: hand the channel over instead of tuning an in-app engine.
         // History is still recorded, so the channel shows up in History/Recently watched either way.
         // #115 — a protected channel stays in-app whatever this setting says: no standard intent extra
@@ -1399,6 +1519,7 @@ class LiveViewModel(
      *  playback browse/zap context instead of replacing it with provider-category metadata. */
     suspend fun ensurePlayingByIdAsync(channelId: Long, zapChannels: List<ChannelEntity> = emptyList()): Boolean {
         val channel = channelDao.getById(channelId) ?: return false
+        if (!canAccess(channel)) return false
         if (zapChannels.isEmpty()) {
             // A single Home "continue watching" tile has no browse rail of its own.
             zapList.armFor(channel)
@@ -1425,6 +1546,7 @@ class LiveViewModel(
         historyJob = viewModelScope.launch {
             if (!immediate) delay(HISTORY_DEBOUNCE_MS)
             val pid = currentProfileId() ?: return@launch
+            if (!canAccess(channel, pid)) return@launch
             Log.d(TAG, "ensurePlaying history profile=$pid channelId=${channel.id}")
             runCatching {
                 historyDao.record(WatchHistoryEntity(profileId = pid, mediaType = MediaType.LIVE, itemId = channel.id))
@@ -1475,7 +1597,7 @@ class LiveViewModel(
     fun playCatchupExternal(ch: ChannelEntity, programme: tv.own.owntv.core.database.entity.EpgProgrammeEntity) {
         viewModelScope.launch {
             val pid = currentProfileId() ?: return@launch
-            if (!tv.own.owntv.core.content.AdultCategoryClassifier.allows(pid, ch.categoryId, profileDao, categoryDao)) return@launch
+            if (!canAccess(ch, pid)) return@launch
             val url = archiveUrls.forProgramme(ch, programme) ?: run {
                 _catchupUnavailable.tryEmit(Unit)
                 return@launch
@@ -1502,7 +1624,7 @@ class LiveViewModel(
         // over the programme a moment later.
         live.launch {
             val pid = currentProfileId() ?: return@launch
-            if (!tv.own.owntv.core.content.AdultCategoryClassifier.allows(pid, ch.categoryId, profileDao, categoryDao)) return@launch
+            if (!canAccess(ch, pid)) return@launch
             val url = archiveUrls.forProgramme(ch, programme) ?: run {
                 _catchupUnavailable.tryEmit(Unit)
                 return@launch
@@ -1635,12 +1757,14 @@ class LiveViewModel(
      *  it live would. Without that the channel-list overlay and zapping stay dead for the session. */
     fun playCatchupAt(ch: ChannelEntity, offsetSec: Int) {
         if (!ch.catchup) return
-        if (ch.categoryId != null && ch.categoryId in hiddenCategoryIds.value) return
-        zapList.armFor(ch)
-        _previewChannel.value = ch
-        _catchupActive.value = false
-        timeshift.beginAt(ch, offsetSec)
-        recordLiveHistory(ch, immediate = true)
+        viewModelScope.launch {
+            if (!canAccess(ch)) return@launch
+            zapList.armFor(ch)
+            _previewChannel.value = ch
+            _catchupActive.value = false
+            timeshift.beginAt(ch, offsetSec)
+            recordLiveHistory(ch, immediate = true)
+        }
     }
 
     /** Move [deltaSec] further back (+) or toward live (−) into the archive (also drives the timeline
@@ -1668,6 +1792,7 @@ class LiveViewModel(
      * was being resolved.
      */
     private suspend fun loadArchiveStream(ch: ChannelEntity, startMs: Long, offsetSec: Int): Boolean {
+        if (!canAccess(ch)) return false
         val (url, sourceUa) = withContext(Dispatchers.IO) {
             val source = sourceDao.getById(ch.sourceId) ?: return@withContext null
             val tz = settings.resolveCatchupTimeZone(source)
@@ -1707,6 +1832,8 @@ class LiveViewModel(
     }
 
     fun stopPreview() {
+        previewAuthorizationJob?.cancel()
+        previewAuthorizationJob = null
         live.stop() // both engines, every watcher and the give-up alarm, and the reconnect link
         _previewChannel.value = null
     }
@@ -1804,6 +1931,23 @@ class LiveViewModel(
     private suspend fun currentProfileId(): Long? {
         val preferred = settings.activeProfileId.first()
         return if (preferred >= 0) profileDao.resolveExistingProfileId(preferred) else null
+    }
+
+    /** Final authorization barrier for every live stream, archive, preview and recording entry. */
+    private suspend fun canAccess(channel: ChannelEntity): Boolean = canAccess(channel, currentProfileId())
+
+    private suspend fun canAccess(channel: ChannelEntity, profileId: Long?): Boolean {
+        profileId ?: return false
+        // Lists decorate rows with profile-specific names. Use the persisted provider identity for
+        // M3U fallback keys, otherwise a renamed stale row could bypass a newly hidden channel.
+        val stored = channelDao.getById(channel.id)?.takeIf { it.sourceId == channel.sourceId } ?: return false
+        return contentAccess.allows(
+            profileId = profileId,
+            type = MediaType.LIVE,
+            itemKey = CustomizeKeys.channel(stored),
+            categoryId = stored.categoryId,
+            sourceId = stored.sourceId,
+        )
     }
 
     private fun pagingSource(key: LiveKey, c: Ctx, query: String, sort: SettingsRepository.SortMode): PagingSource<Int, ChannelEntity> =

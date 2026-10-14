@@ -3,11 +3,13 @@ package tv.own.owntv.player
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -15,6 +17,7 @@ import org.junit.Test
 import tv.own.owntv.core.database.entity.ChannelEntity
 import tv.own.owntv.core.database.entity.SourceEntity
 import tv.own.owntv.core.player.EnginePreference
+import tv.own.owntv.core.model.SourceType
 import tv.own.owntv.core.stalker.ReconnectUrlProvider
 
 /**
@@ -254,5 +257,43 @@ class LiveTuneControllerTest {
         c.tune(channel(11))
         runCurrent()
         assertEquals(listOf("exo:${channel(11).streamUrl}", "exo-unmute"), engines.log)
+    }
+
+    @Test
+    fun `late preview resolution cannot reopen exo over a newer mpv tune`() = runTest {
+        val engines = FakeEngines()
+        val resolved = CompletableDeferred<String>()
+        val stalker = SourceEntity(
+            id = 1,
+            name = "portal",
+            type = SourceType.STALKER,
+            url = "http://portal.invalid",
+            mac = "00:11:22:33:44:55",
+        )
+        val base = FakeHost(this).apply { preference = EnginePreference.MPV_FIRST }
+        val host = object : LiveTuneController.Host by base {
+            override suspend fun sourceOf(sourceId: Long): SourceEntity? = stalker.takeIf { sourceId == 1L }
+            override fun needsResolve(source: SourceEntity?) = source?.type == SourceType.STALKER
+            override suspend fun resolve(source: SourceEntity, cmd: String): String? =
+                withContext(NonCancellable) { resolved.await() }
+        }
+        val c = LiveTuneController(backgroundScope, engines, host)
+        val preview = channel(20)
+        val fullscreen = channel(21).copy(sourceId = 2)
+
+        c.preview(preview, muted = true)
+        runCurrent() // preview is inside the provider resolver
+        c.tune(fullscreen)
+        runCurrent()
+        assertEquals(listOf("mpv:${fullscreen.streamUrl}"), engines.log)
+
+        resolved.complete("http://portal.invalid/late-preview.ts")
+        runCurrent()
+
+        assertEquals(
+            "the cancelled preview must not claim ExoPlayer after mpv took fullscreen",
+            listOf("mpv:${fullscreen.streamUrl}"),
+            engines.log,
+        )
     }
 }

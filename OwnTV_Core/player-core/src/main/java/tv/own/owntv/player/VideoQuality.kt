@@ -64,6 +64,27 @@ object VideoQuality {
         val limit = cap ?: return null
         return (sized.filter { it.second <= limit }.maxByOrNull { it.second } ?: sized.minByOrNull { it.second })?.first
     }
+
+    /** Selecting Auto with no Settings cap must actively return mpv to its adaptive/default choice.
+     * `mpvTrack` returns null both for that command and for a genuinely single-quality stream, so the
+     * caller uses this predicate to distinguish them instead of leaving the last manual track pinned. */
+    fun mpvShouldUseAuto(tracks: List<Pair<Int, Int>>, cap: Int?, pick: Int?): Boolean =
+        cap == null && pick == null && heights(tracks.map { it.second }).isNotEmpty()
+}
+
+/**
+ * The manual quality shown by the HUD belongs to one media URL only.
+ *
+ * Keeping this transition as a tiny value policy makes the renderer hand-off rule testable without
+ * constructing an Android player: reopening the same item retains its pick, while entering another
+ * title atomically moves the shared UI state to Auto before that title exposes its tracks.
+ */
+internal data class VideoQualityPickState(
+    val itemUrl: String? = null,
+    val height: Int? = null,
+) {
+    fun forItem(url: String): VideoQualityPickState =
+        if (itemUrl == url) this else VideoQualityPickState(itemUrl = url, height = null)
 }
 
 /**

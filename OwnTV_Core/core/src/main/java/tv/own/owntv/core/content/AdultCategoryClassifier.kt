@@ -65,7 +65,10 @@ object AdultCategoryClassifier {
         if (profileId < 0L) return false
         val profile = profileDao.getById(profileId) ?: return false
         if (!profile.isKids) return true
-        val categoryName = categoryId?.let { categoryDao.getById(it)?.name }
+        // A kids profile may only open content whose category can actually be classified. Providers
+        // sometimes omit category ids and stale deep links can point at a category removed by sync;
+        // treating either case as safe would turn missing metadata into a parental-control bypass.
+        val categoryName = categoryId?.let { categoryDao.getById(it)?.name } ?: return false
         return !isAdult(categoryName)
     }
 

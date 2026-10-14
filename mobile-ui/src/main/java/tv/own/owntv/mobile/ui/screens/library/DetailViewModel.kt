@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tv.own.owntv.core.content.AdultCategoryClassifier
+import tv.own.owntv.core.content.ContentAccessPolicy
+import tv.own.owntv.core.customize.CustomizeKeys
 import tv.own.owntv.core.database.dao.CategoryDao
 import tv.own.owntv.core.database.dao.FavoriteDao
 import tv.own.owntv.core.database.dao.LinkedSubtitle
@@ -66,6 +68,7 @@ class DetailViewModel(
     private val seriesSortOrderDao: SeriesSortOrderDao,
     private val metadata: MetadataRepository,
     private val subtitleController: SubtitleController,
+    private val contentAccess: ContentAccessPolicy,
 ) : ViewModel() {
 
     private data class Target(val tab: LibraryTab, val id: Long)
@@ -226,13 +229,31 @@ class DetailViewModel(
         viewModelScope.launch {
             profileId.value = currentProfileId() ?: -1L
             if (tab == LibraryTab.MOVIES) {
-                _movie.value = movieDao.getById(id)
+                val entity = movieDao.getById(id)
+                _movie.value = entity?.takeIf {
+                    contentAccess.allows(
+                        profileId.value,
+                        MediaType.MOVIE,
+                        CustomizeKeys.movie(it),
+                        it.categoryId,
+                        it.sourceId,
+                    )
+                }
                 return@launch
             }
             _loading.value = true
             val entity = seriesDao.getSeriesById(id)
-            _show.value = entity
-            if (entity != null) seriesRepository.loadEpisodes(entity)
+            val allowed = entity?.takeIf {
+                contentAccess.allows(
+                    profileId.value,
+                    MediaType.SERIES,
+                    CustomizeKeys.series(it),
+                    it.categoryId,
+                    it.sourceId,
+                )
+            }
+            _show.value = allowed
+            if (allowed != null) seriesRepository.loadEpisodes(allowed)
             _loading.value = false
             val pid = profileId.value
             val lastWatched = if (pid >= 0) progressDao.lastWatchedEpisodeId(pid, id) else null
@@ -334,7 +355,7 @@ class DetailViewModel(
             val pid = profileId.value.takeIf { it >= 0 } ?: return@launch
             val film = movie.value
             if (film != null) {
-                if (!AdultCategoryClassifier.allows(pid, film.categoryId, profileDao, categoryDao)) return@launch
+                if (!contentAccess.allows(pid, film)) return@launch
                 downloadManager.enqueue(
                     profileId = pid,
                     mediaType = MediaType.MOVIE,
@@ -349,7 +370,7 @@ class DetailViewModel(
                 return@launch
             }
             val current = show.value ?: return@launch
-            if (!AdultCategoryClassifier.allows(pid, current.categoryId, profileDao, categoryDao)) return@launch
+            if (!contentAccess.allows(pid, current)) return@launch
             seriesDao.episodesBySeriesOnce(current.id).forEach { downloadEpisode(current, it, pid) }
         }
     }
@@ -358,14 +379,21 @@ class DetailViewModel(
         viewModelScope.launch {
             val pid = profileId.value.takeIf { it >= 0 } ?: return@launch
             val current = show.value ?: return@launch
-            if (!AdultCategoryClassifier.allows(pid, current.categoryId, profileDao, categoryDao)) return@launch
+            if (episode.seriesId != current.id) return@launch
+            if (!contentAccess.allows(pid, episode)) return@launch
             downloadEpisode(current, episode, pid)
         }
     }
 
     /** Start the failed rows over — the button that showed the failure is the one that retries it. */
     fun retryDownloads(rows: List<DownloadEntity>) {
-        rows.filter { it.status == DownloadStatus.FAILED }.forEach { downloadManager.retry(it) }
+        viewModelScope.launch {
+            val pid = profileId.value.takeIf { it >= 0 } ?: return@launch
+            val allowed = movie.value?.let { contentAccess.allows(pid, it) }
+                ?: show.value?.let { contentAccess.allows(pid, it) }
+                ?: false
+            if (allowed) rows.filter { it.status == DownloadStatus.FAILED }.forEach { downloadManager.retry(it) }
+        }
     }
 
     /** Cancel what is in flight, or remove what has already been saved. Both are one tap, both undoable. */

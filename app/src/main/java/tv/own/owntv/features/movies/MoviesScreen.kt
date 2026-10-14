@@ -111,7 +111,7 @@ import tv.own.owntv.ui.components.gridFocusTarget
 import androidx.compose.foundation.layout.width
 import tv.own.owntv.ui.components.SearchBar
 import tv.own.owntv.ui.components.trapAllFocusExit
-import tv.own.owntv.ui.components.trapVerticalFocusExit
+import tv.own.owntv.ui.components.trapDownFocusExit
 import tv.own.owntv.ui.components.SortChip
 import tv.own.owntv.ui.components.formatCount
 import tv.own.owntv.ui.components.ContentPanelFill
@@ -589,12 +589,12 @@ fun MoviesScreen(
                         }
                     }
                 }
-                // Held Up/Down can outrun the lazy grid's composition and escape this pane
-                // (landing on the top bar) — trap vertical exits; Left/Right/Back leave normally.
+                // Held Down can outrun the lazy grid's composition, so keep the bottom edge closed.
+                // Up intentionally remains open so the shell can return focus to global navigation.
                 // Plan Z — while pinned there IS somewhere above to go: the More screen's tab
                 // strip. It owns the trap instead, so Up reaches the tabs and still cannot escape
                 // past them to the shell's top bar.
-                .then(if (lockedKey == null) Modifier.trapVerticalFocusExit() else Modifier)
+                .then(if (lockedKey == null) Modifier.trapDownFocusExit() else Modifier)
                 .focusGroup()
         ) {
             if (cinematic) {

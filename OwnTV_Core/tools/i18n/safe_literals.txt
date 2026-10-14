@@ -19,7 +19,7 @@
 # category protocol: Stable protocol or comparison identifier.
 # category technical: Reviewed non-user-facing technical literal.
 
-2	empty	core/src/main/java/tv/own/owntv/core/CoreBuildInfo.kt	\0
+3	empty	core/src/main/java/tv/own/owntv/core/CoreBuildInfo.kt	\0
 1	technical	core/src/main/java/tv/own/owntv/core/CoreBuildInfo.kt	ahXN00/OwnTV
 1	log	core/src/main/java/tv/own/owntv/core/CorePerf.kt	OwnTVPerf
 3	technical	core/src/main/java/tv/own/owntv/core/backup/BackupContainer.kt	..
@@ -1878,6 +1878,7 @@
 1	empty	core/src/main/java/tv/own/owntv/core/i18n/LocaleStore.kt	\0
 1	technical	core/src/main/java/tv/own/owntv/core/i18n/LocaleStore.kt	Failed to persist application locale
 1	assertion	core/src/main/java/tv/own/owntv/core/i18n/LocaleStore.kt	Unsupported application locale: ${tag.trim()}
+1	locale	core/src/main/java/tv/own/owntv/core/i18n/LocaleStore.kt	es-US
 1	technical	core/src/main/java/tv/own/owntv/core/i18n/LocaleStore.kt	owntv_locale
 1	preference-key	core/src/main/java/tv/own/owntv/core/i18n/LocaleStore.kt	ui_language
 3	uri	core/src/main/java/tv/own/owntv/core/launcher/LauncherDeepLink.kt	episode
@@ -2126,6 +2127,10 @@
 2	json	core/src/main/java/tv/own/owntv/core/model/HomeRow.kt	order
 2	preference-key	core/src/main/java/tv/own/owntv/core/model/HomeRow.kt	recentLiveMode
 2	json	core/src/main/java/tv/own/owntv/core/model/HomeRow.kt	trendingStyle
+1	assertion	core/src/main/java/tv/own/owntv/core/network/CatalogRetryPolicy.kt	baseDelayMs must be positive
+1	assertion	core/src/main/java/tv/own/owntv/core/network/CatalogRetryPolicy.kt	failedAttempt must be at least 1
+1	assertion	core/src/main/java/tv/own/owntv/core/network/CatalogRetryPolicy.kt	maxDelayMs must be at least baseDelayMs
+1	assertion	core/src/main/java/tv/own/owntv/core/network/CatalogRetryPolicy.kt	maxRetryAfterMs must not be negative
 1	url	core/src/main/java/tv/own/owntv/core/network/DnsConfig.kt	$base${if ('?' in base) '&' else '?'}dns=$query
 1	technical	core/src/main/java/tv/own/owntv/core/network/DnsConfig.kt	${cfg.dohUrl}|${cfg.host}:${cfg.port}|$hostname
 2	technical	core/src/main/java/tv/own/owntv/core/network/DnsConfig.kt	Accept
@@ -2159,6 +2164,7 @@
 1	log	core/src/main/java/tv/own/owntv/core/network/HttpClient.kt	GET start url=$safeUrl ua=${ua.take(48)} attempt=$attempt/$attempts
 1	log	core/src/main/java/tv/own/owntv/core/network/HttpClient.kt	HTTP ${response.code} for ${redact(url)}
 2	log	core/src/main/java/tv/own/owntv/core/network/HttpClient.kt	HttpClient
+1	protocol	core/src/main/java/tv/own/owntv/core/network/HttpClient.kt	Retry-After
 1	protocol	core/src/main/java/tv/own/owntv/core/network/HttpClient.kt	Transfer-Encoding
 1	log	core/src/main/java/tv/own/owntv/core/network/HttpClient.kt	User-Agent
 1	log	core/src/main/java/tv/own/owntv/core/network/HttpClient.kt	VLC/3.0.20 LibVLC/3.0.20
@@ -3517,13 +3523,14 @@
 1	log	core/src/main/java/tv/own/owntv/core/sync/work/CatalogSyncScheduler.kt	ConnectionMeasurement
 1	log	core/src/main/java/tv/own/owntv/core/sync/work/CatalogSyncScheduler.kt	backfill enqueued sourceId=$sourceId delayMinutes=$initialDelayMinutes
 1	technical	core/src/main/java/tv/own/owntv/core/sync/work/CatalogSyncScheduler.kt	backfill-source-$sourceId
+1	technical	core/src/main/java/tv/own/owntv/core/sync/work/CatalogSyncScheduler.kt	catalog-refresh-periodic-source-$sourceId
 1	log	core/src/main/java/tv/own/owntv/core/sync/work/CatalogSyncScheduler.kt	catalog-sync
 1	technical	core/src/main/java/tv/own/owntv/core/sync/work/CatalogSyncScheduler.kt	catalog-sync-source-$sourceId
 1	technical	core/src/main/java/tv/own/owntv/core/sync/work/CatalogSyncScheduler.kt	fresh_sync
 1	technical	core/src/main/java/tv/own/owntv/core/sync/work/CatalogSyncScheduler.kt	manual
 1	technical	core/src/main/java/tv/own/owntv/core/sync/work/CatalogSyncScheduler.kt	measure-source-$sourceId
 1	log	core/src/main/java/tv/own/owntv/core/sync/work/CatalogSyncScheduler.kt	measurement enqueued sourceId=$sourceId
-1	technical	core/src/main/java/tv/own/owntv/core/sync/work/CatalogSyncScheduler.kt	source-$sourceId
+2	technical	core/src/main/java/tv/own/owntv/core/sync/work/CatalogSyncScheduler.kt	source-$sourceId
 1	protocol	core/src/main/java/tv/own/owntv/core/sync/work/CatalogSyncScheduler.kt	trending-source-$sourceId
 1	technical	core/src/main/java/tv/own/owntv/core/sync/work/CatalogSyncWorker.kt	Cancelled
 1	log	core/src/main/java/tv/own/owntv/core/sync/work/CatalogSyncWorker.kt	CatalogSyncWorker
@@ -3601,6 +3608,9 @@
 1	log	core/src/main/java/tv/own/owntv/core/sync/work/EpgSyncWorker.kt	series rules not applied after EPG sync: ${it.message}
 1	preference-key	core/src/main/java/tv/own/owntv/core/sync/work/EpgSyncWorker.kt	sourceId
 1	technical	core/src/main/java/tv/own/owntv/core/sync/work/EpgSyncWorker.kt	unknown
+1	technical	core/src/main/java/tv/own/owntv/core/sync/work/PeriodicCatalogRefreshWorker.kt	catalog-periodic-refresh
+1	technical	core/src/main/java/tv/own/owntv/core/sync/work/PeriodicCatalogRefreshWorker.kt	periodic_2h
+1	technical	core/src/main/java/tv/own/owntv/core/sync/work/PeriodicCatalogRefreshWorker.kt	sourceId
 1	log	core/src/main/java/tv/own/owntv/core/sync/work/TrendingRefreshWorker.kt	Finished sourceId=$sourceId outcome=${outcome.diagnosticName()}
 1	log	core/src/main/java/tv/own/owntv/core/sync/work/TrendingRefreshWorker.kt	TrendingRefreshWorker
 1	log	core/src/main/java/tv/own/owntv/core/sync/work/TrendingRefreshWorker.kt	Unexpected refresh failure sourceId=$sourceId; preserving snapshot
@@ -3830,24 +3840,31 @@
 1	log	core/src/main/java/tv/own/owntv/core/tv/TvHomeRepository.kt	syncMovie profile=$profileId movieId=$movieId groupId=$groupId existing=${existing?.providerProgramId ?: -1}
 1	log	core/src/main/java/tv/own/owntv/core/tv/TvHomeRepository.kt	syncMovie skip hidden profile=$profileId movieId=$movieId sourceId=${movie.sourceId}
 1	log	core/src/main/java/tv/own/owntv/core/tv/TvHomeRepository.kt	syncMovie skip user-hidden profile=$profileId movieId=$movieId groupId=$groupId
+2	empty	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	\0
+2	technical	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	%02x
 1	technical	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	.apk
+1	log	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	APK signature does not match installed ZenPlay
 1	technical	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	Accept
-2	technical	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	OwnTV
+3	compiler	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	DEPRECATION
+2	technical	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	SHA-256
+1	log	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	SHA-256 mismatch
 1	log	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	UpdateManager
 2	technical	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	User-Agent
+2	technical	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	ZenPlay-TV
 1	mime	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	application/vnd.github+json
 1	json	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	assets
 1	json	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	body
-1	json	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	browser_download_url
+2	json	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	browser_download_url
+1	json	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	digest
 1	url	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	https://api.github.com/repos/${CoreBuildInfo.releaseRepo}/releases/latest
 1	log	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	install cancelled by user
 1	log	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	install refused status=$status message=$message
-1	json	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	name
-1	file-path	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	owntv-update
-1	file-path	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	owntv-update.apk
+3	json	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	name
+1	log	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	non-upgrade versionCode $updateVersionCode <= $installedVersionCode
+1	protocol	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	sha256:
 1	json	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	tag_name
 1	log	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	truncated: got $copied of $total bytes
-1	uri	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	tv.own.owntv.UPDATE_INSTALL_STATUS
+1	uri	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	tv.zenplay.universal.UPDATE_INSTALL_STATUS
 1	log	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	unparseable APK (${apk.length()} bytes)
 1	log	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	update check failed: ${error.message}
 1	log	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	update download failed: ${error.message}
@@ -3856,6 +3873,8 @@
 1	technical	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	v
 1	log	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	wrong package ${info.packageName}
 2	technical	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	x86_64
+1	file-path	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	zenplay-update
+1	file-path	core/src/main/java/tv/own/owntv/core/update/UpdateManager.kt	zenplay-update.apk
 1	technical	core/src/main/java/tv/own/owntv/core/util/CrashRecorder.kt	Crashed $stamp on thread "${thread.name}"
 1	technical	core/src/main/java/tv/own/owntv/core/util/CrashRecorder.kt	OwnTV ${CoreBuildInfo.versionName} (${CoreBuildInfo.versionCode})
 1	file-path	core/src/main/java/tv/own/owntv/core/util/CrashRecorder.kt	diagnostics

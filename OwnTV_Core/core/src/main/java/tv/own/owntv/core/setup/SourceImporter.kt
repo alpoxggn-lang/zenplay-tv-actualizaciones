@@ -10,7 +10,6 @@ import kotlinx.coroutines.withContext
 import tv.own.owntv.core.backup.BackupManager
 import tv.own.owntv.core.database.dao.ProfileDao
 import tv.own.owntv.core.database.dao.SourceDao
-import tv.own.owntv.core.database.entity.ProfileEntity
 import tv.own.owntv.core.database.entity.ProfileSourceCrossRef
 import tv.own.owntv.core.database.entity.SourceEntity
 import tv.own.owntv.core.launcher.LauncherIntegrationRepository
@@ -31,7 +30,8 @@ import tv.own.owntv.core.sync.SyncScopeChoice
 import tv.own.owntv.core.sync.SyncWarning
 import tv.own.owntv.core.sync.work.CatalogSyncScheduler
 import tv.own.owntv.core.util.FriendlySyncFailure
-import tv.own.owntv.core.util.Pin
+import tv.own.owntv.core.profile.ProfileAuthorization
+import tv.own.owntv.core.profile.ProfileManager
 import tv.own.owntv.core.util.classifySyncFailure
 import java.io.File
 
@@ -56,6 +56,7 @@ class SourceImporter(
     private val launcherIntegrationRepository: LauncherIntegrationRepository,
     private val catalogSyncScheduler: CatalogSyncScheduler,
     private val stalkerAuth: StalkerAuthManager,
+    private val profileManager: ProfileManager,
 ) {
 
     sealed interface SetupFailure {
@@ -103,18 +104,23 @@ class SourceImporter(
     private var createdProfileName = ""
 
     /** Creates the profile (not active yet); the rest of onboarding attaches content to it. */
-    suspend fun createProfile(name: String, avatarId: Int, isKids: Boolean, pin: String?): Long {
+    suspend fun createProfile(
+        name: String,
+        avatarId: Int,
+        isKids: Boolean,
+        pin: String?,
+        authorization: ProfileAuthorization? = null,
+    ): Long? {
         createdProfileName = name
-        createdProfileId = profileDao.insert(
-            ProfileEntity(
-                name = name,
-                avatarColor = 0,
-                avatarId = avatarId,
-                isKids = isKids,
-                pinHash = pin?.takeIf { it.isNotBlank() }?.let { Pin.hash(it) },
-            ),
-        )
-        return createdProfileId
+        createdProfileId = profileManager.create(
+            name = name,
+            avatarId = avatarId,
+            isKids = isKids,
+            pin = pin,
+            fallbackName = name,
+            authorization = authorization,
+        ) ?: -1L
+        return createdProfileId.takeIf { it > 0L }
     }
 
     /**
@@ -437,7 +443,13 @@ class SourceImporter(
 
     private suspend fun ensureFallbackProfile(): Long {
         if (createdProfileId > 0) return createdProfileId
-        createdProfileId = profileDao.insert(ProfileEntity(name = createdProfileName, avatarColor = 0, avatarId = 0))
+        createdProfileId = profileManager.create(
+            name = createdProfileName,
+            avatarId = 0,
+            isKids = false,
+            pin = null,
+            fallbackName = createdProfileName,
+        ) ?: error("Profile creation requires adult authorization")
         return createdProfileId
     }
 

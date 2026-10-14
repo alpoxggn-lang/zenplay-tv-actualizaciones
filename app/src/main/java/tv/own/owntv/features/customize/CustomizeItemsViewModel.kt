@@ -42,6 +42,7 @@ import tv.own.owntv.core.customize.moveBlock
 import tv.own.owntv.core.customize.CustomizationStore
 import tv.own.owntv.core.customize.CustomizeKeys
 import tv.own.owntv.core.model.MediaType
+import tv.own.owntv.core.profile.ProfileCustomizationAccess
 import tv.own.owntv.core.repository.ActiveProfileSources
 import tv.own.owntv.core.repository.activeProfileSources
 import tv.own.owntv.core.settings.SettingsRepository
@@ -69,6 +70,7 @@ class CustomizeItemsViewModel(
     private val contentOrderDao: ContentOrderDao,
     private val customCategoryDao: CustomCategoryDao,
     private val customize: CustomizationStore,
+    private val customizationAccess: ProfileCustomizationAccess,
 ) : ViewModel() {
 
     private data class Ctx(val profileId: Long, val sources: List<tv.own.owntv.core.database.entity.SourceEntity>) {
@@ -79,6 +81,9 @@ class CustomizeItemsViewModel(
         .map { aps -> Ctx(aps.profileId, aps.sources) }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, Ctx(-1L, emptyList()))
+
+    private suspend fun authorizeWrite(profileId: Long = ctx.value.profileId): Boolean =
+        profileId >= 0L && customizationAccess.authorizeWrite(profileId)
 
     /** The category whose items are shown. Set via [open], cleared via [close]. [categoryId] is null
      *  for a user's custom combined category (issue #87) — its items live in the membership table. */
@@ -187,6 +192,7 @@ class CustomizeItemsViewModel(
         val keys = span.keysInRange(endRow) ?: return
         val ci = _catInfo.value ?: return
         viewModelScope.launch {
+            if (!authorizeWrite()) return@launch
             val labels = loadedRows.value.filter { it.key in keys }.associate { it.key to it.originalName }
             customize.setItemsHidden(ctx.value.profileId, ci.mediaType, labels, hidden)
         }
@@ -230,6 +236,7 @@ class CustomizeItemsViewModel(
     /** Writes the full resulting order for this context (the Move commit point). */
     private suspend fun persistOrder(ci: CatInfo, orderedIds: List<Long>) {
         val pid = ctx.value.profileId
+        if (!authorizeWrite(pid)) return
         contentOrderDao.replaceContext(
             profileId = pid,
             type = ci.mediaType,
@@ -252,6 +259,7 @@ class CustomizeItemsViewModel(
     fun move(row: CustomizeItemRow, up: Boolean) {
         val ci = _catInfo.value ?: return
         viewModelScope.launch {
+            if (!authorizeWrite()) return@launch
             runMove(ci) { snapshot ->
                 val index = snapshot.indexOfFirst { it.second == row.key }
                 if (index < 0) return@runMove null
@@ -264,6 +272,7 @@ class CustomizeItemsViewModel(
     fun moveToEdge(row: CustomizeItemRow, top: Boolean) {
         val ci = _catInfo.value ?: return
         viewModelScope.launch {
+            if (!authorizeWrite()) return@launch
             runMove(ci) { snapshot ->
                 val index = snapshot.indexOfFirst { it.second == row.key }
                 if (index < 0) return@runMove null
@@ -279,6 +288,7 @@ class CustomizeItemsViewModel(
         val anchorKey = span.anchorKey.value ?: return
         val endKey = span.endKey.value ?: endRow.key
         viewModelScope.launch {
+            if (!authorizeWrite()) return@launch
             runMove(ci) { snapshot ->
                 val anchorIndex = snapshot.indexOfFirst { it.second == anchorKey }
                 val endIndex = snapshot.indexOfFirst { it.second == endKey }
@@ -371,7 +381,8 @@ class CustomizeItemsViewModel(
     fun setItemHidden(row: CustomizeItemRow, hidden: Boolean) {
         val ci = _catInfo.value ?: return
         viewModelScope.launch {
-            customize.setItemHidden(ctx.value.profileId, ci.mediaType, row.key, row.originalName, hidden)
+            val pid = ctx.value.profileId
+            if (authorizeWrite(pid)) customize.setItemHidden(pid, ci.mediaType, row.key, row.originalName, hidden)
         }
     }
 
@@ -379,7 +390,8 @@ class CustomizeItemsViewModel(
     fun renameItem(row: CustomizeItemRow, name: String?) {
         val ci = _catInfo.value ?: return
         viewModelScope.launch {
-            customize.renameItem(ctx.value.profileId, ci.mediaType, row.key, name)
+            val pid = ctx.value.profileId
+            if (authorizeWrite(pid)) customize.renameItem(pid, ci.mediaType, row.key, name)
         }
     }
 
@@ -393,11 +405,13 @@ class CustomizeItemsViewModel(
         scope = viewModelScope,
         persist = { renames ->
             val ci = _catInfo.value
-            if (ci != null) customize.applyBulkRenames(ctx.value.profileId, ci.mediaType, renames)
+            val pid = ctx.value.profileId
+            if (ci != null && authorizeWrite(pid)) customize.applyBulkRenames(pid, ci.mediaType, renames)
         },
         restore = { keys ->
             val ci = _catInfo.value
-            if (ci != null) customize.clearItemNames(ctx.value.profileId, ci.mediaType, keys)
+            val pid = ctx.value.profileId
+            if (ci != null && authorizeWrite(pid)) customize.clearItemNames(pid, ci.mediaType, keys)
         },
         existingNames = { selectedKeys ->
             val ci = _catInfo.value
@@ -432,6 +446,7 @@ class CustomizeItemsViewModel(
         val pid = ctx.value.profileId
         if (pid < 0) return
         viewModelScope.launch {
+            if (!authorizeWrite(pid)) return@launch
             val entries: List<Pair<String, String>> = when {
                 ci.isCustom -> when (ci.mediaType) {
                     MediaType.LIVE -> customCategoryDao.snapshotChannels(pid, ci.contextKey, ci.sourceIds, SNAPSHOT_LIMIT)
@@ -491,7 +506,8 @@ class CustomizeItemsViewModel(
     fun createCustomCategory(name: String) {
         val ci = _catInfo.value ?: return
         viewModelScope.launch {
-            customize.createCustomCategory(ctx.value.profileId, ci.mediaType, name)
+            val pid = ctx.value.profileId
+            if (authorizeWrite(pid)) customize.createCustomCategory(pid, ci.mediaType, name)
         }
     }
 
@@ -506,6 +522,7 @@ class CustomizeItemsViewModel(
         if (targetId == ci.contextKey) return
         viewModelScope.launch {
             val pid = ctx.value.profileId
+            if (!authorizeWrite(pid)) return@launch
             customCategoryDao.appendItem(pid, ci.mediaType, targetId, row.itemId)
             if (!keepInOrigin) {
                 when {

@@ -10,6 +10,9 @@ import kotlinx.coroutines.launch
 import tv.own.owntv.core.database.dao.ProfileDao
 import tv.own.owntv.core.database.entity.ProfileEntity
 import tv.own.owntv.core.profile.ProfileManager
+import tv.own.owntv.core.profile.ProfileAuthorization
+import tv.own.owntv.core.profile.ProfileManagementAction
+import tv.own.owntv.core.profile.ProfileManagementRequirement
 import tv.own.owntv.core.settings.SettingsRepository
 
 /** Who is watching: the list, the one in use, and the four things that can be done to a profile. */
@@ -43,20 +46,47 @@ class ProfilesViewModel(
     fun verifyPin(profile: ProfileEntity, pin: String): Boolean = manager.verifyPin(profile, pin)
 
     /** Make [profile] the one in use; [onSwitched] runs once the preference has actually committed. */
-    fun switchTo(profile: ProfileEntity, onSwitched: () -> Unit = {}) {
+    fun switchTo(
+        profile: ProfileEntity,
+        authorization: ProfileAuthorization? = null,
+        onResult: (Boolean) -> Unit = {},
+    ) {
         viewModelScope.launch {
-            manager.switchTo(profile.id)
-            onSwitched()
+            onResult(manager.switchTo(profile.id, authorization))
         }
     }
 
-    fun create(name: String, avatarId: Int, isKids: Boolean, pin: String?, fallbackName: String, onCreated: (Long) -> Unit = {}) {
-        viewModelScope.launch { onCreated(manager.create(name, avatarId, isKids, pin, fallbackName)) }
+    fun managementRequirement(
+        action: ProfileManagementAction,
+        target: ProfileEntity? = null,
+        onResult: (ProfileManagementRequirement) -> Unit,
+    ) {
+        viewModelScope.launch { onResult(manager.managementRequirement(action, target?.id)) }
+    }
+
+    fun create(
+        name: String,
+        avatarId: Int,
+        isKids: Boolean,
+        pin: String?,
+        fallbackName: String,
+        authorization: ProfileAuthorization? = null,
+        onCreated: (Long?) -> Unit = {},
+    ) {
+        viewModelScope.launch { onCreated(manager.create(name, avatarId, isKids, pin, fallbackName, authorization)) }
     }
 
     /** [pin]: null keeps the existing PIN, "" removes it. */
-    fun edit(profile: ProfileEntity, name: String, avatarId: Int, isKids: Boolean, pin: String?) {
-        viewModelScope.launch { manager.edit(profile, name, avatarId, isKids, pin) }
+    fun edit(
+        profile: ProfileEntity,
+        name: String,
+        avatarId: Int,
+        isKids: Boolean,
+        pin: String?,
+        authorization: ProfileAuthorization? = null,
+        onResult: (Boolean) -> Unit = {},
+    ) {
+        viewModelScope.launch { onResult(manager.edit(profile, name, avatarId, isKids, pin, authorization)) }
     }
 
     /**
@@ -64,21 +94,32 @@ class ProfilesViewModel(
      * scales it; [onResult] says whether it was a readable image, so the sheet can tell the user
      * rather than appearing to have ignored the tap.
      */
-    fun setPicture(profile: ProfileEntity, uri: android.net.Uri, onResult: (Boolean) -> Unit = {}) {
+    fun setPicture(
+        profile: ProfileEntity,
+        uri: android.net.Uri,
+        authorization: ProfileAuthorization? = null,
+        onResult: (Boolean) -> Unit = {},
+    ) {
         viewModelScope.launch {
             val ok = runCatching {
-                context.contentResolver.openInputStream(uri)?.use { manager.setCustomAvatar(profile, it) } ?: false
+                context.contentResolver.openInputStream(uri)?.use {
+                    manager.setCustomAvatar(profile, it, authorization)
+                } ?: false
             }.getOrDefault(false)
             onResult(ok)
         }
     }
 
     /** Drop [profile]'s picture; the drawn tile it already had comes back. */
-    fun clearPicture(profile: ProfileEntity) {
-        viewModelScope.launch { manager.clearCustomAvatar(profile) }
+    fun clearPicture(profile: ProfileEntity, authorization: ProfileAuthorization? = null) {
+        viewModelScope.launch { manager.clearCustomAvatar(profile, authorization) }
     }
 
-    fun delete(profile: ProfileEntity) {
-        viewModelScope.launch { manager.delete(profile) }
+    fun delete(
+        profile: ProfileEntity,
+        authorization: ProfileAuthorization? = null,
+        onResult: (Boolean) -> Unit = {},
+    ) {
+        viewModelScope.launch { onResult(manager.delete(profile, authorization)) }
     }
 }

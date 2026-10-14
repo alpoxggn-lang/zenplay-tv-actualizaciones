@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tv.own.owntv.core.content.AdultCategoryClassifier
+import tv.own.owntv.core.content.ContentAccessPolicy
 import tv.own.owntv.core.content.movieCountFlow
 import tv.own.owntv.core.content.moviePagingSource
 import tv.own.owntv.core.content.seriesCountFlow
@@ -114,6 +115,7 @@ class LibraryViewModel(
     private val vodTuner: VodTuner,
     private val metadata: MetadataRepository,
     private val subtitleController: SubtitleController,
+    private val contentAccess: ContentAccessPolicy,
 ) : ViewModel() {
 
     private val _tab = MutableStateFlow(LibraryTab.MOVIES)
@@ -573,7 +575,7 @@ class LibraryViewModel(
             val pid = ctx.value.profileId.takeIf { it >= 0 } ?: return@launch
             if (mediaType.value == MediaType.MOVIE) {
                 val movie = movieDao.getById(itemId) ?: return@launch
-                if (!AdultCategoryClassifier.allows(pid, movie.categoryId, profileDao, categoryDao)) return@launch
+                if (!contentAccess.allows(pid, movie)) return@launch
                 downloadManager.enqueue(
                     profileId = pid,
                     mediaType = MediaType.MOVIE,
@@ -587,7 +589,7 @@ class LibraryViewModel(
                 )
             } else {
                 val show = seriesDao.getSeriesById(itemId) ?: return@launch
-                if (!AdultCategoryClassifier.allows(pid, show.categoryId, profileDao, categoryDao)) return@launch
+                if (!contentAccess.allows(pid, show)) return@launch
                 seriesDao.episodesBySeriesOnce(show.id).forEach { episode ->
                     downloadManager.enqueue(
                         profileId = pid,
@@ -619,7 +621,18 @@ class LibraryViewModel(
 
     /** Start the failed rows over. */
     fun retryDownloads(rows: List<DownloadEntity>) {
-        rows.filter { it.status == DownloadStatus.FAILED }.forEach { downloadManager.retry(it) }
+        viewModelScope.launch {
+            val pid = ctx.value.profileId.takeIf { it >= 0 } ?: return@launch
+            rows.filter { it.status == DownloadStatus.FAILED }.forEach { row ->
+                val allowed = when (row.mediaType) {
+                    MediaType.MOVIE -> movieDao.getById(row.itemId)?.let { contentAccess.allows(pid, it) } == true
+                    MediaType.EPISODE -> seriesDao.getEpisodeById(row.itemId)
+                        ?.let { contentAccess.allows(pid, it) } == true
+                    else -> false
+                }
+                if (allowed) downloadManager.retry(row)
+            }
+        }
     }
 
     /** Cancel what is in flight, or remove what has already been saved. */

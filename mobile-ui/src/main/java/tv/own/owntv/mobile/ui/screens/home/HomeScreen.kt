@@ -78,8 +78,8 @@ import tv.own.owntv.mobile.ui.theme.MobilePosterShape
 /**
  * Home, on a phone.
  *
- * Trends and new arrivals lead, followed by the existing profile's optional continuation rows.
- * New arrivals open the same movie/series details as the library; continue rows resume playback.
+ * The cinematic highlight leads, followed by Continue watching, recent movies, recent or updated
+ * series, and live TV. New arrivals open the same details as the library; continue rows resume.
  */
 @Composable
 fun HomeScreen(
@@ -120,7 +120,13 @@ fun HomeScreen(
         return
     }
     val state = zenPlay.feed
-    val rows = state.config.visibleOrder.filter { it != HomeRow.TRENDING && state.hasContent(it) }
+    val rows = state.config.visibleOrder.filter { row ->
+        row != HomeRow.TRENDING && when (row) {
+            HomeRow.RECENT_MOVIES -> zenPlay.recentMovies.isNotEmpty()
+            HomeRow.RECENT_SERIES -> zenPlay.recentSeries.isNotEmpty()
+            else -> state.hasContent(row)
+        }
+    }
 
     LazyColumn(
         state = listState,
@@ -146,35 +152,6 @@ fun HomeScreen(
                 )
             }
         }
-        item(ZenPlayHomeSection.RECENT_MOVIES) {
-            RecentlyAddedRow(
-                title = stringResource(R.string.zenplay_home_recent_movies),
-                items = zenPlay.recentMovies,
-                itemId = { it.id },
-                itemName = { it.name },
-                itemPoster = { it.posterUrl },
-                itemRating = { it.rating },
-                sharedKey = { posterKey(LibraryTab.MOVIES.name, it.id) },
-                onOpen = { onOpenMovie(it.id) },
-                onMenu = { menuFor = ContentTarget(MediaType.MOVIE, it.id, it.name) },
-            )
-        }
-        item(ZenPlayHomeSection.RECENT_SERIES) {
-            RecentlyAddedRow(
-                title = stringResource(R.string.zenplay_home_recent_series),
-                items = zenPlay.recentSeries,
-                itemId = { it.id },
-                itemName = { it.name },
-                itemPoster = { it.posterUrl },
-                itemRating = { it.rating },
-                sharedKey = { posterKey(LibraryTab.SERIES.name, it.id) },
-                onOpen = { onOpenSeries(it.id) },
-                onMenu = { menuFor = ContentTarget(MediaType.SERIES, it.id, it.name) },
-            )
-        }
-        weather?.let { info ->
-            item("weather") { WeatherChip(info = info, fahrenheit = fahrenheit) }
-        }
         rows.forEach { row ->
             item(row.name) {
                 when (row) {
@@ -189,6 +166,28 @@ fun HomeScreen(
                             resumeGate(position) { vm.playEpisode(id, it, onPlayerOpened) }
                         },
                         onMenu = { menuFor = it },
+                    )
+                    HomeRow.RECENT_MOVIES -> RecentlyAddedRow(
+                        title = stringResource(R.string.zenplay_home_recent_movies),
+                        items = zenPlay.recentMovies,
+                        itemId = { it.id },
+                        itemName = { it.name },
+                        itemPoster = { it.posterUrl },
+                        itemRating = { it.rating },
+                        sharedKey = { posterKey(LibraryTab.MOVIES.name, it.id) },
+                        onOpen = { onOpenMovie(it.id) },
+                        onMenu = { menuFor = ContentTarget(MediaType.MOVIE, it.id, it.name) },
+                    )
+                    HomeRow.RECENT_SERIES -> RecentlyAddedRow(
+                        title = stringResource(R.string.zenplay_home_recent_series),
+                        items = zenPlay.recentSeries,
+                        itemId = { it.id },
+                        itemName = { it.name },
+                        itemPoster = { it.posterUrl },
+                        itemRating = { it.rating },
+                        sharedKey = { posterKey(LibraryTab.SERIES.name, it.id) },
+                        onOpen = { onOpenSeries(it.id) },
+                        onMenu = { menuFor = ContentTarget(MediaType.SERIES, it.id, it.name) },
                     )
                     HomeRow.RECENT_CHANNELS -> LiveRow(
                         title = stringResource(R.string.home_row_recent_channels),
@@ -229,6 +228,9 @@ fun HomeScreen(
                 }
             }
         }
+        weather?.let { info ->
+            item("weather") { WeatherChip(info = info, fahrenheit = fahrenheit) }
+        }
     }
 
     menuFor?.let { target ->
@@ -255,6 +257,9 @@ private fun HomeFeed.hasContent(row: HomeRow): Boolean = when (row) {
     // empty in that mode by design.
     HomeRow.TRENDING -> false // ZenPlay's catalog carousel is rendered separately.
     HomeRow.HERO -> heroItems.isNotEmpty()
+    // These catalogue rows live in ZenPlayHomeState rather than the shared HomeFeed. Their caller
+    // checks that state before invoking this helper.
+    HomeRow.RECENT_MOVIES, HomeRow.RECENT_SERIES -> false
     HomeRow.RECENT_CHANNELS -> when (config.recentLiveMode) {
         HomeLiveRowMode.CARDS -> recentLive.isNotEmpty()
         HomeLiveRowMode.ON_NOW -> recentGuide.hasContent

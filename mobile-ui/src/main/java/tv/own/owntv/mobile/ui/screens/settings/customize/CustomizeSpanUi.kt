@@ -29,7 +29,6 @@ import androidx.compose.ui.unit.dp
 import tv.own.owntv.core.customize.MoveKind
 import tv.own.owntv.core.customize.SpanSelector
 import tv.own.owntv.core.settings.SettingsRepository
-import tv.own.owntv.core.util.Pin
 import tv.own.owntv.mobile.R
 import tv.own.owntv.mobile.ui.components.MobileBottomSheet
 import tv.own.owntv.mobile.ui.components.MobileListRow
@@ -337,7 +336,11 @@ internal fun PinEditFlow(mode: PinEdit, onSetPin: (String?) -> Unit, onDone: () 
 
 /** The screen shown instead of Customize until the right PIN is typed. */
 @Composable
-internal fun CustomizePinGate(storedPin: String, onUnlock: () -> Unit) {
+internal fun CustomizePinGate(
+    storedPin: String,
+    verifyPin: (entered: String, stored: String) -> Boolean,
+    onUnlock: () -> Unit,
+) {
     var wrong by remember { mutableStateOf(false) }
     PinPromptDialog(
         title = stringResource(
@@ -345,14 +348,14 @@ internal fun CustomizePinGate(storedPin: String, onUnlock: () -> Unit) {
         ),
         description = stringResource(R.string.settings_customize_pin_locked),
         onSubmit = { entered ->
-            if (entered == storedPin || Pin.verify(entered, storedPin)) onUnlock() else wrong = true
+            if (verifyPin(entered, storedPin)) onUnlock() else wrong = true
         },
         onDismiss = { },
     )
 }
 
 @Composable
-private fun PinPromptDialog(
+internal fun PinPromptDialog(
     title: String,
     onSubmit: (String) -> Unit,
     onDismiss: () -> Unit,

@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import tv.own.owntv.core.content.AdultCategoryClassifier
+import tv.own.owntv.core.content.ContentAccessPolicy
 import tv.own.owntv.core.customize.CustomizationStore
 import tv.own.owntv.core.customize.CustomizeKeys
 import tv.own.owntv.core.customize.SectionCustomizations
@@ -42,6 +43,7 @@ import tv.own.owntv.core.database.dao.EpgDao
 import tv.own.owntv.core.database.dao.FavoriteDao
 import tv.own.owntv.core.database.dao.ProfileDao
 import tv.own.owntv.core.database.dao.SourceDao
+import tv.own.owntv.core.database.dao.resolveExistingProfileId
 import tv.own.owntv.core.database.entity.ChannelEntity
 import tv.own.owntv.core.database.entity.EpgProgrammeEntity
 import tv.own.owntv.core.database.entity.FavoriteEntity
@@ -127,6 +129,7 @@ class GuideViewModel(
     private val tuner: LiveTuner,
     private val recordings: tv.own.owntv.core.recording.RecordingManager,
     private val xtream: tv.own.owntv.core.parser.XtreamClient,
+    private val contentAccess: ContentAccessPolicy,
 ) : ViewModel() {
 
     /** The one candidate set the picker and auto-match read — filtered by no source. */
@@ -512,12 +515,13 @@ class GuideViewModel(
     /** Schedule it, or pull it from the archive when it has already been on. */
     fun record(channel: ChannelEntity, programme: EpgProgrammeEntity) {
         viewModelScope.launch {
-            val pid = settings.activeProfileId.first().takeIf { it >= 0 } ?: return@launch
-            val source = sourceDao.getById(channel.sourceId) ?: return@launch
+            val pid = currentProfileId() ?: return@launch
+            val storedChannel = authorizedStoredChannel(pid, channel) ?: return@launch
+            val source = sourceDao.getById(storedChannel.sourceId) ?: return@launch
             if (programme.stopMs <= System.currentTimeMillis()) {
                 recordings.recordFromArchive(
                     profileId = pid,
-                    channel = channel,
+                    channel = storedChannel,
                     programme = programme,
                     source = source,
                     timeZone = settings.resolveCatchupTimeZone(source),
@@ -529,13 +533,13 @@ class GuideViewModel(
             recordings.schedule(
                 tv.own.owntv.core.database.entity.RecordingEntity(
                     profileId = pid,
-                    sourceId = channel.sourceId,
-                    channelId = channel.id,
-                    channelName = channel.name,
-                    channelIconUrl = channel.logoUrl,
-                    epgChannelId = channel.epgChannelId,
-                    streamUrl = channel.streamUrl,
-                    httpHeaders = channel.httpHeaders,
+                    sourceId = storedChannel.sourceId,
+                    channelId = storedChannel.id,
+                    channelName = storedChannel.name,
+                    channelIconUrl = storedChannel.logoUrl,
+                    epgChannelId = storedChannel.epgChannelId,
+                    streamUrl = storedChannel.streamUrl,
+                    httpHeaders = storedChannel.httpHeaders,
                     title = programme.title,
                     description = programme.description,
                     programmeStartMs = programme.startMs,
@@ -565,8 +569,9 @@ class GuideViewModel(
     /** Record every future showing of this title on this channel. */
     fun recordSeries(channel: ChannelEntity, programme: EpgProgrammeEntity) {
         viewModelScope.launch {
-            val pid = settings.activeProfileId.first().takeIf { it >= 0 } ?: return@launch
-            recordings.addSeriesRule(pid, channel, programme.title)
+            val pid = currentProfileId() ?: return@launch
+            val storedChannel = authorizedStoredChannel(pid, channel) ?: return@launch
+            recordings.addSeriesRule(pid, storedChannel, programme.title)
         }
     }
 
@@ -591,6 +596,28 @@ class GuideViewModel(
     /** Replay a programme from the provider's archive. */
     fun playCatchup(channel: ChannelEntity, programme: EpgProgrammeEntity) =
         tuner.playCatchup(programme, channel)
+
+    /**
+     * Resolve the active profile and the channel identity from Room at the final recording boundary.
+     *
+     * Guide rows are long-lived UI snapshots: a provider sync can replace their source/category data
+     * while the programme sheet is still open. Never authorize or persist that stale copy. The stable
+     * row id is used only to reload the provider-owned identity; source/category/URL then come from the
+     * stored row and [ContentAccessPolicy] verifies that source still belongs to this profile and that
+     * the channel/category has not become hidden or adult-restricted.
+     */
+    private suspend fun authorizedStoredChannel(profileId: Long, requested: ChannelEntity): ChannelEntity? =
+        authorizePersistedGuideChannel(
+            profileId = profileId,
+            requested = requested,
+            load = channelDao::getById,
+            allows = { pid, stored -> contentAccess.allows(pid, stored) },
+        )
+
+    private suspend fun currentProfileId(): Long? {
+        val preferred = settings.activeProfileId.first()
+        return if (preferred >= 0L) profileDao.resolveExistingProfileId(preferred) else null
+    }
 
     fun toggleFavorite(channel: ChannelEntity) {
         viewModelScope.launch {

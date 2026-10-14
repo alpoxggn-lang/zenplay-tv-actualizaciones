@@ -236,10 +236,13 @@ fun ChNavSettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             onDismiss = { dialog = ChNavDialog.NONE },
         )
         ChNavDialog.ACTION -> pendingBinding?.let { binding ->
-            // Offline content downloads are intentionally unavailable on the TV build. Keep the
-            // legacy enum value readable for restored settings, but never offer it for a new remote
-            // shortcut assignment.
-            val shortcutActions = RemoteShortcutAction.entries.filterNot { it == RemoteShortcutAction.OPEN_DOWNLOADS }
+            // Offline downloads and source switching are intentionally unavailable in ZenPlay.
+            // Keep the enum values for restored preferences, but never offer either for a new
+            // remote shortcut assignment.
+            val shortcutActions = RemoteShortcutAction.entries.filterNot {
+                it == RemoteShortcutAction.OPEN_DOWNLOADS ||
+                    it == RemoteShortcutAction.OPEN_PLAYLIST_SWITCHER
+            }
             val actionOptions = shortcutActions.map { it.name to remoteActionLabel(it) }
             PickerDialog(
                 title = stringResource(R.string.settings_remote_shortcuts_choose_action),
@@ -434,7 +437,8 @@ private fun remoteActionLabel(action: RemoteShortcutAction): String = stringReso
         RemoteShortcutAction.OPEN_SEARCH -> R.string.common_nav_search
         RemoteShortcutAction.OPEN_SETTINGS -> R.string.common_nav_settings
         RemoteShortcutAction.OPEN_PROFILE_SWITCHER -> R.string.profiles_title
-        RemoteShortcutAction.OPEN_PLAYLIST_SWITCHER -> R.string.settings_playlists
+        // A restored source-switch shortcut is presented as the safe Inicio fallback.
+        RemoteShortcutAction.OPEN_PLAYLIST_SWITCHER -> R.string.common_nav_home
         RemoteShortcutAction.CONTINUE_LAST_WATCHED -> R.string.settings_remote_action_continue
         RemoteShortcutAction.FOCUS_NOW_PLAYING -> R.string.settings_remote_action_focus_now_playing
         RemoteShortcutAction.EXPAND_NOW_PLAYING -> R.string.settings_remote_action_expand_now_playing
@@ -464,7 +468,7 @@ private fun remoteActionIcon(action: RemoteShortcutAction): OwnTVIcon = when (ac
     RemoteShortcutAction.OPEN_SEARCH -> OwnTVIcon.SEARCH
     RemoteShortcutAction.OPEN_SETTINGS -> OwnTVIcon.SETTINGS
     RemoteShortcutAction.OPEN_PROFILE_SWITCHER -> OwnTVIcon.PERSON
-    RemoteShortcutAction.OPEN_PLAYLIST_SWITCHER -> OwnTVIcon.PLAYLIST
+    RemoteShortcutAction.OPEN_PLAYLIST_SWITCHER -> OwnTVIcon.HOME
     RemoteShortcutAction.CONTINUE_LAST_WATCHED, RemoteShortcutAction.PLAY_PAUSE -> OwnTVIcon.PLAY
     RemoteShortcutAction.FOCUS_NOW_PLAYING -> OwnTVIcon.FOCUS_HIGHLIGHT
     RemoteShortcutAction.EXPAND_NOW_PLAYING -> OwnTVIcon.EXPAND

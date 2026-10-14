@@ -2,11 +2,14 @@ package tv.own.owntv.core.sync.work
 
 import android.content.Context
 import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -53,6 +56,43 @@ class CatalogSyncScheduler(private val context: Context) {
 
     fun cancelSync(sourceId: Long) {
         WorkManager.getInstance(context).cancelUniqueWork(workName(sourceId))
+    }
+
+    /** Remove the durable heartbeat only when the source itself is being removed. */
+    fun cancelPeriodicRefresh(sourceId: Long) {
+        WorkManager.getInstance(context).cancelUniqueWork(periodicWorkName(sourceId))
+    }
+
+    /**
+     * Keep a durable two-hour catalogue pulse for this source.
+     *
+     * The periodic worker is only a lightweight trigger: it funnels back through [enqueueSync]
+     * with KEEP, so a manual/startup refresh already queued for the same source wins and the two
+     * paths never run a second catalogue implementation in parallel. WorkManager intentionally
+     * treats the two-hour interval as inexact under Doze; connectivity is required here and again
+     * on the actual sync request so an offline wake-up consumes no provider request.
+     */
+    fun ensurePeriodicRefresh(sourceId: Long) {
+        val request = PeriodicWorkRequestBuilder<PeriodicCatalogRefreshWorker>(
+            PeriodicCatalogRefreshWorker.PERIOD_HOURS,
+            TimeUnit.HOURS,
+        )
+            .setInputData(workDataOf(PeriodicCatalogRefreshWorker.KEY_SOURCE_ID to sourceId))
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build(),
+            )
+            .addTag(TAG_CATALOG_SYNC)
+            .addTag(PeriodicCatalogRefreshWorker.TAG)
+            .addTag("source-$sourceId")
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            periodicWorkName(sourceId),
+            ExistingPeriodicWorkPolicy.KEEP,
+            request,
+        )
     }
 
     fun enqueueContentIndexBuild(reason: String = "fresh_sync") {
@@ -174,6 +214,7 @@ class CatalogSyncScheduler(private val context: Context) {
     companion object {
         const val TAG_CATALOG_SYNC = "catalog-sync"
         fun workName(sourceId: Long) = "catalog-sync-source-$sourceId"
+        fun periodicWorkName(sourceId: Long) = "catalog-refresh-periodic-source-$sourceId"
     }
 }
 

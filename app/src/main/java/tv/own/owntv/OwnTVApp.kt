@@ -1,6 +1,7 @@
 package tv.own.owntv
 
 import android.app.Application
+import android.app.ActivityManager
 import android.content.Context
 import android.content.res.Configuration
 import coil3.ImageLoader
@@ -180,6 +181,8 @@ class OwnTVApp : Application(), SingletonImageLoader.Factory, androidx.work.Conf
             .retryOnConnectionFailure(true)
             .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
             .build()
+        val lowRamDevice = (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)
+            ?.isLowRamDevice == true
         return ImageLoader.Builder(context)
             .components { add(OkHttpNetworkFetcherFactory(callFactory = { imageHttpClient })) }
             .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.10).build() }
@@ -194,7 +197,9 @@ class OwnTVApp : Application(), SingletonImageLoader.Factory, androidx.work.Conf
             // Opaque poster art doesn't need an alpha channel; RGB_565 halves bitmap memory
             // under the deliberately small memory cap.
             .allowRgb565(true)
-            .crossfade(true)
+            // Crossfade temporarily retains both bitmaps. Keep the cinematic transition on capable
+            // hardware, but remove that avoidable allocation/animation on Legacy and low-RAM TVs.
+            .crossfade(shouldCrossfadeImages(BuildConfig.LEGACY_BUILD, lowRamDevice))
             .build()
     }
 
@@ -228,3 +233,6 @@ class OwnTVApp : Application(), SingletonImageLoader.Factory, androidx.work.Conf
         runCatching { GlobalContext.getOrNull()?.getOrNull<tv.own.owntv.player.PlaybackEngines>()?.onTrimMemory(level) }
     }
 }
+
+internal fun shouldCrossfadeImages(legacyBuild: Boolean, lowRamDevice: Boolean): Boolean =
+    !legacyBuild && !lowRamDevice

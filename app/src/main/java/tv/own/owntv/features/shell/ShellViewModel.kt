@@ -228,6 +228,10 @@ class ShellViewModel(
             run {
                 val sources = sourcesInUse(pid)
                 sources.forEach { source ->
+                    // WorkManager keeps this source fresh even if the app remains open or stays in
+                    // the background. Idempotent (unique periodic work + KEEP), so checking it on
+                    // every foreground transition cannot create duplicate schedules.
+                    catalogSyncScheduler.ensurePeriodicRefresh(source.id)
                     val due = includeStartup ||
                         nowMs - (source.lastSyncAt ?: 0L) >= ZENPLAY_RESUME_STALE_MS
                     if (due) {

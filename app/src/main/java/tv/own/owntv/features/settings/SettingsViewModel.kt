@@ -1339,6 +1339,7 @@ class SettingsViewModel(
             _deletingSourceIds.value = _deletingSourceIds.value + source.id
             try {
                 catalogSyncScheduler.cancelSync(source.id)
+                catalogSyncScheduler.cancelPeriodicRefresh(source.id)
                 stalkerAuth.invalidate(source.id)
                 // NonCancellable: once confirmed, finish the cascade even if the user leaves the
                 // screen mid-delete — an interrupted half-deleted source is worse than a short wait.

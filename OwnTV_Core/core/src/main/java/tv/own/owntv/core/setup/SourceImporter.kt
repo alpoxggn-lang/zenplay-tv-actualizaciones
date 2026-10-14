@@ -272,6 +272,9 @@ class SourceImporter(
                     val counts = importFinalizer.finalize(source, deferIndexes = freshSync)
                     if (makeDefault) settings.setDefaultSource(source.id)
                     val syncedSource = sourceDao.getById(source.id) ?: source
+                    // The first two-hour window starts as soon as a valid source is imported; the
+                    // shell also repairs this schedule for sources created by older app versions.
+                    catalogSyncScheduler.ensurePeriodicRefresh(source.id)
                     if (enqueueRemainder) enqueueRemainderSync(source, contentTypes, enabledScope)
                     if (freshSync && !remainder.hasAny) catalogSyncScheduler.enqueueContentIndexBuild(reason = "fresh_add")
                     _state.value = ImportState.Success(
@@ -457,6 +460,7 @@ class SourceImporter(
         if (source == null) return
         withContext(NonCancellable) {
             catalogSyncScheduler.cancelSync(source.id)
+            catalogSyncScheduler.cancelPeriodicRefresh(source.id)
             if (backgroundHandoff) {
                 // The user already entered the app with "Run in background" — deleting the source
                 // would make the playlist they just added silently vanish. Keep it so they can

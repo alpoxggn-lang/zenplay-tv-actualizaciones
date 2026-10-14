@@ -45,6 +45,10 @@ class KoinWorkerFactory : WorkerFactory() {
                 koin.get(),
                 koin.get(),
             )
+            PeriodicCatalogRefreshWorker::class.java.name -> PeriodicCatalogRefreshWorker(
+                appContext,
+                workerParameters,
+            )
             CatalogBackfillWorker::class.java.name -> CatalogBackfillWorker(
                 appContext,
                 workerParameters,

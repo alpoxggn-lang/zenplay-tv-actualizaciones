@@ -13,7 +13,10 @@ import tv.own.owntv.core.model.SourceType
  * favorites / history / progress (scoped by `profileId`). Kids profiles hide adult categories;
  * locked profiles store only a salted PIN hash.
  */
-@Entity(tableName = "profiles")
+@Entity(
+    tableName = "profiles",
+    indices = [Index(value = ["syncUuid"], unique = true)],
+)
 data class ProfileEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
@@ -32,6 +35,15 @@ data class ProfileEntity(
     val isKids: Boolean = false,
     val pinHash: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
+    /**
+     * Stable cross-device identity. Room's numeric [id] is intentionally local and can change after
+     * a restore, while this UUID follows the same logical profile through Android, Windows and macOS.
+     *
+     * The empty SQL default exists only so the additive v46 -> v47 migration can add the column;
+     * that migration immediately backfills every old row before installing the unique index. New
+     * profiles are always minted with a real UUID here.
+     */
+    @ColumnInfo(defaultValue = "''") val syncUuid: String = ProfileSyncId.newId(),
 )
 
 /** [SourceEntity.livePrerollSecs] sentinel: use the global Settings value rather than a per-playlist one. */

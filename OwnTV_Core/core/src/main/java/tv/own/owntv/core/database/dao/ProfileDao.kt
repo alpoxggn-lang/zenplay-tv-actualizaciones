@@ -23,6 +23,9 @@ interface ProfileDao {
     @Query("SELECT * FROM profiles WHERE id = :id")
     suspend fun getById(id: Long): ProfileEntity?
 
+    @Query("SELECT * FROM profiles WHERE syncUuid = :syncUuid")
+    suspend fun getBySyncUuid(syncUuid: String): ProfileEntity?
+
     @Query("SELECT * FROM profiles WHERE id = :id")
     fun observeById(id: Long): Flow<ProfileEntity?>
 

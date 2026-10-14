@@ -19,6 +19,7 @@ import tv.own.owntv.core.database.dao.PlaybackPrefsDao
 import tv.own.owntv.core.database.dao.ProgressDao
 import tv.own.owntv.core.database.dao.CatalogBackfillDao
 import tv.own.owntv.core.database.dao.RecordingDao
+import tv.own.owntv.core.database.dao.RemoteSyncDao
 import tv.own.owntv.core.database.dao.SeriesDao
 import tv.own.owntv.core.database.dao.SeriesSortOrderDao
 import tv.own.owntv.core.database.dao.TvProviderProgramDao
@@ -48,6 +49,8 @@ import tv.own.owntv.core.database.entity.ProfileSourceCrossRef
 import tv.own.owntv.core.database.entity.CatalogBackfillEntity
 import tv.own.owntv.core.database.entity.RecordingEntity
 import tv.own.owntv.core.database.entity.RecordingRuleEntity
+import tv.own.owntv.core.database.entity.RemoteSyncOutboxEntity
+import tv.own.owntv.core.database.entity.RemoteSyncStateEntity
 import tv.own.owntv.core.database.entity.SeasonEntity
 import tv.own.owntv.core.database.entity.SeriesEntity
 import tv.own.owntv.core.database.entity.SeriesFtsEntity
@@ -89,6 +92,9 @@ import tv.own.owntv.core.database.dao.SubtitleDao
         PlaybackQuirkEntity::class,
         SeriesSortOrderEntity::class,
         UserDataTombstoneEntity::class,
+        // Durable cross-platform sync boundary (v47). Transport is added separately.
+        RemoteSyncOutboxEntity::class,
+        RemoteSyncStateEntity::class,
         DownloadEntity::class,
         // Live recordings and the standing rules that create them (v39). Never synced, never
         // backed up — D6.
@@ -118,7 +124,7 @@ import tv.own.owntv.core.database.dao.SubtitleDao
         SeriesFtsEntity::class,
         EpisodeFtsEntity::class,
     ],
-    version = 46, // v7: content_order (Move). v8: contentHash + browse/unique indexes. v9: EPG contentHash + natural key. v10: TMDB metadata cache. v11: movies/series rating-sort indexes. v12: metadata_cache trailerKey. v13: metadata_cache logoPath. v14: sources.mac (Stalker portal). v15: external-subtitle cache/selection/timing tables. v16: subtitle_link (downloaded-sub ↔ content). v17: sources.syncLive/Movies/Series (skip-sync enabledScope). v18: series.episodesSyncedAt (episode-cache freshness, S8). v19: epg_channels.iconUrl (XMLTV channel logos). v20: channels (sourceId, number) index for direct tune. v21: series.addedAt + date-added sort indexes. v22: series_sort_order (per-series season/episode order). v23: sources.hlsSupported and sources.preferHls. v24: custom_category_members (user custom categories, #87). v25: sources.livePrerollSecs (per-playlist "Pre-buffer"). v26: channels.catchupType + channels.httpHeaders (M3U catch-up styles + per-channel HTTP headers). v27: sources.maxConnections (Xtream session limit read at sync). v28: movies.httpHeaders + episodes.httpHeaders (per-item M3U HTTP headers). v29: optional Stalker serial/device IDs/signature. v30: source-scoped Now Trending snapshots. v31: indexed provider-title metadata and persistent Trending attempt state. v32: playback_prefs (per-item zoom + volume, keyed by the P6 stable content key). v33: channels/movies/episodes drmConfig (M3U Widevine/ClearKey licence details, #115). v34: sources.liveEnginePreference + sources.liveLatencyMode/liveLatencyCustomSecs (per-playlist Live TV engine and Live latency). v35: playback_prefs.audioDelayMs (per-item A/V-sync memory). v36: user_data_tombstones (deleted favorites/history/resume/memberships, so local sync propagates a deletion instead of undoing it). v37: episodes.airDateMs + metadata_cache.airDate (when an episode first aired — the provider's date, with TMDB's as the fallback) profiles.avatarPath (a picture of the user's own instead of a drawn tile). v38: sources.importPortalEpg (whether a Stalker portal's own guide may be imported). v39: recordings + recording_rules (live recording and its standing "record every showing" rules; never synced, never backed up). v40: sources.maxConnectionsProbedAt (when the app measured how many streams the provider really allows, for the providers that never say). v41: epg_channels.normName/normId (the matcher's normalized forms, stored at sync instead of recomputed per keystroke) and an epg_programmes (startMs, stopMs) index for time-bounded guide reads. v42: catalog_backfill (the Stalker VOD pages setup deliberately did not fetch, drained in the background — plan N1b). v43: channels/movies/episodes manifestType (the container an M3U entry declares via #KODIPROP:…manifest_type) and channels.directSource (the Xtream panel’s own URL, kept as a last-resort retry only). v44: playback_quirks (what a stream needs, shared by all profiles), playback_prefs.sourceId/audioLang/subtitleLang, and five per-playlist overrides on sources (catch-up zone/offset, VOD engine, tune timeout, Referer). v45: metadata_cache.originalLanguage (TMDB's original language, for the "Original language" audio choice). v46: playback_quirks.softwareDecode dropped (never written).
+    version = 47, // v47: stable profile sync UUID + durable remote-sync outbox/cursor. v7: content_order (Move). v8: contentHash + browse/unique indexes. v9: EPG contentHash + natural key. v10: TMDB metadata cache. v11: movies/series rating-sort indexes. v12: metadata_cache trailerKey. v13: metadata_cache logoPath. v14: sources.mac (Stalker portal). v15: external-subtitle cache/selection/timing tables. v16: subtitle_link (downloaded-sub ↔ content). v17: sources.syncLive/Movies/Series (skip-sync enabledScope). v18: series.episodesSyncedAt (episode-cache freshness, S8). v19: epg_channels.iconUrl (XMLTV channel logos). v20: channels (sourceId, number) index for direct tune. v21: series.addedAt + date-added sort indexes. v22: series_sort_order (per-series season/episode order). v23: sources.hlsSupported and sources.preferHls. v24: custom_category_members (user custom categories, #87). v25: sources.livePrerollSecs (per-playlist "Pre-buffer"). v26: channels.catchupType + channels.httpHeaders (M3U catch-up styles + per-channel HTTP headers). v27: sources.maxConnections (Xtream session limit read at sync). v28: movies.httpHeaders + episodes.httpHeaders (per-item M3U HTTP headers). v29: optional Stalker serial/device IDs/signature. v30: source-scoped Now Trending snapshots. v31: indexed provider-title metadata and persistent Trending attempt state. v32: playback_prefs (per-item zoom + volume, keyed by the P6 stable content key). v33: channels/movies/episodes drmConfig (M3U Widevine/ClearKey licence details, #115). v34: sources.liveEnginePreference + sources.liveLatencyMode/liveLatencyCustomSecs (per-playlist Live TV engine and Live latency). v35: playback_prefs.audioDelayMs (per-item A/V-sync memory). v36: user_data_tombstones (deleted favorites/history/resume/memberships, so local sync propagates a deletion instead of undoing it). v37: episodes.airDateMs + metadata_cache.airDate (when an episode first aired — the provider's date, with TMDB's as the fallback) profiles.avatarPath (a picture of the user's own instead of a drawn tile). v38: sources.importPortalEpg (whether a Stalker portal's own guide may be imported). v39: recordings + recording_rules (live recording and its standing "record every showing" rules; never synced, never backed up). v40: sources.maxConnectionsProbedAt (when the app measured how many streams the provider really allows, for the providers that never say). v41: epg_channels.normName/normId (the matcher's normalized forms, stored at sync instead of recomputed per keystroke) and an epg_programmes (startMs, stopMs) index for time-bounded guide reads. v42: catalog_backfill (the Stalker VOD pages setup deliberately did not fetch, drained in the background — plan N1b). v43: channels/movies/episodes manifestType (the container an M3U entry declares via #KODIPROP:…manifest_type) and channels.directSource (the Xtream panel’s own URL, kept as a last-resort retry only). v44: playback_quirks (what a stream needs, shared by all profiles), playback_prefs.sourceId/audioLang/subtitleLang, and five per-playlist overrides on sources (catch-up zone/offset, VOD engine, tune timeout, Referer). v45: metadata_cache.originalLanguage (TMDB's original language, for the "Original language" audio choice). v46: playback_quirks.softwareDecode dropped (never written).
 
     exportSchema = true,
 )
@@ -140,6 +146,7 @@ abstract class OwnTVDatabase : RoomDatabase() {
     abstract fun customCategoryDao(): CustomCategoryDao
     abstract fun seriesSortOrderDao(): SeriesSortOrderDao
     abstract fun tombstoneDao(): TombstoneDao
+    abstract fun remoteSyncDao(): RemoteSyncDao
     abstract fun tvProviderProgramDao(): TvProviderProgramDao
     abstract fun downloadDao(): DownloadDao
     abstract fun recordingDao(): RecordingDao
@@ -1233,6 +1240,68 @@ abstract class OwnTVDatabase : RoomDatabase() {
         }
 
         /**
+         * v46 → v47: the durable local boundary for cross-platform synchronization.
+         *
+         * Numeric profile ids are device-local, so every existing profile first receives a unique,
+         * canonical UUID. The outbox and cursor tables start empty: upgrading must never pretend an
+         * old local row was already sent or pull against an invented server cursor.
+         */
+        val MIGRATION_46_47 = object : androidx.room.migration.Migration(46, 47) {
+            override fun migrate(db: SQLiteConnection) {
+                db.execSQL("ALTER TABLE `profiles` ADD COLUMN `syncUuid` TEXT NOT NULL DEFAULT ''")
+                db.execSQL(
+                    "UPDATE `profiles` SET `syncUuid` = lower(" +
+                        "hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || " +
+                        "substr(hex(randomblob(2)), 2, 3) || '-8' || " +
+                        "substr(hex(randomblob(2)), 2, 3) || '-' || hex(randomblob(6))) " +
+                        "WHERE `syncUuid` = ''",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_profiles_syncUuid` " +
+                        "ON `profiles` (`syncUuid`)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `remote_sync_outbox` (" +
+                        "`eventId` TEXT NOT NULL, " +
+                        "`profileUuid` TEXT NOT NULL, " +
+                        "`entityType` TEXT NOT NULL, " +
+                        "`entityKey` TEXT NOT NULL, " +
+                        "`operation` TEXT NOT NULL, " +
+                        "`payload` TEXT, " +
+                        "`occurredAt` INTEGER NOT NULL, " +
+                        "`attemptCount` INTEGER NOT NULL, " +
+                        "`nextAttemptAt` INTEGER NOT NULL, " +
+                        "`lastError` TEXT, " +
+                        "PRIMARY KEY(`eventId`)" +
+                        ")",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_remote_sync_outbox_profileUuid` " +
+                        "ON `remote_sync_outbox` (`profileUuid`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_remote_sync_outbox_nextAttemptAt_occurredAt` " +
+                        "ON `remote_sync_outbox` (`nextAttemptAt`, `occurredAt`)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_remote_sync_outbox_profileUuid_entityType_entityKey` " +
+                        "ON `remote_sync_outbox` (`profileUuid`, `entityType`, `entityKey`)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `remote_sync_state` (" +
+                        "`scope` TEXT NOT NULL, " +
+                        "`remoteCursor` TEXT, " +
+                        "`lastSuccessfulSyncAt` INTEGER NOT NULL, " +
+                        "`lastAttemptAt` INTEGER NOT NULL, " +
+                        "`lastError` TEXT, " +
+                        "PRIMARY KEY(`scope`)" +
+                        ")",
+                )
+                healSchema(db)
+            }
+        }
+
+        /**
          * v44 → v45: nullable `originalLanguage` on metadata_cache (N14, "Original language" audio). The
          * cache is disposable; a row from before this version reads null and is re-fetched on play.
          */
@@ -1403,6 +1472,7 @@ abstract class OwnTVDatabase : RoomDatabase() {
             MIGRATION_43_44,
             MIGRATION_44_45,
             MIGRATION_45_46,
+            MIGRATION_46_47,
         )
 
         /**

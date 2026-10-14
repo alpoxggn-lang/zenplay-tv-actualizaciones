@@ -180,6 +180,8 @@ val dataModule = module {
     // The one place a user deletion is written: it records the tombstone local sync needs and does
     // the delete in the same transaction. db, favoriteDao, historyDao, progressDao, customCategoryDao, userData
     single { tv.own.owntv.core.backup.UserDataWriter(get(), get(), get(), get(), get(), get()) }
+    // Durable local half only; the authenticated HTTP transport is a later synchronization phase.
+    single { tv.own.owntv.core.sync.remote.RemoteSyncLocalStore(get()) }
     // sourceDao, syncManager, userDataResolver, channelDao, movieDao, seriesDao, categoryDao
     single { SourceRepository(get(), get(), get(), get(), get(), get(), get(), playbackQuirkDao = get(), playbackPrefsDao = get()) }
     // settings, sourceRepository, channelDao, movieDao, seriesDao

@@ -25,6 +25,7 @@ import tv.own.owntv.core.database.entity.TrendingAttemptStatus
 import tv.own.owntv.core.database.entity.TrendingItemEntity
 import tv.own.owntv.core.database.entity.TrendingSnapshotEntity
 import tv.own.owntv.core.database.entity.TrendingSnapshotStatus
+import tv.own.owntv.core.database.entity.ProfileSyncId
 
 @RunWith(AndroidJUnit4::class)
 class OwnTVDatabaseMigrationTest {
@@ -649,6 +650,44 @@ class OwnTVDatabaseMigrationTest {
                 assertEquals(1L, it.getLong(1))
                 assertEquals(250L, it.getLong(2))
             }
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun migrateVersion46To47_assignsStableUniqueProfileUuids_andCreatesEmptyRemoteSyncState() {
+        context.deleteDatabase(DB_NAME)
+        val db46 = context.openOrCreateDatabase(DB_NAME, Context.MODE_PRIVATE, null)
+        try {
+            executeSchemaQueries(db46, "tv.own.owntv.core.database.OwnTVDatabase/46.json")
+            db46.execSQL("INSERT INTO profiles (id, name, avatarColor, avatarId, isKids, pinHash, createdAt) VALUES (1, 'Primary', 1122867, 7, 0, NULL, 1)")
+            db46.execSQL("INSERT INTO profiles (id, name, avatarColor, avatarId, isKids, pinHash, createdAt) VALUES (2, 'Kids', 4478310, 2, 1, NULL, 2)")
+            db46.version = 46
+        } finally {
+            db46.close()
+        }
+
+        val db = openWithAllMigrations()
+        try {
+            val sqlite = openForAssertions(db)
+            assertColumnExists(sqlite, "profiles", "syncUuid")
+            assertIndexExists(sqlite, "index_profiles_syncUuid")
+            val uuids = mutableListOf<String>()
+            sqlite.prepare("SELECT syncUuid FROM profiles ORDER BY id").use { statement ->
+                while (statement.step()) uuids += statement.getText(0)
+            }
+            assertEquals(2, uuids.size)
+            assertTrue(uuids.all(ProfileSyncId::isValid))
+            assertEquals(2, uuids.distinct().size)
+
+            assertTableExists(sqlite, "remote_sync_outbox")
+            assertIndexExists(sqlite, "index_remote_sync_outbox_profileUuid")
+            assertIndexExists(sqlite, "index_remote_sync_outbox_nextAttemptAt_occurredAt")
+            assertIndexExists(sqlite, "index_remote_sync_outbox_profileUuid_entityType_entityKey")
+            assertTableExists(sqlite, "remote_sync_state")
+            assertCount(sqlite, "remote_sync_outbox", 0)
+            assertCount(sqlite, "remote_sync_state", 0)
         } finally {
             db.close()
         }

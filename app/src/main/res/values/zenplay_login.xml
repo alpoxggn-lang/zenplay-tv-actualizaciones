@@ -1,12 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="zenplay_plan_basic" translatable="false">Básica</string>
-    <string name="zenplay_plan_advanced" translatable="false">Avanzado</string>
-    <string name="zenplay_plan_premium" translatable="false">Premium</string>
+    <string name="zenplay_plan_zenplay" translatable="false">ZenPlay</string>
     <string name="zenplay_login_title">Inicia sesión</string>
-    <string name="zenplay_login_subtitle">Elige tu lista e ingresa los datos de tu cuenta.</string>
+    <string name="zenplay_login_subtitle">Ingresa los datos de tu cuenta ZenPlay.</string>
     <string name="zenplay_login_tagline">Tu entretenimiento, en un solo lugar.</string>
-    <string name="zenplay_login_plan">Lista de reproducción</string>
     <string name="zenplay_login_username">Usuario</string>
     <string name="zenplay_login_password">Contraseña</string>
     <string name="zenplay_login_submit">Iniciar sesión</string>
@@ -14,7 +11,7 @@
     <string name="zenplay_login_checking">Verificando tu cuenta…</string>
     <string name="zenplay_login_importing">Cargando tu contenido…</string>
     <string name="zenplay_login_missing_fields">Escribe tu usuario y contraseña.</string>
-    <string name="zenplay_login_invalid">No se pudo iniciar sesión. Revisa la lista seleccionada, el usuario y la contraseña.</string>
+    <string name="zenplay_login_invalid">No se pudo iniciar sesión. Revisa el usuario y la contraseña.</string>
     <string name="zenplay_login_expired">Tu suscripción ha vencido. Contacta a tu proveedor.</string>
     <string name="zenplay_login_unreachable">No pudimos conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.</string>
     <string name="zenplay_login_invalid_response">El servidor no devolvió una cuenta válida de Xtream Codes. Contacta a tu proveedor.</string>

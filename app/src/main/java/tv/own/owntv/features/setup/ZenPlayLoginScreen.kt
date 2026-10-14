@@ -39,25 +39,22 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import tv.own.owntv.R
-import tv.own.owntv.ui.components.FocusableSurface
 import tv.own.owntv.ui.components.OwnTVButton
 import tv.own.owntv.ui.components.OwnTVIcon
 import tv.own.owntv.ui.components.OwnTVTextField
 import tv.own.owntv.ui.theme.OwnTVTheme
 
 /**
- * ZenPlay's three playlists. Each is an Xtream Codes server; the customer only types the user name
- * and password their provider gave them.
+ * ZenPlay's fixed Xtream service. The customer only types the user name and password supplied with
+ * the account; no server or plan choice is exposed in the application.
  */
 enum class ZenPlayPlan(@param:StringRes val labelRes: Int, val server: String) {
-    BASICA(R.string.zenplay_plan_basic, "http://blitzultra.com.mx:8080"),
-    AVANZADO(R.string.zenplay_plan_advanced, "https://krnosmx.com:443"),
-    PREMIUM(R.string.zenplay_plan_premium, "https://dns.ruta5.xyz:8443"),
+    ZENPLAY(R.string.zenplay_plan_zenplay, "https://dns.ruta5.xyz:8443/"),
 }
 
 /**
- * ZenPlay's first screen: pick Básica / Avanzado / Premium, enter user and password, sign in. It
- * replaces OwnTV's welcome → disclaimer → profile → add-source wizard for a first run.
+ * ZenPlay's first screen: enter user and password, then sign in. It replaces OwnTV's welcome →
+ * disclaimer → profile → add-source wizard for a first run.
  *
  * [errorText] is the reason the previous attempt failed (shown under the button), or null.
  */
@@ -67,18 +64,17 @@ fun ZenPlayLoginScreen(
     errorText: String? = null,
     modifier: Modifier = Modifier,
     /** ZenPlay "Mis planes": the plan to preselect. */
-    initialPlan: ZenPlayPlan = ZenPlayPlan.BASICA,
+    initialPlan: ZenPlayPlan = ZenPlayPlan.ZENPLAY,
     /** When set, Back closes the screen (adding a plan from inside the app). */
     onCancel: (() -> Unit)? = null,
 ) {
     val colors = OwnTVTheme.colors
     if (onCancel != null) androidx.activity.compose.BackHandler { onCancel() }
-    var plan by rememberSaveable(initialPlan) { mutableStateOf(initialPlan) }
     var username by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var missing by remember { mutableStateOf(false) }
-    val planFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { planFocus.requestFocus() } }
+    val usernameFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { usernameFocus.requestFocus() } }
 
     Box(
         modifier = modifier
@@ -135,31 +131,11 @@ fun ZenPlayLoginScreen(
                     color = colors.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(22.dp))
-                Text(
-                    stringResource(R.string.zenplay_login_plan),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = colors.primary,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ZenPlayPlan.entries.forEachIndexed { index, option ->
-                        PlanChip(
-                            label = stringResource(option.labelRes),
-                            selected = option == plan,
-                            onClick = { plan = option },
-                            modifier = Modifier
-                                .weight(1f)
-                                .then(if (index == 0) Modifier.focusRequester(planFocus) else Modifier),
-                        )
-                    }
-                }
-                Spacer(Modifier.height(20.dp))
                 OwnTVTextField(
                     value = username,
                     onValueChange = { username = it; missing = false },
                     label = stringResource(R.string.zenplay_login_username),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().focusRequester(usernameFocus),
                     keyboardType = KeyboardType.Text,
                 )
                 Spacer(Modifier.height(14.dp))
@@ -178,7 +154,7 @@ fun ZenPlayLoginScreen(
                         if (username.isBlank() || password.isBlank()) {
                             missing = true
                         } else {
-                            onLogin(plan, username.trim(), password)
+                            onLogin(initialPlan, username.trim(), password)
                         }
                     },
                     icon = OwnTVIcon.PLAY,
@@ -199,30 +175,6 @@ fun ZenPlayLoginScreen(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun PlanChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val colors = OwnTVTheme.colors
-    FocusableSurface(
-        onClick = onClick,
-        modifier = modifier.height(48.dp),
-        selected = selected,
-        shape = RoundedCornerShape(50),
-        focusedContainerColor = colors.primary,
-        unfocusedContainerColor = colors.surfaceContainerHigh,
-        selectedContainerColor = colors.primaryContainer,
-        contentAlignment = Alignment.Center,
-    ) { focused ->
-        Text(
-            label,
-            style = MaterialTheme.typography.titleSmall,
-            color = if (focused) colors.onPrimary else if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant,
-            fontWeight = if (selected || focused) FontWeight.Bold else FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 8.dp),
-            textAlign = TextAlign.Center,
-        )
     }
 }
 

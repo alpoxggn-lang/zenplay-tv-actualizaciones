@@ -49,9 +49,9 @@ import tv.own.owntv.ui.components.trapAllFocusExit
 import tv.own.owntv.ui.theme.OwnTVTheme
 
 /**
- * ZenPlay "Mis planes": Básica, Avanzado and Premium side by side. A plan already signed in can be
- * switched to with one press (no signing out, no typing the details again); one that is not yet
- * signed in opens the sign-in screen with that plan chosen, loads it, and makes it the active one.
+ * ZenPlay account management. The product has one fixed service endpoint; a signed-in account can
+ * be selected without exposing server management, while an empty installation opens the standard
+ * username/password form.
  */
 @Composable
 fun ZenPlayPlansScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {

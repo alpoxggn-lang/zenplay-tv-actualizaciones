@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Core uses these resources as Android TV home-channel logos. Alias each legacy choice
+         to the original bitmap so that resource-URI consumers receive ZenPlay too. -->
+    <item name="owntv_banner_petrol" type="drawable">@drawable/zenplay_logo</item>
+    <item name="owntv_banner_sunflower" type="drawable">@drawable/zenplay_logo</item>
+    <item name="owntv_banner_cobalt" type="drawable">@drawable/zenplay_logo</item>
+    <item name="owntv_banner_tomato" type="drawable">@drawable/zenplay_logo</item>
+    <item name="owntv_banner_board" type="drawable">@drawable/zenplay_logo</item>
+    <item name="owntv_banner_eggshell" type="drawable">@drawable/zenplay_logo</item>
+    <item name="owntv_banner_olive" type="drawable">@drawable/zenplay_logo</item>
+    <item name="owntv_banner_olive_cream" type="drawable">@drawable/zenplay_logo</item>
+</resources>

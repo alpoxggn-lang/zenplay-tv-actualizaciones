@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ZenPlay: modern adaptive icon — the robot (foreground) on the brand's blue-purple glow
+     (background), shaped by each launcher; monochrome for Android 13 themed icons. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/zenplay_icon_bg" />
+    <foreground android:drawable="@drawable/zenplay_icon_fg" />
+    <monochrome android:drawable="@drawable/zenplay_icon_mono" />
+</adaptive-icon>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Host-app overrides of Core's non-translatable product identity. -->
+    <string name="app_name" translatable="false">ZenPlay</string>
+    <string name="brand_own" translatable="false">Zen</string>
+    <string name="brand_tv" translatable="false">Play</string>
+</resources>

@@ -1,0 +1,306 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- INTERNET, ACCESS_NETWORK_STATE, FOREGROUND_SERVICE, FOREGROUND_SERVICE_DATA_SYNC and
+         POST_NOTIFICATIONS are declared by :core, together with WorkManager's foreground-service
+         host: core is what does the networking and runs catalog, guide and recording workers. They merge in
+         from there — see core/src/main/AndroidManifest.xml. -->
+
+    <!-- ZenPlay: no in-app updater, so no permission to install other APKs. Asking for it is one of
+         the signals Play Protect weighs when it warns about a sideloaded app. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- MODIFY_AUDIO_SETTINGS is declared by :player-core, which owns VolumeBoost. -->
+
+    <!-- Android TV provider writes for Watch Next cards. -->
+    <uses-permission android:name="com.android.providers.tv.permission.WRITE_EPG_DATA" />
+
+    <!-- Recordings & backup to user-chosen folders (SAF's document picker is absent on most TVs).
+         READ stays declared through API 32: dropping it left some OEM builds (TCL Android 12,
+         "Permission Shield") with NO grantable storage entry at all — MANAGE_EXTERNAL_STORAGE alone
+         is a special app access their settings never surface. With READ declared, requesting it on
+         API 30–32 opens the system "Files and media" screen, which also lists
+         "Allow management of all files" because MANAGE is declared. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+
+    <!-- TV-first app, but allow non-TV installs too: touchscreen optional, and leanback is NOT required
+         (required=true blocked plain phones / non-TV armv7a boxes that don't report the leanback feature). -->
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="false" />
+
+    <application
+        android:name=".OwnTVApp"
+        android:allowBackup="false"
+        android:banner="@drawable/zenplay_banner"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/zenplay_icon"
+        android:label="@string/app_name"
+        android:requestLegacyExternalStorage="true"
+        android:roundIcon="@mipmap/zenplay_icon"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.OwnTV"
+        android:usesCleartextTraffic="true"
+        tools:targetApi="26">
+
+        <!-- Exposes the downloaded update APK to the system installer. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- Disable WorkManager default auto-init; OwnTVApp provides Configuration. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
+        <!-- Keep Core's launcher activities for restored preference compatibility. AppIconSwitcher
+             enables exactly one, and every entry displays ZenPlay. All entries retain their deep links.
+             LEANBACK_LAUNCHER supports TVs; LAUNCHER supports phone/tablet/box home screens. -->
+        <activity
+            android:name=".MainActivityPetrol"
+            android:banner="@drawable/zenplay_banner"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/zenplay_icon"
+            android:launchMode="singleTop"
+            android:roundIcon="@mipmap/zenplay_icon"
+            android:theme="@style/Theme.OwnTV.Starting.Petrol"
+            android:windowSoftInputMode="adjustPan">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="play"
+                    android:scheme="owntv" />
+                <data
+                    android:host="open"
+                    android:scheme="owntv" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".MainActivitySunflower"
+            android:banner="@drawable/zenplay_banner"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/zenplay_icon"
+            android:launchMode="singleTop"
+            android:roundIcon="@mipmap/zenplay_icon"
+            android:theme="@style/Theme.OwnTV.Starting.Sunflower"
+            android:windowSoftInputMode="adjustPan">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="play"
+                    android:scheme="owntv" />
+                <data
+                    android:host="open"
+                    android:scheme="owntv" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".MainActivityCobalt"
+            android:banner="@drawable/zenplay_banner"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/zenplay_icon"
+            android:launchMode="singleTop"
+            android:roundIcon="@mipmap/zenplay_icon"
+            android:theme="@style/Theme.OwnTV.Starting.Cobalt"
+            android:windowSoftInputMode="adjustPan">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="play"
+                    android:scheme="owntv" />
+                <data
+                    android:host="open"
+                    android:scheme="owntv" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".MainActivityTomato"
+            android:banner="@drawable/zenplay_banner"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/zenplay_icon"
+            android:launchMode="singleTop"
+            android:roundIcon="@mipmap/zenplay_icon"
+            android:theme="@style/Theme.OwnTV.Starting.Tomato"
+            android:windowSoftInputMode="adjustPan">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="play"
+                    android:scheme="owntv" />
+                <data
+                    android:host="open"
+                    android:scheme="owntv" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".MainActivityBoard"
+            android:banner="@drawable/zenplay_banner"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/zenplay_icon"
+            android:launchMode="singleTop"
+            android:roundIcon="@mipmap/zenplay_icon"
+            android:theme="@style/Theme.OwnTV.Starting.Board"
+            android:windowSoftInputMode="adjustPan">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="play"
+                    android:scheme="owntv" />
+                <data
+                    android:host="open"
+                    android:scheme="owntv" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".MainActivity"
+            android:banner="@drawable/zenplay_banner"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/zenplay_icon"
+            android:launchMode="singleTop"
+            android:roundIcon="@mipmap/zenplay_icon"
+            android:theme="@style/Theme.OwnTV.Starting.Eggshell"
+            android:windowSoftInputMode="adjustPan">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="play"
+                    android:scheme="owntv" />
+                <data
+                    android:host="open"
+                    android:scheme="owntv" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".MainActivityOlive"
+            android:banner="@drawable/zenplay_banner"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/zenplay_icon"
+            android:launchMode="singleTop"
+            android:roundIcon="@mipmap/zenplay_icon"
+            android:theme="@style/Theme.OwnTV.Starting.Olive"
+            android:windowSoftInputMode="adjustPan">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="play"
+                    android:scheme="owntv" />
+                <data
+                    android:host="open"
+                    android:scheme="owntv" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".MainActivityOliveCream"
+            android:banner="@drawable/zenplay_banner"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/zenplay_icon"
+            android:launchMode="singleTop"
+            android:roundIcon="@mipmap/zenplay_icon"
+            android:theme="@style/Theme.OwnTV.Starting.OliveCream"
+            android:windowSoftInputMode="adjustPan">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="play"
+                    android:scheme="owntv" />
+                <data
+                    android:host="open"
+                    android:scheme="owntv" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Product wording only; upstream credits, services, and licenses retain their attribution. -->
+    <string name="content_exit_owntv">Exit ZenPlay?</string>
+    <string name="content_storage_folder_fallback">Your download folder isn\'t available right now, so downloads are being saved to ZenPlay\'s own folder until it\'s back.</string>
+    <string name="content_epg_own_player">ZenPlay player</string>
+    <string name="recovery_title">ZenPlay could not open its database</string>
+    <string name="settings_recording_timers_inexact">This device does not allow ZenPlay to set exact alarms, so a recording may begin a few minutes late. Recordings start earlier to make up for it.</string>
+    <string name="recording_failed_drm">This channel is DRM-protected, so it can be watched but not recorded. The protection comes from your provider, not from ZenPlay.</string>
+    <string name="multiview_unknown_connections">ZenPlay could not tell how many streams this playlist allows. If a tile fails, that is why.</string>
+    <string name="settings_proxy_description">Send all ZenPlay traffic and playback through an HTTP proxy.</string>
+    <string name="settings_auto_frame_rate_warning_description">This device runs Android <xliff:g id="android_version" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%1$s</xliff:g>. Below Android 12 the TV can\'t tell ZenPlay which refresh rates it can switch to smoothly, so changing the rate may black the screen out for a second or two — sometimes more than once during a programme.\n\nWe recommend leaving Auto frame rate off here. If your TV switches cleanly, turn it on and see: you can change it back at any time.</string>
+    <string name="settings_auto_frame_rate_warning_description_mobile">This device runs Android <xliff:g id="android_version" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">%1$s</xliff:g>. Below Android 12 the device can\'t tell ZenPlay which refresh rates it can switch to smoothly, so changing the rate may black the screen out for a second or two — sometimes more than once during a programme.\n\nWe recommend leaving Auto frame rate off here. If your screen switches cleanly, turn it on and see: you can change it back at any time.</string>
+    <string name="settings_app_startup_description">What ZenPlay opens when it starts</string>
+    <string name="settings_catchup_player_internal">ZenPlay player</string>
+    <string name="settings_sources_probe_warning">Many providers never say how many channels you may watch at the same time, so ZenPlay finds out by opening a few and seeing which ones survive. Anything playing now will stop, and this can take up to two minutes.</string>
+    <string name="settings_sources_probe_unknown">ZenPlay could not work out how many channels this provider allows.</string>
+    <string name="settings_dns_toggle_description">Resolve all ZenPlay domain lookups through a custom DNS server.</string>
+    <string name="settings_live_tune_timeout_description">If a live channel has shown no picture by this time, ZenPlay stops trying and tells you, instead of leaving a black screen while it works through every player it has. Never keeps trying, which can take well over a minute on a channel your provider has removed. Waits your provider asks for are not counted.</string>
+    <string name="settings_surround_forced_description">Surround — send Dolby/DTS to a real 5.1/7.1 receiver. If it goes silent or stutters, ZenPlay still falls back to stereo and tells you.</string>
+    <string name="settings_glass_master_description">Use translucent, frosted surfaces throughout ZenPlay.</string>
+    <string name="local_sync_error_unreachable">This device could not be reached. On it, open ZenPlay → Settings → Data → Local sync and turn Sync mode on. Both devices must be on the same Wi-Fi.</string>
+    <string name="settings_app_icon_summary">Color of the ZenPlay icon and logo</string>
+    <string name="app_icon_restart_title">Restart ZenPlay?</string>
+    <string name="app_icon_restart_message">You chose a new icon and logo. They take effect after ZenPlay restarts.</string>
+    <string name="setup_disclaimer">ZenPlay is a media player only. It includes no channels, playlists, or content. You are responsible for adding your own legally accessible Xtream, M3U, or Stalker sources.</string>
+    <string name="setup_set_up_owntv">Set up ZenPlay</string>
+    <string name="setup_sync_device_description">Copy everything from your other ZenPlay device over Wi-Fi</string>
+    <string name="setup_byo_source_description">ZenPlay is a player \u2014 bring your own Xtream, M3U, or Stalker source.</string>
+    <string name="companion_pin_page_title">ZenPlay \u2014 Enter PIN</string>
+    <string name="companion_add_page_title">ZenPlay \u2014 Add source</string>
+    <string name="companion_saved_page_title">ZenPlay \u2014 Sent</string>
+    <string name="companion_backup_page_title">ZenPlay \u2014 Restore backup</string>
+    <string name="companion_image_page_title">ZenPlay \u2014 Background image</string>
+    <string name="companion_download_page_title">ZenPlay \u2014 Download backup</string>
+    <string name="local_sync_browser_title">ZenPlay local sync</string>
+    <string name="local_sync_browser_body">This address is for the ZenPlay app on your other device. Open Local sync there and pick this device from the list.</string>
+    <string name="common_own_tv_user">ZenPlay User</string>
+</resources>

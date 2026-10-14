@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches ZenPlay's dark UI to keep the launch handoff seamless. -->
+    <color name="owntv_window_bg">#070B1A</color>
+    <!-- Adaptive launcher icon background. -->
+    <color name="owntv_icon_bg">#050914</color>
+</resources>

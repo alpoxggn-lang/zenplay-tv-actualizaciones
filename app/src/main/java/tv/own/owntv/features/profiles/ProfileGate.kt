@@ -317,7 +317,10 @@ internal fun profileGateManagementChallenge(
     action: ProfileManagementAction,
     target: ProfileEntity?,
 ): ProfileManagementRequirement.PinRequired? {
-    if (action != ProfileManagementAction.EDIT && action != ProfileManagementAction.DELETE) return null
+    if (action != ProfileManagementAction.CREATE &&
+        action != ProfileManagementAction.EDIT &&
+        action != ProfileManagementAction.DELETE
+    ) return null
 
     target?.takeIf { !it.pinHash.isNullOrBlank() }?.let {
         return ProfileManagementRequirement.PinRequired(it, ProfilePinPurpose.TARGET_PROFILE)

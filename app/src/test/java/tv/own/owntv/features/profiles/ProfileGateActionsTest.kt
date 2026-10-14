@@ -7,7 +7,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import tv.own.owntv.core.database.entity.ProfileEntity
 import tv.own.owntv.core.profile.ProfileManagementAction
+import tv.own.owntv.core.profile.ProfileManagementRequirement
 import tv.own.owntv.core.profile.ProfilePinPurpose
+import tv.own.owntv.core.profile.profileManagementRequirement
 
 /** TV-only contract for the actions shown after selecting an avatar on the profile gate. */
 class ProfileGateActionsTest {
@@ -54,6 +56,51 @@ class ProfileGateActionsTest {
 
         assertEquals(protectedAdult.id, challenge?.profile?.id)
         assertEquals(ProfilePinPurpose.ADULT_ADMIN, challenge?.purpose)
+    }
+
+    @Test
+    fun `gate creation challenges the active protected adult before opening the editor`() {
+        val protectedAdult = profile(id = 10L, name = "Adult", pinHash = "stored-hash")
+
+        assertTrue(
+            profileManagementRequirement(
+                profiles = listOf(protectedAdult),
+                activeProfileId = protectedAdult.id,
+                action = ProfileManagementAction.CREATE,
+            ) is ProfileManagementRequirement.Allowed,
+        )
+
+        val challenge = profileGateManagementChallenge(
+            profiles = listOf(protectedAdult),
+            activeProfileId = protectedAdult.id,
+            action = ProfileManagementAction.CREATE,
+            target = null,
+        )
+
+        assertEquals(protectedAdult.id, challenge?.profile?.id)
+        assertEquals(ProfilePinPurpose.ADULT_ADMIN, challenge?.purpose)
+    }
+
+    @Test
+    fun `gate creation adds no artificial challenge when no protected adult exists`() {
+        val unlockedAdult = profile(id = 10L, name = "Adult")
+
+        assertTrue(
+            profileManagementRequirement(
+                profiles = listOf(unlockedAdult),
+                activeProfileId = unlockedAdult.id,
+                action = ProfileManagementAction.CREATE,
+            ) is ProfileManagementRequirement.Allowed,
+        )
+
+        assertNull(
+            profileGateManagementChallenge(
+                profiles = listOf(unlockedAdult),
+                activeProfileId = unlockedAdult.id,
+                action = ProfileManagementAction.CREATE,
+                target = null,
+            ),
+        )
     }
 
     @Test

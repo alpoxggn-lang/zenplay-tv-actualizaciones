@@ -7,6 +7,11 @@
 > Issue numbers that are part of a title are fine; explanatory parentheticals are not. The detail —
 > what, why, files and verification — belongs in the commit message, never here.
 
+## v2.2.4 — 2026-10-14
+
+### 🐛 Correcciones
+- **Crear perfiles desde TV solicita el PIN del adulto protegido**
+
 ## v2.2.3 — 2026-10-14
 
 ### ✨ Funciones nuevas

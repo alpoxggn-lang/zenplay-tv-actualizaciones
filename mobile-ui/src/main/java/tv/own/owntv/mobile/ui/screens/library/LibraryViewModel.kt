@@ -9,11 +9,14 @@ import androidx.paging.cachedIn
 import androidx.paging.filter
 import androidx.paging.map
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -84,6 +87,10 @@ data class VodItem(
     val rating: Double?,
 )
 
+/** A section search intentionally ignores the selected folder and scans the whole local catalogue. */
+internal fun catalogSearchKey(selected: LiveKey, query: String): LiveKey =
+    if (query.isBlank()) selected else LiveKey.All
+
 /**
  * Movies and Series for the phone.
  *
@@ -94,7 +101,7 @@ data class VodItem(
  * Nothing here queries until a tab is actually collected — a catalogue of 170,000 films must not cost
  * anything at launch, and the count under the chips is the only whole-list question ever asked.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class LibraryViewModel(
     private val movieDao: MovieDao,
     private val seriesDao: SeriesDao,
@@ -123,6 +130,17 @@ class LibraryViewModel(
 
     private val _selectedMovies = MutableStateFlow<LiveKey>(LiveKey.All)
     private val _selectedSeries = MutableStateFlow<LiveKey>(LiveKey.All)
+
+    private val _movieSearch = MutableStateFlow("")
+    private val _seriesSearch = MutableStateFlow("")
+
+    /** The section-local query shown in the Movies/Series catalogue field. */
+    val catalogQuery: StateFlow<String> = combine(_tab, _movieSearch, _seriesSearch) { tab, movies, series ->
+        if (tab == LibraryTab.MOVIES) movies else series
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    private val movieSearch = _movieSearch.map { it.trim() }.debounce(300).distinctUntilChanged()
+    private val seriesSearch = _seriesSearch.map { it.trim() }.debounce(300).distinctUntilChanged()
 
     /** The chip the current tab is on. */
     val selected: StateFlow<LiveKey> =
@@ -302,22 +320,27 @@ class LibraryViewModel(
         val ctx: ActiveProfileSources,
         val cust: SectionCustomizations,
         val hidden: Set<Long>,
+        val query: String = "",
     )
 
     /** The films of the current selection. Collected only while the Movies tab is on screen. */
     val movies: Flow<PagingData<VodItem>> =
-        combine(_selectedMovies, ctx, custom, hiddenCategoryIds, ::Args)
+        combine(_selectedMovies, ctx, custom, hiddenCategoryIds) { key, c, cust, hidden ->
+            Args(key, c, cust, hidden)
+        }
+            .combine(movieSearch) { args, query -> args.copy(query = query) }
             .combine(orderedContexts) { args, _ -> args }
-            .flatMapLatest { (key, c, cust, hidden) ->
+            .flatMapLatest { (selectedKey, c, cust, hidden, query) ->
                 if (c.profileId < 0) {
                     flowOf(PagingData.empty())
                 } else {
+                    val key = catalogSearchKey(selectedKey, query)
                     Pager(pagingConfig()) {
-                        zenFolder<tv.own.owntv.core.database.entity.MovieEntity>(key, c.profileId, MediaType.MOVIE) ?: moviePagingSource(
+                        (if (query.isBlank()) zenFolder<tv.own.owntv.core.database.entity.MovieEntity>(key, c.profileId, MediaType.MOVIE) else null) ?: moviePagingSource(
                             key = key,
                             profileId = c.profileId,
                             sourceIds = c.sourceIdsFor(MediaType.MOVIE),
-                            query = "",
+                            query = query,
                             sort = sortMode.value,
                             movieDao = movieDao,
                             customCategoryDao = customCategoryDao,
@@ -334,18 +357,22 @@ class LibraryViewModel(
 
     /** [movies] for shows. */
     val series: Flow<PagingData<VodItem>> =
-        combine(_selectedSeries, ctx, custom, hiddenCategoryIds, ::Args)
+        combine(_selectedSeries, ctx, custom, hiddenCategoryIds) { key, c, cust, hidden ->
+            Args(key, c, cust, hidden)
+        }
+            .combine(seriesSearch) { args, query -> args.copy(query = query) }
             .combine(orderedContexts) { args, _ -> args }
-            .flatMapLatest { (key, c, cust, hidden) ->
+            .flatMapLatest { (selectedKey, c, cust, hidden, query) ->
                 if (c.profileId < 0) {
                     flowOf(PagingData.empty())
                 } else {
+                    val key = catalogSearchKey(selectedKey, query)
                     Pager(pagingConfig()) {
-                        zenFolder<tv.own.owntv.core.database.entity.SeriesEntity>(key, c.profileId, MediaType.SERIES) ?: seriesPagingSource(
+                        (if (query.isBlank()) zenFolder<tv.own.owntv.core.database.entity.SeriesEntity>(key, c.profileId, MediaType.SERIES) else null) ?: seriesPagingSource(
                             key = key,
                             profileId = c.profileId,
                             sourceIds = c.sourceIdsFor(MediaType.SERIES),
-                            query = "",
+                            query = query,
                             sort = sortMode.value,
                             seriesDao = seriesDao,
                             customCategoryDao = customCategoryDao,
@@ -418,6 +445,11 @@ class LibraryViewModel(
         _tab.value = tab
     }
 
+    /** Searches the whole current section, independently of the selected provider category. */
+    fun setCatalogQuery(query: String) {
+        if (_tab.value == LibraryTab.MOVIES) _movieSearch.value = query else _seriesSearch.value = query
+    }
+
     /**
      * Set while this view model is serving Favourites or Watch history rather than the Library tab.
      * Those screens are one folder each: the selection is theirs to fix, and it must not become the
@@ -432,6 +464,10 @@ class LibraryViewModel(
     fun lock(key: LiveKey) {
         if (lockedKey == null) previousKeys = _selectedMovies.value to _selectedSeries.value
         lockedKey = key
+        // Favourites/History reuse this screen but are intentionally pinned lists, not the main
+        // section-wide catalogue search.
+        _movieSearch.value = ""
+        _seriesSearch.value = ""
         _selectedMovies.value = key
         _selectedSeries.value = key
     }

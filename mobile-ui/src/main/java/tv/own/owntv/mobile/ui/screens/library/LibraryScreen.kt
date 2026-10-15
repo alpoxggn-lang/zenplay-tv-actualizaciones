@@ -39,12 +39,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -53,6 +57,7 @@ import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 import tv.own.owntv.core.live.LiveKey
 import tv.own.owntv.core.settings.SettingsRepository
@@ -63,6 +68,7 @@ import tv.own.owntv.mobile.ui.components.MobileBottomSheet
 import tv.own.owntv.mobile.ui.components.MobileButton
 import tv.own.owntv.mobile.ui.components.MobileButtonStyle
 import tv.own.owntv.mobile.ui.components.MobileListRow
+import tv.own.owntv.mobile.ui.components.MobileTextField
 import tv.own.owntv.mobile.ui.components.mobileGroupPlate
 import tv.own.owntv.mobile.ui.components.PosterCard
 import tv.own.owntv.mobile.ui.components.GRID_LIST_SHARE
@@ -120,6 +126,7 @@ fun LibraryScreen(
     val chosenColumns by vm.gridColumns.collectAsStateWithLifecycle()
     val favorites by vm.favoriteIds.collectAsStateWithLifecycle()
     val progress by vm.movieProgress.collectAsStateWithLifecycle()
+    val catalogQuery by vm.catalogQuery.collectAsStateWithLifecycle()
 
     val items = when (tab) {
         LibraryTab.MOVIES -> vm.movies
@@ -135,7 +142,18 @@ fun LibraryScreen(
     var sheetOpen by remember { mutableStateOf(false) }
     var categoryPicker by rememberSaveable(tab, lockedKey) { mutableStateOf(false) }
     var categoryMenuFor by remember { mutableStateOf<VodCategory?>(null) }
+    var catalogSearchOpen by rememberSaveable(tab, lockedKey) { mutableStateOf(false) }
     val categoryLabel = categories.firstOrNull { it.key == selected }?.label(tab).orEmpty()
+    val catalogSearchFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(catalogSearchOpen, tab) {
+        if (catalogSearchOpen) {
+            delay(100)
+            runCatching { catalogSearchFocus.requestFocus() }
+            runCatching { keyboard?.show() }
+        }
+    }
 
     val twoPane = isExpandedWidth()
     // Beside the grid, something is always open: the pane is a preview of the grid, so it falls back
@@ -146,7 +164,7 @@ fun LibraryScreen(
 
     // A new selection's scroll position has nothing to do with the old one's, and neither does the
     // title that was open in the pane — it is not in this category any more.
-    LaunchedEffect(tab, selected) {
+    LaunchedEffect(tab, selected, catalogQuery.trim()) {
         gridState.scrollToItem(0)
         listState.scrollToItem(0)
         tappedItem = null
@@ -197,14 +215,60 @@ fun LibraryScreen(
                     enabled = categories.isNotEmpty(),
                     modifier = Modifier.weight(1f).semantics { stateDescription = categoryLabel },
                 )
+                IconButton(onClick = { catalogSearchOpen = true }) {
+                    Icon(
+                        MobileIcons.Search,
+                        stringResource(
+                            if (tab == LibraryTab.MOVIES) R.string.library_catalog_search_movies
+                            else R.string.library_catalog_search_series,
+                        ),
+                    )
+                }
                 IconButton(onClick = { sheetOpen = true }) {
                     Icon(MobileIcons.Tune, stringResource(R.string.content_sorting))
                 }
             }
+            if (catalogSearchOpen) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(
+                        start = MobileDimens.ScreenPaddingH,
+                        end = MobileDimens.ScreenPaddingH,
+                        bottom = MobileDimens.GapSmall,
+                    ),
+                    horizontalArrangement = Arrangement.spacedBy(MobileDimens.GapSmall),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    MobileTextField(
+                        value = catalogQuery,
+                        onValueChange = vm::setCatalogQuery,
+                        label = stringResource(
+                            if (tab == LibraryTab.MOVIES) R.string.library_catalog_search_movies
+                            else R.string.library_catalog_search_series,
+                        ),
+                        imeAction = ImeAction.Search,
+                        onSearch = { keyboard?.hide() },
+                        modifier = Modifier.weight(1f).focusRequester(catalogSearchFocus),
+                    )
+                    IconButton(
+                        onClick = {
+                            vm.setCatalogQuery("")
+                            catalogSearchOpen = false
+                            keyboard?.hide()
+                        },
+                    ) {
+                        Icon(MobileIcons.Close, stringResource(R.string.search_clear))
+                    }
+                }
+            }
         }
         Text(
-            // "Action (312 movies)" — core's own wording, so the count reads as it does on the TV.
-            text = pluralStringResource(
+            // A typed query always searches All, not merely the selected provider category.
+            text = if (catalogQuery.isNotBlank()) {
+                stringResource(
+                    if (tab == LibraryTab.MOVIES) R.string.library_catalog_results_movies
+                    else R.string.library_catalog_results_series,
+                )
+            } else pluralStringResource(
                 if (tab == LibraryTab.MOVIES) R.plurals.content_count_movies else R.plurals.content_count_series,
                 count,
                 categoryLabel,
@@ -217,7 +281,7 @@ fun LibraryScreen(
         // Empty only once the first page has actually come back — otherwise every category change
         // flashes "No movies here" for as long as the query takes on a 170k-title catalogue.
         if (items.itemCount == 0 && items.loadState.refresh !is LoadState.Loading) {
-            EmptyLibrary(tab)
+            EmptyLibrary(tab, catalogQuery)
         } else if (viewMode == SettingsRepository.VodViewMode.LIST) {
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize().mobileGroupPlate()) {
                 items(count = items.itemCount, key = items.itemKey { it.id }) { index ->
@@ -381,10 +445,11 @@ private fun LibraryOptionsSheet(vm: LibraryViewModel, columns: Int, onDismiss: (
 }
 
 @Composable
-private fun EmptyLibrary(tab: LibraryTab) {
+private fun EmptyLibrary(tab: LibraryTab, query: String = "") {
     Box(Modifier.fillMaxSize().padding(MobileDimens.GapLarge), contentAlignment = Alignment.Center) {
         Text(
-            text = stringResource(
+            text = if (query.isNotBlank()) stringResource(R.string.search_no_results, query.trim())
+            else stringResource(
                 if (tab == LibraryTab.MOVIES) R.string.content_no_movies_here else R.string.content_no_series_here,
             ),
             style = MaterialTheme.typography.bodyLarge,

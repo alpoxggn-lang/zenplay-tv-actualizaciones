@@ -38,6 +38,11 @@
     <string name="profiles_locked_tag">Bloqueado con PIN</string>
     <string name="profiles_active_tag">Activo</string>
     <string name="search_title">Buscar</string>
+    <string name="search_scope_label">Buscar en</string>
+    <string name="search_scope_all">Todo</string>
+    <string name="search_scope_live">TV en vivo</string>
+    <string name="search_scope_movies">Películas</string>
+    <string name="search_scope_series">Series</string>
     <string name="search_continue">Seguir viendo</string>
     <string name="search_unwatched">Sin ver</string>
     <string name="search_hint">Buscar canales, películas y series…</string>

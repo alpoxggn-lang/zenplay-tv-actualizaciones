@@ -74,6 +74,12 @@
     <!-- Search -->
     <!-- Translators: Screen title for the global search screen. -->
     <string name="search_title">Search</string>
+    <!-- Translators: Label immediately before the global-search scope selector. -->
+    <string name="search_scope_label">Search in</string>
+    <string name="search_scope_all">All</string>
+    <string name="search_scope_live">Live TV</string>
+    <string name="search_scope_movies">Movies</string>
+    <string name="search_scope_series">Series</string>
     <!-- Translators: Section header in search results for continue-watching items. -->
     <string name="search_continue">Continue watching</string>
     <!-- Translators: Filter chip in search results for unwatched content. -->

@@ -3,6 +3,7 @@ package tv.own.owntv.features.search
 import tv.own.owntv.core.epg.displayLogoUrl
 import tv.own.owntv.core.content.SearchIntent
 import tv.own.owntv.core.content.SearchResults
+import tv.own.owntv.core.content.SearchScope
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -66,6 +67,16 @@ private fun SearchIntent.displayLabel(): String = stringResource(
     },
 )
 
+@Composable
+private fun SearchScope.displayLabel(): String = stringResource(
+    when (this) {
+        SearchScope.ALL -> R.string.search_scope_all
+        SearchScope.LIVE -> R.string.search_scope_live
+        SearchScope.MOVIES -> R.string.search_scope_movies
+        SearchScope.SERIES -> R.string.search_scope_series
+    },
+)
+
 private sealed interface SearchItem {
     data class ChannelItem(val row: ChannelSearchResult) : SearchItem
     data class MovieItem(val movie: MovieEntity) : SearchItem
@@ -99,6 +110,7 @@ fun SearchScreen(
     val results by vm.results.collectAsStateWithLifecycle()
     val curated by vm.curatedResults.collectAsStateWithLifecycle()
     val intent by vm.intent.collectAsStateWithLifecycle()
+    val scope by vm.scope.collectAsStateWithLifecycle()
     val recent by vm.recentSearches.collectAsStateWithLifecycle()
     val favoriteIds by vm.favoriteChannelIds.collectAsStateWithLifecycle()
     val colors = OwnTVTheme.colors
@@ -132,6 +144,8 @@ fun SearchScreen(
             placeholder = stringResource(R.string.search_hint),
             modifier = Modifier.fillMaxWidth().focusRequester(searchFocus),
         )
+        Spacer(Modifier.height(12.dp))
+        SearchScopeSelector(selected = scope, onSelect = vm::setScope)
         Spacer(Modifier.height(20.dp))
 
         when {
@@ -166,6 +180,29 @@ fun SearchScreen(
                 onToggleFavorite = { vm.toggleFavoriteChannel(it) },
                 onPlayMovie = { vm.playMovie(it); if (!vm.externalPlayerOn.value) onFullscreen() },
                 onOpenSeries = { vm.rememberCurrentQuery(); onOpenSeries(it) },
+            )
+        }
+    }
+}
+
+/** A permanent, remote-focusable scope selector for the typed global search. */
+@Composable
+private fun SearchScopeSelector(selected: SearchScope, onSelect: (SearchScope) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().focusGroup(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.search_scope_label),
+            style = MaterialTheme.typography.labelLarge,
+            color = OwnTVTheme.colors.onSurfaceVariant,
+        )
+        SearchScope.entries.forEach { entry ->
+            PillChip(
+                label = entry.displayLabel(),
+                tonal = entry == selected,
+                onClick = { onSelect(entry) },
             )
         }
     }

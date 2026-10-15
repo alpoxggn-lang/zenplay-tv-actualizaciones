@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="library_catalog_search_movies">Search all movies</string>
+    <string name="library_catalog_search_series">Search all series</string>
+    <string name="library_catalog_results_movies">Results from all movies</string>
+    <string name="library_catalog_results_series">Results from all series</string>
+</resources>

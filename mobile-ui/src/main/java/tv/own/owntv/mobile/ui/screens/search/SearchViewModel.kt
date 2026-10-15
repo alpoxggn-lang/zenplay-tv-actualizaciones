@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 import tv.own.owntv.core.content.SearchIntent
 import tv.own.owntv.core.content.SearchReader
 import tv.own.owntv.core.content.SearchResults
+import tv.own.owntv.core.content.SearchScope
 import tv.own.owntv.core.database.dao.SourceDao
 import tv.own.owntv.core.model.MediaType
 import tv.own.owntv.core.repository.ActiveProfileSources
@@ -52,6 +53,9 @@ class SearchViewModel(
     private val _intent = MutableStateFlow<SearchIntent?>(null)
     val intent: StateFlow<SearchIntent?> = _intent.asStateFlow()
 
+    private val _scope = MutableStateFlow(SearchScope.ALL)
+    val scope: StateFlow<SearchScope> = _scope.asStateFlow()
+
     /** How many rows of each kind to ask for. Grows as the list is scrolled to its end. */
     private val _limit = MutableStateFlow(PAGE)
 
@@ -66,10 +70,11 @@ class SearchViewModel(
         _query.map { it.trim() }.debounce(DEBOUNCE_MS).distinctUntilChanged(),
         ctx,
         _limit,
-    ) { q, c, limit -> Triple(q, c, limit) }
-        .flatMapLatest { (q, c, limit) ->
+        _scope,
+    ) { q, c, limit, scope -> SearchRequest(q, c, limit, scope) }
+        .flatMapLatest { (q, c, limit, scope) ->
             if (q.length < MIN_QUERY) flowOf(SearchResults())
-            else flow { emit(searchReader.search(c.profileId, c, q, limit)) }
+            else flow { emit(searchReader.search(c.profileId, c, q, limit, scope)) }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchResults())
 
@@ -126,6 +131,12 @@ class SearchViewModel(
         if (q.isNotBlank()) _intent.value = null
     }
 
+    fun setScope(scope: SearchScope) {
+        if (_scope.value == scope) return
+        resetPaging()
+        _scope.value = scope
+    }
+
     /** Picking a chip clears the query, so the two never compete for the same list. */
     fun setIntent(i: SearchIntent?) {
         _intent.value = i
@@ -161,4 +172,11 @@ class SearchViewModel(
         const val PAGE = 40
         const val MAX_LIMIT = 1_000
     }
+
+    private data class SearchRequest(
+        val query: String,
+        val context: ActiveProfileSources,
+        val limit: Int,
+        val scope: SearchScope,
+    )
 }

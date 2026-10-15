@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -37,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 import tv.own.owntv.core.content.SearchIntent
+import tv.own.owntv.core.content.SearchScope
 import tv.own.owntv.core.database.entity.MovieEntity
 import tv.own.owntv.core.database.entity.SeriesEntity
 import tv.own.owntv.core.model.MediaType
@@ -70,6 +72,7 @@ fun SearchScreen(
 
     val query by vm.query.collectAsStateWithLifecycle()
     val intent by vm.intent.collectAsStateWithLifecycle()
+    val scope by vm.scope.collectAsStateWithLifecycle()
     val typed by vm.results.collectAsStateWithLifecycle()
     val curated by vm.curated.collectAsStateWithLifecycle()
     val recents by vm.recentSearches.collectAsStateWithLifecycle()
@@ -125,6 +128,7 @@ fun SearchScreen(
                 .padding(horizontal = MobileDimens.ScreenPaddingH, vertical = MobileDimens.GapSmall)
                 .focusRequester(focus),
         )
+        ScopeChips(selected = scope, onSelect = vm::setScope)
         IntentChips(selected = intent, enabled = !searching, onSelect = vm::setIntent)
 
         when {
@@ -208,6 +212,33 @@ fun SearchScreen(
             onHide = { vm.hide(target.type, target.id) },
             onDismiss = { menuFor = null },
         )
+    }
+}
+
+/** Typed-search scope. A lazy row stays usable on narrow phones and remains keyboard/D-pad focusable. */
+@Composable
+private fun ScopeChips(selected: SearchScope, onSelect: (SearchScope) -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(R.string.search_scope_label),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = MobileDimens.ScreenPaddingH),
+        )
+        LazyRow(
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                horizontal = MobileDimens.ScreenPaddingH,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(MobileDimens.GapSmall),
+        ) {
+            items(SearchScope.entries, key = { it.name }) { entry ->
+                FilterChip(
+                    selected = entry == selected,
+                    onClick = { onSelect(entry) },
+                    label = { Text(entry.label()) },
+                )
+            }
+        }
     }
 }
 
@@ -354,6 +385,16 @@ private fun SearchIntent?.label(): String = when (this) {
     SearchIntent.CHANNELS -> stringResource(R.string.search_channels)
     null -> stringResource(R.string.search_title)
 }
+
+@Composable
+private fun SearchScope.label(): String = stringResource(
+    when (this) {
+        SearchScope.ALL -> R.string.search_scope_all
+        SearchScope.LIVE -> R.string.search_scope_live
+        SearchScope.MOVIES -> R.string.search_scope_movies
+        SearchScope.SERIES -> R.string.search_scope_series
+    },
+)
 
 private const val MIN_QUERY = 2
 

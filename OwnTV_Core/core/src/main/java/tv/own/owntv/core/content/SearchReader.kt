@@ -34,6 +34,21 @@ enum class SearchIntent {
     CHANNELS,
 }
 
+/** Which catalogue sections a typed global search is allowed to query. */
+enum class SearchScope {
+    ALL,
+    LIVE,
+    MOVIES,
+    SERIES;
+
+    fun includes(type: MediaType): Boolean = when (this) {
+        ALL -> type == MediaType.LIVE || type == MediaType.MOVIE || type == MediaType.SERIES
+        LIVE -> type == MediaType.LIVE
+        MOVIES -> type == MediaType.MOVIE
+        SERIES -> type == MediaType.SERIES
+    }
+}
+
 /**
  * Searching a profile's channels, films and shows at once.
  *
@@ -62,12 +77,13 @@ class SearchReader(
         sources: ActiveProfileSources,
         query: String,
         limit: Int = LIMIT,
+        scope: SearchScope = SearchScope.ALL,
     ): SearchResults {
         if (profileId < 0 || !sources.hasAny) return SearchResults()
         val fts = ftsQuery(query)
         val access = accessSnapshot(profileId, sources) ?: return SearchResults()
         return SearchResults(
-            channels = if (sources.liveSourceIds.isEmpty()) emptyList() else
+            channels = if (!scope.includes(MediaType.LIVE) || sources.liveSourceIds.isEmpty()) emptyList() else
                 (
                     if (fts != null) channelDao.searchListDetailedFts(fts, sources.liveSourceIds, limit)
                     else channelDao.searchListDetailed(query, sources.liveSourceIds, limit)
@@ -77,14 +93,14 @@ class SearchReader(
                         access.live.itemNames[CustomizeKeys.channel(row.channel)]
                             ?.let { row.copy(channel = row.channel.copy(name = it)) } ?: row
                     },
-            movies = if (sources.movieSourceIds.isEmpty()) emptyList() else
+            movies = if (!scope.includes(MediaType.MOVIE) || sources.movieSourceIds.isEmpty()) emptyList() else
                 (
                     if (fts != null) movieDao.searchListFts(fts, sources.movieSourceIds, limit)
                     else movieDao.searchList(query, sources.movieSourceIds, limit)
                     )
                     .filter { access.allows(MediaType.MOVIE, CustomizeKeys.movie(it), it.categoryId, it.sourceId) }
                     .map { m -> access.movie.itemNames[CustomizeKeys.movie(m)]?.let { m.copy(name = it) } ?: m },
-            series = if (sources.seriesSourceIds.isEmpty()) emptyList() else
+            series = if (!scope.includes(MediaType.SERIES) || sources.seriesSourceIds.isEmpty()) emptyList() else
                 (
                     if (fts != null) seriesDao.searchListFts(fts, sources.seriesSourceIds, limit)
                     else seriesDao.searchList(query, sources.seriesSourceIds, limit)

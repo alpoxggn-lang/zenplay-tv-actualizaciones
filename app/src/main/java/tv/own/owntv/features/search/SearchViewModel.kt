@@ -39,6 +39,7 @@ import tv.own.owntv.core.database.entity.playStreamUrl
 import tv.own.owntv.core.content.SearchIntent
 import tv.own.owntv.core.content.SearchReader
 import tv.own.owntv.core.content.SearchResults
+import tv.own.owntv.core.content.SearchScope
 import tv.own.owntv.core.model.MediaType
 import tv.own.owntv.core.repository.ActiveProfileSources
 import tv.own.owntv.core.repository.activeProfileSources
@@ -82,15 +83,20 @@ class SearchViewModel(
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
-    val results: StateFlow<SearchResults> = _query
-        .map { it.trim() }
-        .debounce(300)
-        .distinctUntilChanged()
-        .flatMapLatest { q ->
+
+    private val _scope = MutableStateFlow(SearchScope.ALL)
+    val scope: StateFlow<SearchScope> = _scope.asStateFlow()
+
+    val results: StateFlow<SearchResults> = combine(
+        _query.map { it.trim() }.debounce(300).distinctUntilChanged(),
+        _scope,
+        ctx,
+    ) { q, scope, context -> Triple(q, scope, context) }
+        .flatMapLatest { (q, scope, context) ->
             if (q.length < 2) {
                 flowOf(SearchResults())
             } else {
-                flowOf(search(q))
+                flowOf(searchReader.search(context.profileId, context, q, scope = scope))
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchResults())
@@ -98,6 +104,10 @@ class SearchViewModel(
     fun setQuery(q: String) {
         _query.value = q
         if (q.isNotBlank()) _intent.value = null // typing overrides an active launcher intent
+    }
+
+    fun setScope(scope: SearchScope) {
+        _scope.value = scope
     }
 
     // --- Batch 5: empty-state launcher (recent search terms + Continue / Unwatched / Channels) ---
@@ -127,11 +137,6 @@ class SearchViewModel(
             else flowOf(searchReader.curated(c.profileId, c, i))
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchResults())
-
-    private suspend fun search(q: String): SearchResults {
-        val pid = currentProfileId() ?: return SearchResults()
-        return searchReader.search(pid, ctx.value, q)
-    }
 
     /** Live channels this profile has favourited — so a search result can show a star and toggle it. */
     val favoriteChannelIds: StateFlow<Set<Long>> = ctx

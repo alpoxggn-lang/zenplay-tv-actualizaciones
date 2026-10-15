@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="library_catalog_search_movies">Buscar en todas las películas</string>
+    <string name="library_catalog_search_series">Buscar en todas las series</string>
+    <string name="library_catalog_results_movies">Resultados de todas las películas</string>
+    <string name="library_catalog_results_series">Resultados de todas las series</string>
+</resources>

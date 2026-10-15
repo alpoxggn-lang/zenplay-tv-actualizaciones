@@ -16,4 +16,17 @@ class CatalogSearchKeyTest {
         assertEquals(LiveKey.All, catalogSearchKey(LiveKey.Folder(42L), "matrix"))
         assertEquals(LiveKey.All, catalogSearchKey(LiveKey.Favorites, "matrix"))
     }
+
+    @Test
+    fun oneCharacterDoesNotStartCatalogueQuery() {
+        val selected = LiveKey.Folder(42L)
+        assertEquals(false, catalogQueryCanRun("m"))
+        assertEquals(selected, catalogSearchKey(selected, "m"))
+    }
+
+    @Test
+    fun twoTrimmedCharactersStartCatalogueQuery() {
+        assertEquals(true, catalogQueryCanRun("  ma  "))
+        assertEquals(LiveKey.All, catalogSearchKey(LiveKey.Folder(42L), "  ma  "))
+    }
 }

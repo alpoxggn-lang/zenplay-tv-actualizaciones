@@ -21,6 +21,7 @@ import tv.own.owntv.core.content.SearchIntent
 import tv.own.owntv.core.content.SearchReader
 import tv.own.owntv.core.content.SearchResults
 import tv.own.owntv.core.content.SearchScope
+import tv.own.owntv.core.content.searchQueryCanRun
 import tv.own.owntv.core.database.dao.SourceDao
 import tv.own.owntv.core.model.MediaType
 import tv.own.owntv.core.repository.ActiveProfileSources
@@ -56,6 +57,9 @@ class SearchViewModel(
     private val _scope = MutableStateFlow(SearchScope.ALL)
     val scope: StateFlow<SearchScope> = _scope.asStateFlow()
 
+    private val _scopeRefreshing = MutableStateFlow(false)
+    val scopeRefreshing: StateFlow<Boolean> = _scopeRefreshing.asStateFlow()
+
     /** How many rows of each kind to ask for. Grows as the list is scrolled to its end. */
     private val _limit = MutableStateFlow(PAGE)
 
@@ -66,15 +70,23 @@ class SearchViewModel(
      * What the query found. Debounced, because every keystroke otherwise costs three queries over a
      * catalogue that can hold a quarter of a million rows.
      */
-    val results: StateFlow<SearchResults> = combine(
-        _query.map { it.trim() }.debounce(DEBOUNCE_MS).distinctUntilChanged(),
-        ctx,
-        _limit,
-        _scope,
-    ) { q, c, limit, scope -> SearchRequest(q, c, limit, scope) }
-        .flatMapLatest { (q, c, limit, scope) ->
-            if (q.length < MIN_QUERY) flowOf(SearchResults())
-            else flow { emit(searchReader.search(c.profileId, c, q, limit, scope)) }
+    val results: StateFlow<SearchResults> = _scope
+        .flatMapLatest { scope ->
+            combine(
+                _query.map { it.trim() }.debounce(DEBOUNCE_MS).distinctUntilChanged(),
+                ctx,
+                _limit,
+            ) { q, c, limit -> SearchRequest(q, c, limit, scope) }
+                .flatMapLatest { (q, c, limit, activeScope) ->
+                    flow {
+                        val next = if (!searchQueryCanRun(q)) SearchResults()
+                        else searchReader.search(c.profileId, c, q, limit, activeScope)
+                        emit(next)
+                        // `emit` reaches the StateFlow before loading becomes false, so the screen
+                        // cannot briefly reveal rows from the previous scope.
+                        if (_scope.value == activeScope) _scopeRefreshing.value = false
+                    }
+                }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchResults())
 
@@ -105,7 +117,8 @@ class SearchViewModel(
      *
      * Two things stop it. A page that brought nothing new means the provider has no more matches, and
      * asking again would re-run the same three queries for the same rows. The cap is there because a
-     * query like "a" matches most of a 170k-row catalogue, and nobody scrolls that far on a phone.
+     * A broad query like "an" matches much of a 170k-row catalogue, and nobody scrolls that far on
+     * a phone.
      * The unchanged-total check doubles as the guard against the scroll firing twice before the new
      * page has arrived.
      */
@@ -126,6 +139,7 @@ class SearchViewModel(
     fun setQuery(q: String) {
         if (q.trim() != _query.value.trim()) resetPaging()
         _query.value = q
+        if (!searchQueryCanRun(q)) _scopeRefreshing.value = false
         // Typing is the user leaving the launcher behind; the curated list would otherwise stay up
         // underneath the results.
         if (q.isNotBlank()) _intent.value = null
@@ -134,13 +148,17 @@ class SearchViewModel(
     fun setScope(scope: SearchScope) {
         if (_scope.value == scope) return
         resetPaging()
+        _scopeRefreshing.value = searchQueryCanRun(_query.value)
         _scope.value = scope
     }
 
     /** Picking a chip clears the query, so the two never compete for the same list. */
     fun setIntent(i: SearchIntent?) {
         _intent.value = i
-        if (i != null) _query.value = ""
+        if (i != null) {
+            _query.value = ""
+            _scopeRefreshing.value = false
+        }
     }
 
     /** Remembered only when a result is actually opened — a term nobody used is not a search. */
@@ -168,7 +186,6 @@ class SearchViewModel(
 
     private companion object {
         const val DEBOUNCE_MS = 300L
-        const val MIN_QUERY = 2
         const val PAGE = 40
         const val MAX_LIMIT = 1_000
     }

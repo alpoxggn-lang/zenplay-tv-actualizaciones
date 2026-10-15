@@ -4,6 +4,7 @@ import tv.own.owntv.core.epg.displayLogoUrl
 import tv.own.owntv.core.content.SearchIntent
 import tv.own.owntv.core.content.SearchResults
 import tv.own.owntv.core.content.SearchScope
+import tv.own.owntv.core.content.searchQueryCanRun
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -83,6 +85,9 @@ private sealed interface SearchItem {
     data class SeriesItem(val series: SeriesEntity) : SearchItem
 }
 
+internal fun shouldRestoreSearchFocus(intent: SearchIntent?, resultsEmpty: Boolean): Boolean =
+    intent != null && resultsEmpty
+
 /**
  * Phase 11 + Batch 5 — global search across channels, movies and series with a remote-first launcher
  * empty state (recent terms + Continue / Unwatched / Channels intents) and a list + detail layout so a
@@ -111,12 +116,18 @@ fun SearchScreen(
     val curated by vm.curatedResults.collectAsStateWithLifecycle()
     val intent by vm.intent.collectAsStateWithLifecycle()
     val scope by vm.scope.collectAsStateWithLifecycle()
+    val scopeRefreshing by vm.scopeRefreshing.collectAsStateWithLifecycle()
     val recent by vm.recentSearches.collectAsStateWithLifecycle()
     val favoriteIds by vm.favoriteChannelIds.collectAsStateWithLifecycle()
     val colors = OwnTVTheme.colors
 
     val searchFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { searchFocus.requestFocus() } }
+    // A curated shortcut with no rows removes the launcher chip that held focus. Keep remote focus
+    // inside Search by returning it to the field; a non-empty result subsequently moves it to row 1.
+    LaunchedEffect(intent, curated) {
+        if (shouldRestoreSearchFocus(intent, curated.isEmpty)) runCatching { searchFocus.requestFocus() }
+    }
 
     // Back clears an active query/intent (returning to the launcher) before leaving the screen.
     BackHandler(enabled = returnToHomeOnBack || query.isNotBlank() || intent != null) {
@@ -126,7 +137,7 @@ fun SearchScreen(
         else runCatching { searchFocus.requestFocus() }
     }
 
-    val searching = query.trim().length >= 2
+    val searching = searchQueryCanRun(query)
     val shown = if (searching) results else curated
 
     Column(
@@ -144,11 +155,16 @@ fun SearchScreen(
             placeholder = stringResource(R.string.search_hint),
             modifier = Modifier.fillMaxWidth().focusRequester(searchFocus),
         )
-        Spacer(Modifier.height(12.dp))
-        SearchScopeSelector(selected = scope, onSelect = vm::setScope)
+        if (intent == null) {
+            Spacer(Modifier.height(12.dp))
+            SearchScopeSelector(selected = scope, onSelect = vm::setScope)
+        }
         Spacer(Modifier.height(20.dp))
 
         when {
+            scopeRefreshing -> CenterHint(stringResource(R.string.settings_loading))
+            query.trim().isNotEmpty() && !searching ->
+                CenterHint(stringResource(R.string.search_minimum_query))
             !searching && intent == null ->
                 LauncherEmptyState(
                     recent = recent,
@@ -156,8 +172,6 @@ fun SearchScreen(
                     onClearRecent = { vm.clearRecentSearches() },
                     onIntent = { vm.setIntent(it) },
                 )
-            searching && query.trim().length < 2 ->
-                CenterHint(stringResource(R.string.search_minimum_query))
             shown.isEmpty ->
                 CenterHint(
                     if (searching) stringResource(R.string.search_no_results, query.trim())
@@ -167,6 +181,7 @@ fun SearchScreen(
                 results = shown,
                 favoriteIds = favoriteIds,
                 heading = if (searching) null else intent?.displayLabel(),
+                scope = scope,
                 // When a curated intent is chosen its chip disappears, so pull focus onto the first
                 // result row (otherwise focus falls back to the sidebar). While typing, leave focus
                 // in the search field so the keyboard keeps working.
@@ -202,6 +217,7 @@ private fun SearchScopeSelector(selected: SearchScope, onSelect: (SearchScope) -
             PillChip(
                 label = entry.displayLabel(),
                 tonal = entry == selected,
+                selected = entry == selected,
                 onClick = { onSelect(entry) },
             )
         }
@@ -258,6 +274,7 @@ private fun ResultsWithDetail(
     results: SearchResults,
     favoriteIds: Set<Long>,
     heading: String?,
+    scope: SearchScope,
     autoFocusFirst: Boolean,
     onPlayChannel: (ChannelEntity) -> Unit,
     onToggleFavorite: (ChannelEntity) -> Unit,
@@ -272,17 +289,23 @@ private fun ResultsWithDetail(
         }
     }
     var selected by remember { mutableStateOf<SearchItem?>(null) }
+    val listState = rememberLazyListState()
     val active = selected?.takeIf { it in items } ?: items.firstOrNull()
     val firstItem = items.firstOrNull()
 
     // Land focus on the first row when a curated intent's list appears (see call site).
     val firstRowFocus = remember { FocusRequester() }
+    LaunchedEffect(scope) {
+        selected = null
+        listState.scrollToItem(0)
+    }
     LaunchedEffect(autoFocusFirst, items.isNotEmpty()) {
         if (autoFocusFirst && items.isNotEmpty()) runCatching { firstRowFocus.requestFocus() }
     }
 
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.weight(1f).fillMaxHeight().focusGroup(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -497,12 +520,14 @@ private fun ResultRow(
 private fun PillChip(
     label: String,
     tonal: Boolean,
+    selected: Boolean = false,
     icon: OwnTVIcon? = null,
     onClick: () -> Unit,
 ) {
     val colors = OwnTVTheme.colors
     FocusableSurface(
         onClick = onClick,
+        selected = selected,
         shape = RoundedCornerShape(999.dp),
         contentAlignment = Alignment.Center,
         surface = GlassSurface.CARDS,

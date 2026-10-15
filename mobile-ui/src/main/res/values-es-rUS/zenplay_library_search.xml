@@ -4,4 +4,5 @@
     <string name="library_catalog_search_series">Buscar en todas las series</string>
     <string name="library_catalog_results_movies">Resultados de todas las películas</string>
     <string name="library_catalog_results_series">Resultados de todas las series</string>
+    <string name="library_catalog_search_minimum_query">Escribe al menos 2 caracteres para buscar en este catálogo.</string>
 </resources>

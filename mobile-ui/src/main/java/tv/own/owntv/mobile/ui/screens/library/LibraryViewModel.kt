@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tv.own.owntv.core.content.AdultCategoryClassifier
 import tv.own.owntv.core.content.ContentAccessPolicy
+import tv.own.owntv.core.content.searchQueryCanRun
 import tv.own.owntv.core.content.movieCountFlow
 import tv.own.owntv.core.content.moviePagingSource
 import tv.own.owntv.core.content.seriesCountFlow
@@ -88,8 +89,10 @@ data class VodItem(
 )
 
 /** A section search intentionally ignores the selected folder and scans the whole local catalogue. */
+internal fun catalogQueryCanRun(query: String): Boolean = searchQueryCanRun(query)
+
 internal fun catalogSearchKey(selected: LiveKey, query: String): LiveKey =
-    if (query.isBlank()) selected else LiveKey.All
+    if (catalogQueryCanRun(query)) LiveKey.All else selected
 
 /**
  * Movies and Series for the phone.
@@ -331,7 +334,7 @@ class LibraryViewModel(
             .combine(movieSearch) { args, query -> args.copy(query = query) }
             .combine(orderedContexts) { args, _ -> args }
             .flatMapLatest { (selectedKey, c, cust, hidden, query) ->
-                if (c.profileId < 0) {
+                if (c.profileId < 0 || (query.isNotEmpty() && !catalogQueryCanRun(query))) {
                     flowOf(PagingData.empty())
                 } else {
                     val key = catalogSearchKey(selectedKey, query)
@@ -363,7 +366,7 @@ class LibraryViewModel(
             .combine(seriesSearch) { args, query -> args.copy(query = query) }
             .combine(orderedContexts) { args, _ -> args }
             .flatMapLatest { (selectedKey, c, cust, hidden, query) ->
-                if (c.profileId < 0) {
+                if (c.profileId < 0 || (query.isNotEmpty() && !catalogQueryCanRun(query))) {
                     flowOf(PagingData.empty())
                 } else {
                     val key = catalogSearchKey(selectedKey, query)
@@ -445,7 +448,13 @@ class LibraryViewModel(
         _tab.value = tab
     }
 
-    /** Searches the whole current section, independently of the selected provider category. */
+    /**
+     * Searches the whole current section, independently of the selected provider category.
+     *
+     * The paged Room query is indexed on the provider title. User-visible renamed titles live in
+     * DataStore and are applied after a page is loaded; matching those names too needs a persisted
+     * search index/schema migration rather than an in-memory merge that would break stable paging.
+     */
     fun setCatalogQuery(query: String) {
         if (_tab.value == LibraryTab.MOVIES) _movieSearch.value = query else _seriesSearch.value = query
     }

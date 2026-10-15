@@ -142,7 +142,11 @@ fun LibraryScreen(
     var sheetOpen by remember { mutableStateOf(false) }
     var categoryPicker by rememberSaveable(tab, lockedKey) { mutableStateOf(false) }
     var categoryMenuFor by remember { mutableStateOf<VodCategory?>(null) }
-    var catalogSearchOpen by rememberSaveable(tab, lockedKey) { mutableStateOf(false) }
+    var catalogSearchRequested by rememberSaveable(lockedKey) { mutableStateOf(false) }
+    // Each tab retains its own query. If the user returns to a tab that is still filtering, the
+    // field must be visible so the filter can be understood, edited and cleared.
+    val catalogSearchOpen = lockedKey == null && (catalogSearchRequested || catalogQuery.isNotBlank())
+    val catalogQueryTooShort = catalogQuery.trim().let { it.isNotEmpty() && !catalogQueryCanRun(it) }
     val categoryLabel = categories.firstOrNull { it.key == selected }?.label(tab).orEmpty()
     val catalogSearchFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -215,7 +219,7 @@ fun LibraryScreen(
                     enabled = categories.isNotEmpty(),
                     modifier = Modifier.weight(1f).semantics { stateDescription = categoryLabel },
                 )
-                IconButton(onClick = { catalogSearchOpen = true }) {
+                IconButton(onClick = { catalogSearchRequested = true }) {
                     Icon(
                         MobileIcons.Search,
                         stringResource(
@@ -252,7 +256,7 @@ fun LibraryScreen(
                     IconButton(
                         onClick = {
                             vm.setCatalogQuery("")
-                            catalogSearchOpen = false
+                            catalogSearchRequested = false
                             keyboard?.hide()
                         },
                     ) {
@@ -263,7 +267,12 @@ fun LibraryScreen(
         }
         Text(
             // A typed query always searches All, not merely the selected provider category.
-            text = if (catalogQuery.isNotBlank()) {
+            text = if (catalogQueryTooShort) {
+                stringResource(
+                    if (tab == LibraryTab.MOVIES) R.string.library_catalog_search_movies
+                    else R.string.library_catalog_search_series,
+                )
+            } else if (catalogQuery.isNotBlank()) {
                 stringResource(
                     if (tab == LibraryTab.MOVIES) R.string.library_catalog_results_movies
                     else R.string.library_catalog_results_series,
@@ -280,7 +289,9 @@ fun LibraryScreen(
         )
         // Empty only once the first page has actually come back — otherwise every category change
         // flashes "No movies here" for as long as the query takes on a 170k-title catalogue.
-        if (items.itemCount == 0 && items.loadState.refresh !is LoadState.Loading) {
+        if (catalogQueryTooShort) {
+            EmptyLibrary(tab, catalogQuery)
+        } else if (items.itemCount == 0 && items.loadState.refresh !is LoadState.Loading) {
             EmptyLibrary(tab, catalogQuery)
         } else if (viewMode == SettingsRepository.VodViewMode.LIST) {
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize().mobileGroupPlate()) {
@@ -448,10 +459,15 @@ private fun LibraryOptionsSheet(vm: LibraryViewModel, columns: Int, onDismiss: (
 private fun EmptyLibrary(tab: LibraryTab, query: String = "") {
     Box(Modifier.fillMaxSize().padding(MobileDimens.GapLarge), contentAlignment = Alignment.Center) {
         Text(
-            text = if (query.isNotBlank()) stringResource(R.string.search_no_results, query.trim())
-            else stringResource(
-                if (tab == LibraryTab.MOVIES) R.string.content_no_movies_here else R.string.content_no_series_here,
-            ),
+            text = when {
+                query.trim().let { it.isNotEmpty() && !catalogQueryCanRun(it) } ->
+                    stringResource(R.string.library_catalog_search_minimum_query)
+                query.isNotBlank() -> stringResource(R.string.search_no_results, query.trim())
+                else -> stringResource(
+                    if (tab == LibraryTab.MOVIES) R.string.content_no_movies_here
+                    else R.string.content_no_series_here,
+                )
+            },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

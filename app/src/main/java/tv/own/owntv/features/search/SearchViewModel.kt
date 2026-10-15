@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -40,6 +41,7 @@ import tv.own.owntv.core.content.SearchIntent
 import tv.own.owntv.core.content.SearchReader
 import tv.own.owntv.core.content.SearchResults
 import tv.own.owntv.core.content.SearchScope
+import tv.own.owntv.core.content.searchQueryCanRun
 import tv.own.owntv.core.model.MediaType
 import tv.own.owntv.core.repository.ActiveProfileSources
 import tv.own.owntv.core.repository.activeProfileSources
@@ -87,26 +89,37 @@ class SearchViewModel(
     private val _scope = MutableStateFlow(SearchScope.ALL)
     val scope: StateFlow<SearchScope> = _scope.asStateFlow()
 
-    val results: StateFlow<SearchResults> = combine(
-        _query.map { it.trim() }.debounce(300).distinctUntilChanged(),
-        _scope,
-        ctx,
-    ) { q, scope, context -> Triple(q, scope, context) }
-        .flatMapLatest { (q, scope, context) ->
-            if (q.length < 2) {
-                flowOf(SearchResults())
-            } else {
-                flowOf(searchReader.search(context.profileId, context, q, scope = scope))
-            }
+    private val _scopeRefreshing = MutableStateFlow(false)
+    val scopeRefreshing: StateFlow<Boolean> = _scopeRefreshing.asStateFlow()
+
+    val results: StateFlow<SearchResults> = _scope
+        .flatMapLatest { scope ->
+            combine(
+                _query.map { it.trim() }.debounce(300).distinctUntilChanged(),
+                ctx,
+            ) { q, context -> q to context }
+                .flatMapLatest { (q, context) ->
+                    flow {
+                        val next = if (!searchQueryCanRun(q)) SearchResults()
+                        else searchReader.search(context.profileId, context, q, scope = scope)
+                        emit(next)
+                        // `emit` reaches the StateFlow before loading becomes false, so the screen
+                        // cannot briefly reveal rows from the previous scope.
+                        if (_scope.value == scope) _scopeRefreshing.value = false
+                    }
+                }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchResults())
 
     fun setQuery(q: String) {
         _query.value = q
+        if (!searchQueryCanRun(q)) _scopeRefreshing.value = false
         if (q.isNotBlank()) _intent.value = null // typing overrides an active launcher intent
     }
 
     fun setScope(scope: SearchScope) {
+        if (_scope.value == scope) return
+        _scopeRefreshing.value = searchQueryCanRun(_query.value)
         _scope.value = scope
     }
 
@@ -127,7 +140,10 @@ class SearchViewModel(
     /** Selecting an intent clears any typed query so the curated list shows; null returns to the launcher. */
     fun setIntent(i: SearchIntent?) {
         _intent.value = i
-        if (i != null) _query.value = ""
+        if (i != null) {
+            _query.value = ""
+            _scopeRefreshing.value = false
+        }
     }
 
     /** Curated results for the active empty-state intent (bounded; reuses favourites/history queries). */

@@ -39,6 +39,7 @@ import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 import tv.own.owntv.core.content.SearchIntent
 import tv.own.owntv.core.content.SearchScope
+import tv.own.owntv.core.content.searchQueryCanRun
 import tv.own.owntv.core.database.entity.MovieEntity
 import tv.own.owntv.core.database.entity.SeriesEntity
 import tv.own.owntv.core.model.MediaType
@@ -73,6 +74,7 @@ fun SearchScreen(
     val query by vm.query.collectAsStateWithLifecycle()
     val intent by vm.intent.collectAsStateWithLifecycle()
     val scope by vm.scope.collectAsStateWithLifecycle()
+    val scopeRefreshing by vm.scopeRefreshing.collectAsStateWithLifecycle()
     val typed by vm.results.collectAsStateWithLifecycle()
     val curated by vm.curated.collectAsStateWithLifecycle()
     val recents by vm.recentSearches.collectAsStateWithLifecycle()
@@ -81,7 +83,7 @@ fun SearchScreen(
     val favoriteMovies by vm.favoriteMovies.collectAsStateWithLifecycle()
     val favoriteSeries by vm.favoriteSeries.collectAsStateWithLifecycle()
 
-    val searching = query.trim().length >= MIN_QUERY
+    val searching = searchQueryCanRun(query)
     val results = if (searching) typed else curated
     // One playlist needs no attribution; several do, and that is the case the line is there for.
     val showProvider = sources.size > 1
@@ -103,7 +105,7 @@ fun SearchScreen(
         delay(150)
         runCatching { keyboard?.show() }
     }
-    LaunchedEffect(query, intent) { listState.scrollToItem(0) }
+    LaunchedEffect(query, intent, scope) { listState.scrollToItem(0) }
 
     // Reaching the bottom asks for the next page. Without it a search stops at the first 40 of each
     // kind, and a provider with hundreds of CNN feeds looks like it only has forty.
@@ -128,10 +130,16 @@ fun SearchScreen(
                 .padding(horizontal = MobileDimens.ScreenPaddingH, vertical = MobileDimens.GapSmall)
                 .focusRequester(focus),
         )
-        ScopeChips(selected = scope, onSelect = vm::setScope)
+        if (intent == null) {
+            ScopeChips(selected = scope, onSelect = vm::setScope)
+        }
         IntentChips(selected = intent, enabled = !searching, onSelect = vm::setIntent)
 
         when {
+            scopeRefreshing -> CenterMessage(stringResource(R.string.settings_loading))
+            query.trim().isNotEmpty() && !searching -> CenterMessage(
+                stringResource(R.string.search_minimum_query),
+            )
             !searching && intent == null -> RecentSearches(
                 recents = recents,
                 onPick = vm::setQuery,
@@ -396,7 +404,6 @@ private fun SearchScope.label(): String = stringResource(
     },
 )
 
-private const val MIN_QUERY = 2
 
 /** How many rows from the end the next page is fetched, so the list does not visibly stall. */
 private const val LOAD_MORE_MARGIN = 5

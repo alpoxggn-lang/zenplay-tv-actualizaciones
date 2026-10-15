@@ -28,4 +28,11 @@ class SearchScopeTest {
         assertFalse(SearchScope.SERIES.includes(MediaType.MOVIE))
         assertTrue(SearchScope.SERIES.includes(MediaType.SERIES))
     }
+
+    @Test
+    fun typedSearchRequiresTwoTrimmedCharacters() {
+        assertFalse(searchQueryCanRun(""))
+        assertFalse(searchQueryCanRun(" a "))
+        assertTrue(searchQueryCanRun(" ab "))
+    }
 }

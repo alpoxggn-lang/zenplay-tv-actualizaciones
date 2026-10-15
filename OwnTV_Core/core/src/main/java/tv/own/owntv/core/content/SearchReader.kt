@@ -49,6 +49,9 @@ enum class SearchScope {
     }
 }
 
+/** Shared lower bound for typed catalogue search, before any DAO/FTS work is allowed to start. */
+fun searchQueryCanRun(query: String): Boolean = query.trim().length >= MIN_TYPED_SEARCH_LENGTH
+
 /**
  * Searching a profile's channels, films and shows at once.
  *
@@ -79,14 +82,15 @@ class SearchReader(
         limit: Int = LIMIT,
         scope: SearchScope = SearchScope.ALL,
     ): SearchResults {
-        if (profileId < 0 || !sources.hasAny) return SearchResults()
-        val fts = ftsQuery(query)
+        if (profileId < 0 || !sources.hasAny || !searchQueryCanRun(query)) return SearchResults()
+        val term = query.trim()
+        val fts = ftsQuery(term)
         val access = accessSnapshot(profileId, sources) ?: return SearchResults()
         return SearchResults(
             channels = if (!scope.includes(MediaType.LIVE) || sources.liveSourceIds.isEmpty()) emptyList() else
                 (
                     if (fts != null) channelDao.searchListDetailedFts(fts, sources.liveSourceIds, limit)
-                    else channelDao.searchListDetailed(query, sources.liveSourceIds, limit)
+                    else channelDao.searchListDetailed(term, sources.liveSourceIds, limit)
                     )
                     .filter { row -> access.allows(MediaType.LIVE, CustomizeKeys.channel(row.channel), row.channel.categoryId, row.channel.sourceId) }
                     .map { row ->
@@ -96,14 +100,14 @@ class SearchReader(
             movies = if (!scope.includes(MediaType.MOVIE) || sources.movieSourceIds.isEmpty()) emptyList() else
                 (
                     if (fts != null) movieDao.searchListFts(fts, sources.movieSourceIds, limit)
-                    else movieDao.searchList(query, sources.movieSourceIds, limit)
+                    else movieDao.searchList(term, sources.movieSourceIds, limit)
                     )
                     .filter { access.allows(MediaType.MOVIE, CustomizeKeys.movie(it), it.categoryId, it.sourceId) }
                     .map { m -> access.movie.itemNames[CustomizeKeys.movie(m)]?.let { m.copy(name = it) } ?: m },
             series = if (!scope.includes(MediaType.SERIES) || sources.seriesSourceIds.isEmpty()) emptyList() else
                 (
                     if (fts != null) seriesDao.searchListFts(fts, sources.seriesSourceIds, limit)
-                    else seriesDao.searchList(query, sources.seriesSourceIds, limit)
+                    else seriesDao.searchList(term, sources.seriesSourceIds, limit)
                     )
                     .filter { access.allows(MediaType.SERIES, CustomizeKeys.series(it), it.categoryId, it.sourceId) }
                     .map { s -> access.series.itemNames[CustomizeKeys.series(s)]?.let { s.copy(name = it) } ?: s },
@@ -230,6 +234,8 @@ class SearchReader(
         }
     }
 }
+
+private const val MIN_TYPED_SEARCH_LENGTH = 2
 
 /** True when the profile has at least one playlist a search could look in. */
 private val ActiveProfileSources.hasAny: Boolean

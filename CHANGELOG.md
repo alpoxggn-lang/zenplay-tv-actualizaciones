@@ -7,6 +7,17 @@
 > Issue numbers that are part of a title are fine; explanatory parentheticals are not. The detail —
 > what, why, files and verification — belongs in the commit message, never here.
 
+## v2.2.5 — 2026-10-14
+
+### ✨ Funciones nuevas
+- **Botón de pantalla flotante en el reproductor móvil y tableta**
+- **Búsqueda completa dentro de Películas y Series en móvil y tableta**
+- **Filtros Todo, TV en vivo, Películas y Series en la búsqueda general**
+
+### 🐛 Correcciones
+- **Los filtros de búsqueda conservan su estado visible y el foco del control remoto**
+- **Las búsquedas cortas ya no bloquean catálogos grandes**
+
 ## v2.2.4 — 2026-10-14
 
 ### 🐛 Correcciones

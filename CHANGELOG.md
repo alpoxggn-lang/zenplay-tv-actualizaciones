@@ -7,6 +7,16 @@
 > Issue numbers that are part of a title are fine; explanatory parentheticals are not. The detail —
 > what, why, files and verification — belongs in the commit message, never here.
 
+## v2.2.6 — 2026-10-14
+
+### ✨ Funciones nuevas
+- **Películas agregadas recientemente dentro del catálogo de Películas**
+- **Series agregadas o actualizadas dentro del catálogo de Series**
+
+### 🐛 Correcciones
+- **Las colecciones recientes respetan categorías ocultas y perfiles infantiles**
+- **Las series con fecha de actualización vacía conservan su fecha de agregado**
+
 ## v2.2.5 — 2026-10-14
 
 ### ✨ Funciones nuevas

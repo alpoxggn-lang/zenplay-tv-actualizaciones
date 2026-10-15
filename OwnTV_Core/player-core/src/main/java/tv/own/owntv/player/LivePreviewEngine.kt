@@ -2594,9 +2594,11 @@ class LivePreviewEngine(
             )
         }
         // Audio exists but ExoPlayer can decode none of it → the VM will route this stream to mpv.
-        val anySupportedAudio = tracks.groups.any { g ->
-            g.type == androidx.media3.common.C.TRACK_TYPE_AUDIO && (0 until g.length).any { g.isTrackSupported(it) }
-        }
+        // FORMAT_EXCEEDS_CAPABILITIES is still a playable route: many vendor decoders under-report
+        // channel/profile limits and Media3 intentionally permits selecting them. The shared gate also
+        // sees the bundled FFmpeg renderer, so DTS/TrueHD/MP2 do not get reported as silent merely
+        // because the firmware has no MediaCodec decoder.
+        val anySupportedAudio = ExoAudioGate.anyPlayableAudio(tracks)
         _audioUnsupported.value = audio.isNotEmpty() && !anySupportedAudio
     }
 

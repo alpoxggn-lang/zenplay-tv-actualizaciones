@@ -70,14 +70,6 @@ private val BITMAP_SUB_CODECS = setOf(
     "hdmv_pgs_subtitle", "pgssub", "dvd_subtitle", "dvdsub", "vobsub", "dvb_subtitle", "dvbsub", "xsub",
 )
 
-/** Audio codecs ExoPlayer can reliably decode (MediaCodec / built-in). If the active audio isn't one of
- *  these (e.g. DTS, TrueHD) we DON'T hand off — the handoff would just fail and bounce back to mpv. mpv
- *  decodes these in software via FFmpeg; ExoPlayer doesn't. Video is the same MediaCodec under both, so
- *  only audio gates the handoff. Matched against the mpv `codec` string with a prefix check. */
-private val EXO_SAFE_AUDIO_CODECS = setOf(
-    "aac", "ac3", "eac3", "mp3", "mp2", "opus", "vorbis", "flac", "pcm", "alac",
-)
-
 /** Metadata shown in the player HUD (breadcrumb path, year, channel logo). */
 @Immutable
 data class MediaMeta(
@@ -312,6 +304,9 @@ class OwnTVPlayer(
         // early enough that the tolerant reopen still gets several attempts before the error UI.
         const val TOLERANT_DEMUX_AFTER_RECONNECTS = 3
         const val LIVE_OPEN_TIMEOUT_MS = 10_000L // bound FFmpeg/network loops that never emit FILE_LOADED/END_FILE
+        // Live reads must fail promptly enough for the reconnect ladder to recover the channel.
+        // Finite VOD keeps its configured/default timeout because it can recover more slowly.
+        const val LIVE_NETWORK_TIMEOUT_SECS = 10
 
         /** How long a statistics read may wait for [mpvExecutor] before it is abandoned as unknown. The
          *  executor can be busy with a real command (a load, a decoder switch) and no readout is worth
@@ -743,14 +738,29 @@ class OwnTVPlayer(
         }
     }
 
-    /** mpv `audio-channels`: multichannel allowed → multichannel LPCM where the sink **unambiguously**
-     *  supports it (`auto-safe`), else a safe stereo downmix; Stereo only → force stereo. `auto-safe`
-     *  (not `auto`) because some sinks falsely claim 5.1/7.1. If a sink claims support but actually
+    /** mpv `audio-channels`: multichannel allowed → the layouts the active output's PCM really accepts;
+     *  Stereo only → force stereo. If a sink claims support but actually
      *  mis-plays multichannel PCM (the "2× speed, no sound", #25) or goes silent, the failsafe latches
      *  [AudioOutputPolicy] and every engine forces stereo for the rest of the session. Always decoded
      *  PCM, so the audio clock stays alive. */
     private fun audioChannelsValue(): String =
-        if (AudioOutputPolicy.allowsMultichannel(surroundMode)) "auto-safe" else "stereo"
+        if (AudioOutputPolicy.allowsMultichannel(surroundMode)) {
+            MpvAudioChannels.listFor(MpvAudioChannels.outputPcmChannelCounts(context))
+        } else {
+            "stereo"
+        }
+
+    /** Last value applied to mpv; writing it again needlessly rebuilds the Android audio chain. */
+    @Volatile private var appliedAudioChannels: String? = null
+
+    /** Re-read the active route for every load so switching a soundbar/HDMI receiver is respected. */
+    private fun MPVLib.applyAudioChannels() {
+        val value = audioChannelsValue()
+        if (value == appliedAudioChannels) return
+        setPropertyString("audio-channels", value)
+        appliedAudioChannels = value
+        android.util.Log.i(TAG, "audio-channels=$value")
+    }
 
     /** True when this load may use multichannel — the mode allows it and the session isn't latched. */
     private fun multichannelAllowed(): Boolean = AudioOutputPolicy.allowsMultichannel(surroundMode)
@@ -761,6 +771,7 @@ class OwnTVPlayer(
      * all tracks are detected. If a trimmed live load returns no audio, [ItemState.forceFullProbe] re-probes fully.
      */
     private fun MPVLib.applyProbeProfile(url: String) {
+        applyAudioChannels()
         val lower = url.lowercase()
         // Raw continuous MPEG-TS (Xtream live `…/id.ts`, catch-up timeshift `.ts`). These probe fast and
         // start mid-stream, so they're the streams fast-zap trimming was built for — and the proven-safe
@@ -782,34 +793,41 @@ class OwnTVPlayer(
         // forever during OPEN so the stream never starts. [streamLavfOptionsFor] owns that distinction and
         // is the single place stream-lavf-o is decided, for this path and the loadfile path alike.
         setPropertyString("stream-lavf-o", streamLavfOptionsFor(url, isLiveContent, effectiveHls))
-        // Live latency (#72): how far ahead the demuxer buffers. Live streams honour the user's choice
-        // (or the device budget default when Balanced); VOD always uses the budget default.
-        val budgetReadahead = playerBudget?.readaheadSecs ?: "30"
         // "Pre-buffer" (F07): mpv's own pre-roll gate — hold the picture until the cache
         // holds N seconds, and do the same after an underrun (which is what "pause 3-4 s then play
         // makes it smooth" was doing by hand). Live only; 0 restores mpv's defaults.
         val prerollSecs = effectivePrerollSecs()
-        // The readahead must be able to HOLD the pre-roll, or the gate could never be satisfied.
-        val liveReadahead = effectiveLiveBufferSecs()?.let { maxOf(it, prerollSecs) }
         // N18 — a film's own buffer and network timeout (Settings; 0 = Auto = the values used before).
         // Set on every load, live included, so a channel after a film gets the device's values back.
         // demuxer-max-bytes is not touched: memory stays the tier's, so a longer buffer is "up to".
         val film = playbackSettings.value?.takeIf { !isLiveContent }
-        val filmReadahead = playerBudget?.let { FilmNetwork.readaheadSecs(film?.vodBufferSecs ?: 0, it) } ?: budgetReadahead
-        setPropertyString("demuxer-readahead-secs", if (isLiveContent) (liveReadahead?.toString() ?: budgetReadahead) else filmReadahead)
+        val networkTimeout = if (isLiveContent) LIVE_NETWORK_TIMEOUT_SECS
+        else FilmNetwork.mpvTimeoutSecs(film?.vodNetworkTimeoutSecs ?: 0)
+        setPropertyString("network-timeout", networkTimeout.toString())
         playerBudget?.let { budget ->
-            setPropertyString("cache-secs", FilmNetwork.bufferSecs(film?.vodBufferSecs ?: 0, budget).toString())
+            // A live choice must reach BOTH values or the larger cache silently wins.
+            val live = MpvLiveBuffer.resolve(effectiveLiveBufferSecs(), prerollSecs, budget)
+            setPropertyString(
+                "demuxer-readahead-secs",
+                if (isLiveContent) live.readahead else FilmNetwork.readaheadSecs(film?.vodBufferSecs ?: 0, budget),
+            )
+            setPropertyString(
+                "cache-secs",
+                if (isLiveContent) live.cache else FilmNetwork.bufferSecs(film?.vodBufferSecs ?: 0, budget).toString(),
+            )
+            if (isLiveContent) {
+                android.util.Log.i(
+                    TAG,
+                    "live_buffer preroll=${prerollSecs}s readahead=${live.readahead} cache=${live.cache} latency=${effectiveLiveBufferSecs() ?: -1} net=${networkTimeout}s",
+                )
+            }
         }
-        setPropertyString("network-timeout", FilmNetwork.mpvTimeoutSecs(film?.vodNetworkTimeoutSecs ?: 0).toString())
         if (isLiveContent && prerollSecs > 0) {
             setPropertyString("cache-pause-initial", "yes")
             setPropertyString("cache-pause-wait", prerollSecs.toString())
         } else {
             setPropertyString("cache-pause-initial", "no")
             setPropertyString("cache-pause-wait", "1")
-        }
-        if (isLiveContent) {
-            android.util.Log.i(TAG, "live_buffer preroll=${prerollSecs}s readahead=${liveReadahead ?: budgetReadahead} latency=${effectiveLiveBufferSecs() ?: -1}")
         }
         // Broken-timestamp live streams (some IPTV 4K feeds send non-increasing/duplicate PTS): mpv is
         // strict about PTS and drops nearly every frame ("Invalid video timestamp: X -> X"), which looks
@@ -1062,7 +1080,7 @@ class OwnTVPlayer(
             if (initialized) {
                 mpvAsync {
                     val sur = multichannelAllowed() // AUTO or Surround; see the #25 pin in ensureInit
-                    setPropertyString("audio-channels", audioChannelsValue())
+                    applyAudioChannels()
                     setPropertyString("audio-format", if (sur) "s16" else "")
                     setPropertyString("audio-samplerate", if (sur) "48000" else "0")
                 }
@@ -1108,12 +1126,13 @@ class OwnTVPlayer(
             // Re-apply live to a playing live channel; VOD is untouched. Next-open covers the rest.
             // A playlist override outranks the global value, so a global change is not this tune's to apply.
             if (initialized && isLiveContent && liveBufferOverride == null) {
-                val budgetReadahead = playerBudget?.readaheadSecs ?: "30"
-                // Keep the pre-roll floor from [applyProbeProfile]: a readahead below `cache-pause-wait`
-                // could never satisfy the gate.
-                val readahead = effectiveLiveBufferSecs()?.let { secs -> maxOf(secs, effectivePrerollSecs()).toString() }
-                    ?: budgetReadahead
-                mpvAsync { setPropertyString("demuxer-readahead-secs", readahead) }
+                playerBudget?.let { budget ->
+                    val live = MpvLiveBuffer.resolve(effectiveLiveBufferSecs(), effectivePrerollSecs(), budget)
+                    mpvAsync {
+                        setPropertyString("demuxer-readahead-secs", live.readahead)
+                        setPropertyString("cache-secs", live.cache)
+                    }
+                }
             }
         }.launchIn(scope)
         vodEngineStore.mpvUrls.onEach { vodPinnedMpv = it }.launchIn(scope)
@@ -1653,30 +1672,39 @@ class OwnTVPlayer(
         override fun onEnded() { scope.launch { onExoEnded() } }
     }
 
-    /** ExoPlayer can decode this VOD's active audio? Always-safe codecs (AAC/AC3/…) pass immediately;
-     *  for others (DTS/TrueHD) we check whether THIS device actually has a hardware/software decoder for
-     *  it — many TVs do — and only block when it genuinely can't, so we don't fail+bounce. Unknown → try. */
+    /** ExoPlayer can play this VOD's active audio through MediaCodec, the bundled FFmpeg renderer or
+     *  receiver passthrough? Unknown codec names are tried so incomplete provider metadata never blocks
+     *  a stream before either engine has had a chance to inspect it. */
     private fun audioCodecSafeForExo(): Boolean {
         val sel = _audioTrackList.value.firstOrNull { it.selected } ?: _audioTrackList.value.firstOrNull()
         val codec = sel?.codec?.lowercase() ?: return true
-        if (EXO_SAFE_AUDIO_CODECS.any { codec.startsWith(it) }) {
-            android.util.Log.i(TAG, "Exo codec gate: audio codec='$codec' → safe (allowlist)")
-            return true
-        }
-        val mime = audioMimeFor(codec)
-        val ok = mime != null && deviceHasAudioDecoder(mime)
-        android.util.Log.i(TAG, "Exo codec gate: audio codec='$codec' mime=$mime deviceDecoder=$ok")
-        return ok
+        val passthroughAllowedForItem = multichannelAllowed() && playbackSettings.value?.let { settings ->
+            AudioDynamics.passthroughAllowed(
+                settings.audioPassthrough,
+                settings.nightMode,
+                settings.volumeLevelling,
+            )
+        } != false
+        val verdict = ExoAudioGate.verdict(
+            codec,
+            deviceDecoder = ::deviceHasAudioDecoder,
+            ffmpeg = FfmpegAudio::supports,
+            passthrough = { mime -> passthroughAllowedForItem && outputTakesPassthrough(mime) },
+        )
+        android.util.Log.i(TAG, "Exo codec gate: audio codec='$codec' → $verdict")
+        return verdict.safe
     }
 
-    /** Map an mpv/FFmpeg audio codec name to the Android MIME used to look up a device decoder. */
-    private fun audioMimeFor(codec: String): String? = when {
-        codec.startsWith("ac3") || codec.startsWith("ac-3") -> "audio/ac3"
-        codec.startsWith("eac3") || codec.startsWith("e-ac-3") -> "audio/eac3"
-        codec.startsWith("dts") -> "audio/vnd.dts"
-        codec.startsWith("truehd") || codec.startsWith("mlp") -> "audio/true-hd"
-        else -> null
-    }
+    /** Whether the active Android audio output can accept [mime] as an encoded bitstream. */
+    private fun outputTakesPassthrough(mime: String): Boolean = runCatching {
+        val attributes = androidx.media3.common.AudioAttributes.DEFAULT
+        androidx.media3.exoplayer.audio.AudioCapabilities
+            .getCapabilities(context, attributes, null, emptyList())
+            .isPassthroughPlaybackSupported(
+                androidx.media3.common.Format.Builder().setSampleMimeType(mime).build(),
+                attributes,
+            )
+    }.getOrDefault(false)
 
     /** Does this device expose a (hardware or software) MediaCodec decoder for [mime]? */
     private fun deviceHasAudioDecoder(mime: String): Boolean = runCatching {
@@ -2498,7 +2526,10 @@ class OwnTVPlayer(
             // (auto → stereo on a 2.0 TV, 5.1/7.1 on a capable receiver). Off → a plain stereo downmix.
             // (We never bitstream/spdif: on Realtek the passthrough AudioTrack reports no clock, which
             // stalls the direct VO into a ~2fps slideshow on Dolby/DTS content.)
-            setOptionString("audio-channels", audioChannelsValue())
+            appliedAudioChannels = audioChannelsValue().also {
+                setOptionString("audio-channels", it)
+                android.util.Log.i(TAG, "audio-channels=$it")
+            }
             // Compatibility for multichannel: some HALs choke on Float / 44.1 kHz 5.1 PCM (mis-sized buffer
             // → 2× drain, #25). Pin the universally-safe 16-bit/48 kHz output whenever multichannel is
             // allowed — that is AUTO (the default) as well as Surround, not only "when surround is on". On

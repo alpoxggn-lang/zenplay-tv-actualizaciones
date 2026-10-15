@@ -7,6 +7,16 @@
 > Issue numbers that are part of a title are fine; explanatory parentheticals are not. The detail —
 > what, why, files and verification — belongs in the commit message, never here.
 
+## v2.2.7 — 2026-10-15
+
+### ✨ Funciones nuevas
+- **Decodificación FFmpeg de respaldo para DTS, TrueHD, MP2 y audio sin códec del dispositivo**
+- **Salida multicanal adaptada a las capacidades reales de TV, HDMI y barra de sonido**
+
+### 🐛 Correcciones
+- **Películas y series cambian de reproductor cuando ninguna pista de audio es compatible**
+- **TV en vivo aplica la latencia al búfer completo y recupera antes las conexiones detenidas**
+
 ## v2.2.6 — 2026-10-14
 
 ### ✨ Funciones nuevas

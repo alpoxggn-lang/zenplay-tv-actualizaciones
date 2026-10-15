@@ -123,6 +123,8 @@ class ExoSubtitleEngine(
     // video, so if ExoPlayer never renders a frame (a format/decoder combo mpv handled fine but this
     // renderer can't), fall back rather than leaving the user on audio with a blank screen.
     private var firstFrameSeen = false
+    /** Prevent duplicate engine hand-offs while Media3 publishes successive track snapshots. */
+    private var undecodableAudioReported = false
     // X1: whether this file declares a video track at all. Radio stations filed under Movies, music
     // VOD and audio-only catch-up recordings have none — nothing is broken there and the watchdog
     // below must stay quiet. Assumed true until onTracksChanged says otherwise, so a file whose
@@ -257,6 +259,7 @@ class ExoSubtitleEngine(
         }
 
         override fun onTracksChanged(tracks: Tracks) {
+            if (reportUndecodableAudio(tracks)) return
             updateVideoTrackPresence(tracks)
             rebuildAudioTracks(tracks)
             rebuildTextTracks(tracks)
@@ -322,6 +325,26 @@ class ExoSubtitleEngine(
         }
     }
 
+    /** Hand VOD back to the alternate engine instead of playing silently when no audio renderer can
+     *  handle any advertised track. FORMAT_EXCEEDS_CAPABILITIES is accepted because vendor decoders
+     *  frequently under-report limits while still decoding the stream correctly. */
+    private fun reportUndecodableAudio(tracks: Tracks): Boolean {
+        if (undecodableAudioReported) return false
+        val audioGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
+        if (audioGroups.isEmpty() || ExoAudioGate.anyPlayableAudio(tracks)) return false
+        undecodableAudioReported = true
+        val formats = audioGroups.flatMap { group ->
+            (0 until group.length).map { index -> group.getTrackFormat(index).sampleMimeType }
+        }
+        android.util.Log.w(TAG, "no playable Exo audio track ($formats) — handing VOD to alternate engine")
+        callbacks.onError(
+            PlaybackFailure.ExoDecode(
+                PlaybackException.getErrorCodeName(PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED),
+            ),
+        )
+        return true
+    }
+
     /** Build (if needed) and start playback of [url] at [positionMs] on [surface], selecting the image
      *  subtitle identified by [subLang]/[subTypeIndex] (the track the user picked in mpv's list).
      *  [fallback] = engine-fallback playback after a terminal mpv failure: no subtitle is auto-selected
@@ -350,6 +373,7 @@ class ExoSubtitleEngine(
         pendingSubTypeIndex = subTypeIndex
         subtitleApplied = false
         firstFrameSeen = false
+        undecodableAudioReported = false
         hasVideoTrack = true
         throughputTracker.reset(); fpsSample.resetAll(); dropsBaseline = currentDroppedFrames(player)
         audioWatchdog.reset()
@@ -604,6 +628,8 @@ class ExoSubtitleEngine(
             parameters = buildUponParameters()
                 .setPreferredAudioLanguage(prefAudioLang.takeIf { it.isNotBlank() })
                 .setPreferredTextLanguage(prefSubLang.takeIf { it.isNotBlank() })
+                // Re-evaluate decode versus passthrough if an HDMI/ARC output appears mid-playback.
+                .setAllowInvalidateSelectionsOnRendererCapabilitiesChange(true)
                 .build()
         }
         // Software decoding is a rescue, not the default. A catch-up archive starts mid-GOP and SOME

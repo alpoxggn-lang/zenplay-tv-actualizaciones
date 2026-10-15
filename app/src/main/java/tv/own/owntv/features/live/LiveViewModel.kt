@@ -1977,7 +1977,7 @@ class LiveViewModel(
                 is LiveKey.Custom -> customCategoryDao.snapshotChannels(pid, key.id, ctx.value.sourceIds.ifEmpty { listOf(-1L) }, 5000)
                 LiveKey.Favorites -> channelDao.snapshotFavoritesManual(pid, contextKey, ctx.value.sourceIds.ifEmpty { listOf(-1L) }, 5000)
                 // Catch-up joins History/All as a computed view: it has no stored order to move within.
-                LiveKey.History, LiveKey.All, LiveKey.Catchup -> return@launch
+                LiveKey.History, LiveKey.All, LiveKey.Catchup, LiveKey.RecentlyAdded -> return@launch
             }
             val idx = items.indexOfFirst { it.id == channel.id }
             if (idx < 0) return@launch

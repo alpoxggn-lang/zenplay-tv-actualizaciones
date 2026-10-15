@@ -844,7 +844,7 @@ class MovieViewModel(
                 is LiveKey.Folder -> movieDao.snapshotByCategoryManual(key.id, pid, contextKey, 5000)
                 is LiveKey.Custom -> customCategoryDao.snapshotMovies(pid, key.id, ctx.value.sourceIds.ifEmpty { listOf(-1L) }, 5000)
                 LiveKey.Favorites -> movieDao.snapshotFavoritesManual(pid, contextKey, ctx.value.sourceIds.ifEmpty { listOf(-1L) }, 5000)
-                LiveKey.History, LiveKey.All -> return@launch
+                LiveKey.History, LiveKey.All, LiveKey.Catchup, LiveKey.RecentlyAdded -> return@launch
             }
             val idx = items.indexOfFirst { it.id == movie.id }
             if (idx < 0) return@launch
@@ -936,6 +936,9 @@ class MovieViewModel(
                 dateAdded -> movieDao.pagingAllDateAdded(ids)
                 else -> movieDao.pagingAll(ids)
             }
+            // This collection has one fixed promise regardless of the section's user-selected sort:
+            // newest valid provider date first, deduplicated, with a deterministic local fallback.
+            LiveKey.RecentlyAdded -> movieDao.pagingRecentlyAddedDistinct(ids)
             LiveKey.Favorites -> movieDao.pagingFavoritesManual(c.profileId, ContentOrderEntity.FAV_CONTEXT, ids)
             LiveKey.History -> movieDao.pagingHistory(c.profileId, ids)
             is LiveKey.Custom -> customCategoryDao.pagingMovies(c.profileId, key.id, ids)
@@ -965,6 +968,7 @@ class MovieViewModel(
             LiveKey.All, LiveKey.Catchup ->
                 if (dateAdded) movieDao.searchAllDateAdded(query, ids)
                 else movieDao.searchAll(query, ids)
+            LiveKey.RecentlyAdded -> movieDao.searchRecentlyAddedDistinct(query, ids)
             LiveKey.Favorites -> movieDao.searchFavorites(query, c.profileId, ids)
             LiveKey.History -> movieDao.searchHistory(query, c.profileId, ids)
             is LiveKey.Custom -> customCategoryDao.searchMovies(query, c.profileId, key.id, ids)
@@ -980,6 +984,9 @@ class MovieViewModel(
             LiveKey.All, LiveKey.Catchup ->
                 if (hiddenCats.isEmpty()) movieDao.countAll(ids)
                 else movieDao.countAllExcluding(ids, hiddenCats.toList())
+            LiveKey.RecentlyAdded ->
+                if (hiddenCats.isEmpty()) movieDao.countRecentlyAddedDistinct(ids)
+                else movieDao.countRecentlyAddedDistinctExcluding(ids, hiddenCats.toList())
             LiveKey.Favorites -> movieDao.countFavorites(c.profileId, ids)
             LiveKey.History -> movieDao.countHistory(c.profileId, ids)
             is LiveKey.Custom -> customCategoryDao.countMembers(c.profileId, MediaType.MOVIE, key.id, ids)
@@ -1024,6 +1031,7 @@ class MovieViewModel(
         val defaultRail = listOf(
             LiveRailItem(LiveKey.Favorites, icon = OwnTVIcon.FAVORITE),
             LiveRailItem(LiveKey.History, icon = OwnTVIcon.HISTORY),
+            LiveRailItem(LiveKey.RecentlyAdded, icon = OwnTVIcon.FOLDER),
             LiveRailItem(LiveKey.All),
         )
     }

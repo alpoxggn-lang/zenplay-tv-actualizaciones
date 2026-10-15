@@ -76,7 +76,7 @@ enum class LibraryTab { MOVIES, SERIES }
 
 /** One chip in the strip. [builtIn] labels are translated; the rest are provider or user names. */
 data class VodCategory(val key: LiveKey, val title: String? = null, val builtIn: BuiltIn? = null) {
-    enum class BuiltIn { ALL, FAVORITES, HISTORY }
+    enum class BuiltIn { ALL, RECENTLY_ADDED, FAVORITES, HISTORY }
 }
 
 /** A poster in the grid. Films and shows differ in almost nothing the grid draws, so they share one. */
@@ -204,7 +204,7 @@ class LibraryViewModel(
         .map { it.toSet() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
-    /** The chip strip: All, Favorites, History, then the profile's own arranged folders. */
+    /** The chip strip: fixed catalogue views, then the profile's own arranged folders. */
     val categories: StateFlow<List<VodCategory>> = combine(
         vodCategories,
         custom,
@@ -218,6 +218,7 @@ class LibraryViewModel(
         )
         buildList {
             add(VodCategory(LiveKey.All, builtIn = VodCategory.BuiltIn.ALL))
+            add(VodCategory(LiveKey.RecentlyAdded, builtIn = VodCategory.BuiltIn.RECENTLY_ADDED))
             add(VodCategory(LiveKey.Favorites, builtIn = VodCategory.BuiltIn.FAVORITES))
             add(VodCategory(LiveKey.History, builtIn = VodCategory.BuiltIn.HISTORY))
             folders.forEach { e ->
@@ -692,8 +693,8 @@ class LibraryViewModel(
         is LiveKey.Folder -> folderContextKeys.value[key.id]
         is LiveKey.Custom -> key.id
         LiveKey.Favorites -> ContentOrderEntity.FAV_CONTEXT
-        // History and All are computed views: there is no order of their own to change.
-        LiveKey.History, LiveKey.All, LiveKey.Catchup -> null
+        // Recent, History and All are computed views: there is no order of their own to change.
+        LiveKey.RecentlyAdded, LiveKey.History, LiveKey.All, LiveKey.Catchup -> null
     }
 
     /** The items of [key] in their current order — what the Move sheet shuffles. */

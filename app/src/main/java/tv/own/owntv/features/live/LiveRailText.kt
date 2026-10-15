@@ -11,6 +11,11 @@ import tv.own.owntv.core.live.LiveKey
 fun LiveRailItem.displayLabel(@StringRes allLabelRes: Int = R.string.content_category_all_channels): String = title ?: when (key) {
     LiveKey.Favorites -> stringResource(R.string.content_category_favorites)
     LiveKey.History -> stringResource(R.string.content_category_history)
+    LiveKey.RecentlyAdded -> when (allLabelRes) {
+        R.string.content_category_all_movies -> stringResource(R.string.zenplay_home_recent_movies)
+        R.string.content_category_all_series -> stringResource(R.string.zenplay_home_recent_series)
+        else -> stringResource(R.string.zenplay_recent_collection)
+    }
     LiveKey.Catchup -> stringResource(R.string.content_catchup)
     LiveKey.All -> stringResource(allLabelRes)
     is LiveKey.Folder -> stringResource(allLabelRes)

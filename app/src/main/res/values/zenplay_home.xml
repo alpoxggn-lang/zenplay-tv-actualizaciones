@@ -18,8 +18,9 @@
     <string name="zenplay_recordings_summary">Programas grabados desde el reproductor de TV en vivo</string>
     <string name="zenplay_agenda_summary">Partidos y eventos deportivos de hoy</string>
     <string name="zenplay_refresh_summary">Actualizar las listas, la guía y las novedades</string>
-    <string name="zenplay_home_recent_movies">Recién agregado · Películas</string>
-    <string name="zenplay_home_recent_series">Recién agregado · Series</string>
+    <string name="zenplay_home_recent_movies">Películas agregadas recientemente</string>
+    <string name="zenplay_home_recent_series">Series agregadas o actualizadas</string>
+    <string name="zenplay_recent_collection">Agregado recientemente</string>
     <string name="zenplay_home_recent_movies_description">Películas incorporadas recientemente al catálogo de ZenPlay.</string>
     <string name="zenplay_home_recent_series_description">Series nuevas o actualizadas recientemente en ZenPlay.</string>
     <string name="zenplay_trending_reason">Estreno %1$d · %2$s</string>

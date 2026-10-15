@@ -521,8 +521,8 @@ class LiveViewModel(
         is LiveKey.Folder -> folderContextKeys.value[key.id]
         is LiveKey.Custom -> key.id
         LiveKey.Favorites -> ContentOrderEntity.FAV_CONTEXT
-        // Catch-up, History and All are computed views: there is no order of their own to change.
-        LiveKey.History, LiveKey.All, LiveKey.Catchup -> null
+        // Recent is a VOD-only synthetic key; none of these views has an order of its own here.
+        LiveKey.RecentlyAdded, LiveKey.History, LiveKey.All, LiveKey.Catchup -> null
     }
 
     /** The channels of [key] in their current order — what the Move sheet shuffles. */

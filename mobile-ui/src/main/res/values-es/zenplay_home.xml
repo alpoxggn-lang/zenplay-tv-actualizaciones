@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="zenplay_home_trending">Tendencias</string>
-    <string name="zenplay_home_recent_movies">Recién agregado · Películas</string>
-    <string name="zenplay_home_recent_series">Recién agregado · Series</string>
+    <string name="zenplay_home_recent_movies">Películas agregadas recientemente</string>
+    <string name="zenplay_home_recent_series">Series agregadas o actualizadas</string>
     <string name="zenplay_home_catalog_empty">Todavía no hay títulos disponibles en tu lista.</string>
     <string name="zenplay_home_trending_empty">Todavía no hay películas identificadas como estrenos de 2026 en tu lista.</string>
     <string name="zenplay_home_trending_catalog_description">Hasta 6 películas de 2026 incorporadas recientemente a tu lista. La selección se actualiza al sincronizar el catálogo.</string>

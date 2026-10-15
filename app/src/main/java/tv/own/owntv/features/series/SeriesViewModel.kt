@@ -1130,7 +1130,7 @@ class SeriesViewModel(
                 is LiveKey.Folder -> seriesDao.snapshotByCategoryManual(key.id, pid, contextKey, 5000)
                 is LiveKey.Custom -> customCategoryDao.snapshotSeries(pid, key.id, ctx.value.sourceIds.ifEmpty { listOf(-1L) }, 5000)
                 LiveKey.Favorites -> seriesDao.snapshotFavoritesManual(pid, contextKey, ctx.value.sourceIds.ifEmpty { listOf(-1L) }, 5000)
-                LiveKey.History, LiveKey.All -> return@launch
+                LiveKey.History, LiveKey.All, LiveKey.Catchup, LiveKey.RecentlyAdded -> return@launch
             }
             val idx = items.indexOfFirst { it.id == series.id }
             if (idx < 0) return@launch
@@ -1225,6 +1225,9 @@ class SeriesViewModel(
                 dateAdded -> seriesDao.pagingAllDateAdded(ids)
                 else -> seriesDao.pagingAll(ids)
             }
+            // Xtream maps last_modified (or added when absent) onto addedAt, so updated shows and
+            // newly added shows share one newest-first collection without loading it all into memory.
+            LiveKey.RecentlyAdded -> seriesDao.pagingRecentlyAddedDistinct(ids)
             LiveKey.Favorites -> seriesDao.pagingFavoritesManual(c.profileId, ContentOrderEntity.FAV_CONTEXT, ids)
             LiveKey.History -> seriesDao.pagingHistory(c.profileId, ids)
             is LiveKey.Custom -> customCategoryDao.pagingSeries(c.profileId, key.id, ids)
@@ -1254,6 +1257,7 @@ class SeriesViewModel(
             LiveKey.All, LiveKey.Catchup ->
                 if (dateAdded) seriesDao.searchAllDateAdded(query, ids)
                 else seriesDao.searchAll(query, ids)
+            LiveKey.RecentlyAdded -> seriesDao.searchRecentlyAddedDistinct(query, ids)
             LiveKey.Favorites -> seriesDao.searchFavorites(query, c.profileId, ids)
             LiveKey.History -> seriesDao.searchHistory(query, c.profileId, ids)
             is LiveKey.Custom -> customCategoryDao.searchSeries(query, c.profileId, key.id, ids)
@@ -1269,6 +1273,9 @@ class SeriesViewModel(
             LiveKey.All, LiveKey.Catchup ->
                 if (hiddenCats.isEmpty()) seriesDao.countAll(ids)
                 else seriesDao.countAllExcluding(ids, hiddenCats.toList())
+            LiveKey.RecentlyAdded ->
+                if (hiddenCats.isEmpty()) seriesDao.countRecentlyAddedDistinct(ids)
+                else seriesDao.countRecentlyAddedDistinctExcluding(ids, hiddenCats.toList())
             LiveKey.Favorites -> seriesDao.countFavorites(c.profileId, ids)
             LiveKey.History -> seriesDao.countHistory(c.profileId, ids)
             is LiveKey.Custom -> customCategoryDao.countMembers(c.profileId, MediaType.SERIES, key.id, ids)
@@ -1322,6 +1329,7 @@ class SeriesViewModel(
         val defaultRail = listOf(
             LiveRailItem(LiveKey.Favorites, icon = OwnTVIcon.FAVORITE),
             LiveRailItem(LiveKey.History, icon = OwnTVIcon.HISTORY),
+            LiveRailItem(LiveKey.RecentlyAdded, icon = OwnTVIcon.FOLDER),
             LiveRailItem(LiveKey.All),
         )
     }

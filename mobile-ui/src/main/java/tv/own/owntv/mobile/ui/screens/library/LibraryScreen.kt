@@ -490,6 +490,9 @@ internal fun VodCategory.label(tab: LibraryTab): String = when (builtIn) {
     VodCategory.BuiltIn.ALL -> stringResource(
         if (tab == LibraryTab.MOVIES) R.string.content_category_all_movies else R.string.content_category_all_series,
     )
+    VodCategory.BuiltIn.RECENTLY_ADDED -> stringResource(
+        if (tab == LibraryTab.MOVIES) R.string.zenplay_home_recent_movies else R.string.zenplay_home_recent_series,
+    )
     VodCategory.BuiltIn.FAVORITES -> stringResource(R.string.content_category_favorites)
     VodCategory.BuiltIn.HISTORY -> stringResource(R.string.content_category_history)
     null -> title.orEmpty()

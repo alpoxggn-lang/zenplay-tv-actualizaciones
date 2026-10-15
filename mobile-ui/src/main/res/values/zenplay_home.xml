@@ -2,8 +2,8 @@
 <!-- These ZenPlay sections use Spanish by default for locales without a custom translation. -->
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <string name="zenplay_home_trending">Tendencias</string>
-    <string name="zenplay_home_recent_movies">Recién agregado · Películas</string>
-    <string name="zenplay_home_recent_series">Recién agregado · Series</string>
+    <string name="zenplay_home_recent_movies">Películas agregadas recientemente</string>
+    <string name="zenplay_home_recent_series">Series agregadas o actualizadas</string>
     <string name="zenplay_home_recent_movies_description">Películas incorporadas recientemente al catálogo de ZenPlay.</string>
     <string name="zenplay_home_recent_series_description">Series nuevas o actualizadas recientemente en ZenPlay.</string>
     <string name="zenplay_home_catalog_empty">Todavía no hay títulos disponibles en tu lista.</string>

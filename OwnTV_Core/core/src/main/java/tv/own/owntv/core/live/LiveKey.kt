@@ -4,6 +4,8 @@ package tv.own.owntv.core.live
 sealed interface LiveKey {
     data object Favorites : LiveKey
     data object History : LiveKey
+    /** Synthetic Movies/Series collection ordered by the provider's newest add/update stamp. */
+    data object RecentlyAdded : LiveKey
     /** Every channel the provider says keeps an archive. A filter over ALL, not a stored category —
      *  and independent of the guide, so it works for users with no EPG. */
     data object Catchup : LiveKey
@@ -19,6 +21,7 @@ sealed interface LiveKey {
 fun LiveKey.serialize(): String = when (this) {
     LiveKey.Favorites -> "FAV"
     LiveKey.History -> "HIST"
+    LiveKey.RecentlyAdded -> "RECENTLY_ADDED"
     LiveKey.Catchup -> "CATCHUP"
     LiveKey.All -> "ALL"
     is LiveKey.Folder -> "FOLDER:$id"
@@ -28,6 +31,7 @@ fun LiveKey.serialize(): String = when (this) {
 fun parseLiveKey(s: String): LiveKey? = when {
     s == "FAV" -> LiveKey.Favorites
     s == "HIST" -> LiveKey.History
+    s == "RECENTLY_ADDED" -> LiveKey.RecentlyAdded
     s == "CATCHUP" -> LiveKey.Catchup
     s == "ALL" -> LiveKey.All
     s.startsWith("FOLDER:") -> s.removePrefix("FOLDER:").toLongOrNull()?.let { LiveKey.Folder(it) }

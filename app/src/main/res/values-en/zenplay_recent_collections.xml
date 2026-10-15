@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="zenplay_home_recent_movies">Recently added movies</string>
+    <string name="zenplay_home_recent_series">Added or updated series</string>
+    <string name="zenplay_recent_collection">Recently added</string>
+    <string name="zenplay_home_recent_movies_description">Movies recently added to the ZenPlay catalogue.</string>
+    <string name="zenplay_home_recent_series_description">Series recently added or updated on ZenPlay.</string>
+</resources>

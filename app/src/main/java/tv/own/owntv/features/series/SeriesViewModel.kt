@@ -505,7 +505,7 @@ class SeriesViewModel(
             // Hidden items/categories are filtered on each fresh PagingData inside the pager chain —
             // a customization change re-creates the pager (same pattern as Live TV).
             Pager(PagingConfig(pageSize = 60, prefetchDistance = 30, initialLoadSize = 90, maxSize = 300)) {
-                pagingSource(args.key, args.ctx, args.query, args.sort)
+                pagingSource(args.key, args.ctx, args.query, args.sort, cs.hiddenCats)
             }.flow.map { paging ->
                 val cust = cs.cust
                 val movedFrom = cust.movedFromOrigin
@@ -1211,7 +1211,13 @@ class SeriesViewModel(
         }
     }
 
-    private fun pagingSource(key: LiveKey, c: Ctx, query: String, sort: SettingsRepository.SortMode): PagingSource<Int, SeriesEntity> {
+    private fun pagingSource(
+        key: LiveKey,
+        c: Ctx,
+        query: String,
+        sort: SettingsRepository.SortMode,
+        hiddenCats: Set<Long>,
+    ): PagingSource<Int, SeriesEntity> {
         val ids = c.sourceIds.ifEmpty { listOf(-1L) }
         val playlist = sort == SettingsRepository.SortMode.PLAYLIST
         val rating = sort == SettingsRepository.SortMode.RATING
@@ -1227,7 +1233,9 @@ class SeriesViewModel(
             }
             // Xtream maps last_modified (or added when absent) onto addedAt, so updated shows and
             // newly added shows share one newest-first collection without loading it all into memory.
-            LiveKey.RecentlyAdded -> seriesDao.pagingRecentlyAddedDistinct(ids)
+            LiveKey.RecentlyAdded ->
+                if (hiddenCats.isEmpty()) seriesDao.pagingAllDateAdded(ids)
+                else seriesDao.pagingAllDateAddedExcluding(ids, hiddenCats.toList())
             LiveKey.Favorites -> seriesDao.pagingFavoritesManual(c.profileId, ContentOrderEntity.FAV_CONTEXT, ids)
             LiveKey.History -> seriesDao.pagingHistory(c.profileId, ids)
             is LiveKey.Custom -> customCategoryDao.pagingSeries(c.profileId, key.id, ids)
@@ -1257,7 +1265,9 @@ class SeriesViewModel(
             LiveKey.All, LiveKey.Catchup ->
                 if (dateAdded) seriesDao.searchAllDateAdded(query, ids)
                 else seriesDao.searchAll(query, ids)
-            LiveKey.RecentlyAdded -> seriesDao.searchRecentlyAddedDistinct(query, ids)
+            LiveKey.RecentlyAdded ->
+                if (hiddenCats.isEmpty()) seriesDao.searchAllDateAdded(query, ids)
+                else seriesDao.searchAllDateAddedExcluding(query, ids, hiddenCats.toList())
             LiveKey.Favorites -> seriesDao.searchFavorites(query, c.profileId, ids)
             LiveKey.History -> seriesDao.searchHistory(query, c.profileId, ids)
             is LiveKey.Custom -> customCategoryDao.searchSeries(query, c.profileId, key.id, ids)
@@ -1274,8 +1284,8 @@ class SeriesViewModel(
                 if (hiddenCats.isEmpty()) seriesDao.countAll(ids)
                 else seriesDao.countAllExcluding(ids, hiddenCats.toList())
             LiveKey.RecentlyAdded ->
-                if (hiddenCats.isEmpty()) seriesDao.countRecentlyAddedDistinct(ids)
-                else seriesDao.countRecentlyAddedDistinctExcluding(ids, hiddenCats.toList())
+                if (hiddenCats.isEmpty()) seriesDao.countAll(ids)
+                else seriesDao.countAllExcluding(ids, hiddenCats.toList())
             LiveKey.Favorites -> seriesDao.countFavorites(c.profileId, ids)
             LiveKey.History -> seriesDao.countHistory(c.profileId, ids)
             is LiveKey.Custom -> customCategoryDao.countMembers(c.profileId, MediaType.SERIES, key.id, ids)

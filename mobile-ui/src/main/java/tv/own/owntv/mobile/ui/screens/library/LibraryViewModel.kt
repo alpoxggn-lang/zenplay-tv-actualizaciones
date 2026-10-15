@@ -350,6 +350,7 @@ class LibraryViewModel(
                             customCategoryDao = customCategoryDao,
                             contextKey = { folderContextKeys.value[it] },
                             hasManualOrder = { it in orderedContexts.value },
+                            hiddenCategoryIds = hidden,
                         )
                     }.flow.map { paging ->
                         paging.customized(key, cust, hidden, { CustomizeKeys.movie(it) }, { it.categoryId })
@@ -382,6 +383,7 @@ class LibraryViewModel(
                             customCategoryDao = customCategoryDao,
                             contextKey = { folderContextKeys.value[it] },
                             hasManualOrder = { it in orderedContexts.value },
+                            hiddenCategoryIds = hidden,
                         )
                     }.flow.map { paging ->
                         paging.customized(key, cust, hidden, { CustomizeKeys.series(it) }, { it.categoryId })

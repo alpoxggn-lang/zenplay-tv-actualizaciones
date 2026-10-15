@@ -416,7 +416,7 @@ class MovieViewModel(
             // Hidden items/categories are filtered on each fresh PagingData inside the pager chain —
             // a customization change re-creates the pager (same pattern as Live TV).
             Pager(PagingConfig(pageSize = 60, prefetchDistance = 30, initialLoadSize = 90, maxSize = 300)) {
-                pagingSource(args.key, args.ctx, args.query, args.sort)
+                pagingSource(args.key, args.ctx, args.query, args.sort, cs.hiddenCats)
             }.flow.map { paging ->
                 val cust = cs.cust
                 val movedFrom = cust.movedFromOrigin
@@ -922,7 +922,13 @@ class MovieViewModel(
         }
     }
 
-    private fun pagingSource(key: LiveKey, c: Ctx, query: String, sort: SettingsRepository.SortMode): PagingSource<Int, MovieEntity> {
+    private fun pagingSource(
+        key: LiveKey,
+        c: Ctx,
+        query: String,
+        sort: SettingsRepository.SortMode,
+        hiddenCats: Set<Long>,
+    ): PagingSource<Int, MovieEntity> {
         val ids = c.sourceIds.ifEmpty { listOf(-1L) }
         val playlist = sort == SettingsRepository.SortMode.PLAYLIST
         val rating = sort == SettingsRepository.SortMode.RATING
@@ -936,9 +942,12 @@ class MovieViewModel(
                 dateAdded -> movieDao.pagingAllDateAdded(ids)
                 else -> movieDao.pagingAll(ids)
             }
-            // This collection has one fixed promise regardless of the section's user-selected sort:
-            // newest valid provider date first, deduplicated, with a deterministic local fallback.
-            LiveKey.RecentlyAdded -> movieDao.pagingRecentlyAddedDistinct(ids)
+            // This collection always follows provider dates regardless of the section's chosen sort.
+            // Preserve provider/source/language variants; collapsing them at query time can hide a
+            // legitimate visible item when another variant is parental- or user-hidden.
+            LiveKey.RecentlyAdded ->
+                if (hiddenCats.isEmpty()) movieDao.pagingAllDateAdded(ids)
+                else movieDao.pagingAllDateAddedExcluding(ids, hiddenCats.toList())
             LiveKey.Favorites -> movieDao.pagingFavoritesManual(c.profileId, ContentOrderEntity.FAV_CONTEXT, ids)
             LiveKey.History -> movieDao.pagingHistory(c.profileId, ids)
             is LiveKey.Custom -> customCategoryDao.pagingMovies(c.profileId, key.id, ids)
@@ -968,7 +977,9 @@ class MovieViewModel(
             LiveKey.All, LiveKey.Catchup ->
                 if (dateAdded) movieDao.searchAllDateAdded(query, ids)
                 else movieDao.searchAll(query, ids)
-            LiveKey.RecentlyAdded -> movieDao.searchRecentlyAddedDistinct(query, ids)
+            LiveKey.RecentlyAdded ->
+                if (hiddenCats.isEmpty()) movieDao.searchAllDateAdded(query, ids)
+                else movieDao.searchAllDateAddedExcluding(query, ids, hiddenCats.toList())
             LiveKey.Favorites -> movieDao.searchFavorites(query, c.profileId, ids)
             LiveKey.History -> movieDao.searchHistory(query, c.profileId, ids)
             is LiveKey.Custom -> customCategoryDao.searchMovies(query, c.profileId, key.id, ids)
@@ -985,8 +996,8 @@ class MovieViewModel(
                 if (hiddenCats.isEmpty()) movieDao.countAll(ids)
                 else movieDao.countAllExcluding(ids, hiddenCats.toList())
             LiveKey.RecentlyAdded ->
-                if (hiddenCats.isEmpty()) movieDao.countRecentlyAddedDistinct(ids)
-                else movieDao.countRecentlyAddedDistinctExcluding(ids, hiddenCats.toList())
+                if (hiddenCats.isEmpty()) movieDao.countAll(ids)
+                else movieDao.countAllExcluding(ids, hiddenCats.toList())
             LiveKey.Favorites -> movieDao.countFavorites(c.profileId, ids)
             LiveKey.History -> movieDao.countHistory(c.profileId, ids)
             is LiveKey.Custom -> customCategoryDao.countMembers(c.profileId, MediaType.MOVIE, key.id, ids)

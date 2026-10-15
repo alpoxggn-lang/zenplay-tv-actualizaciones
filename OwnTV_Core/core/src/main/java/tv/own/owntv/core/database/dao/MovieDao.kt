@@ -138,97 +138,32 @@ interface MovieDao {
     @Query("SELECT * FROM movies WHERE sourceId IN (:sourceIds) ORDER BY addedAt DESC, sortOrder DESC, id DESC")
     fun pagingAllDateAdded(sourceIds: List<Long>): PagingSource<Int, MovieEntity>
 
+    @Query(
+        "SELECT * FROM movies WHERE sourceId IN (:sourceIds) " +
+            "AND (categoryId IS NULL OR categoryId NOT IN (:excludedCategoryIds)) " +
+            "ORDER BY addedAt DESC, sortOrder DESC, id DESC",
+    )
+    fun pagingAllDateAddedExcluding(
+        sourceIds: List<Long>,
+        excludedCategoryIds: List<Long>,
+    ): PagingSource<Int, MovieEntity>
+
     @Query("SELECT * FROM movies WHERE categoryId = :categoryId ORDER BY addedAt DESC, sortOrder DESC, id DESC")
     fun pagingByCategoryDateAdded(categoryId: Long): PagingSource<Int, MovieEntity>
 
     @Query("SELECT * FROM movies WHERE sourceId IN (:sourceIds) AND name LIKE '%' || :query || '%' ORDER BY addedAt DESC, sortOrder DESC, id DESC")
     fun searchAllDateAdded(query: String, sourceIds: List<Long>): PagingSource<Int, MovieEntity>
 
-    /**
-     * ZenPlay's permanent "recently added" collection.
-     *
-     * A panel commonly publishes the same film once per quality or language. The CTE collapses those
-     * variants by normalized title + year, keeps the newest valid provider stamp, then prefers the
-     * best advertised quality and a stable local id. Broken/future dates become zero and therefore
-     * fall back deterministically to provider order + local id. The final result remains a Room
-     * [PagingSource], so a 100k-title catalogue is never materialized in app memory.
-     */
     @Query(
-        """
-        WITH eligible AS (
-            SELECT movies.*,
-                COALESCE(NULLIF(titleSignature, ''), '__name__' || LOWER(TRIM(name))) AS recentSignature,
-                COALESCE(year, parsedYear, -1) AS recentYear,
-                CASE
-                    WHEN addedAt > 0
-                         AND addedAt <= (CAST(strftime('%s', 'now') AS INTEGER) + 604800) * 1000
-                    THEN addedAt ELSE 0
-                END AS recentAt
-            FROM movies
-            WHERE sourceId IN (:sourceIds)
-        ), newest AS (
-            SELECT recentSignature, recentYear, MAX(recentAt) AS newestAt
-            FROM eligible
-            GROUP BY recentSignature, recentYear
-        ), best_quality AS (
-            SELECT e.recentSignature, e.recentYear, n.newestAt, MAX(e.qualityRank) AS bestQuality
-            FROM eligible e
-            JOIN newest n ON n.recentSignature = e.recentSignature
-                AND n.recentYear = e.recentYear AND n.newestAt = e.recentAt
-            GROUP BY e.recentSignature, e.recentYear, n.newestAt
-        ), picked AS (
-            SELECT e.recentSignature, e.recentYear, q.newestAt, MAX(e.id) AS pickedId
-            FROM eligible e
-            JOIN best_quality q ON q.recentSignature = e.recentSignature
-                AND q.recentYear = e.recentYear AND q.newestAt = e.recentAt
-                AND q.bestQuality = e.qualityRank
-            GROUP BY e.recentSignature, e.recentYear, q.newestAt
-        )
-        SELECT m.* FROM movies m
-        JOIN picked p ON p.pickedId = m.id
-        ORDER BY p.newestAt DESC, m.sortOrder DESC, m.id DESC
-        """,
+        "SELECT * FROM movies WHERE sourceId IN (:sourceIds) " +
+            "AND (categoryId IS NULL OR categoryId NOT IN (:excludedCategoryIds)) " +
+            "AND name LIKE '%' || :query || '%' ORDER BY addedAt DESC, sortOrder DESC, id DESC",
     )
-    fun pagingRecentlyAddedDistinct(sourceIds: List<Long>): PagingSource<Int, MovieEntity>
-
-    @Query(
-        """
-        WITH eligible AS (
-            SELECT movies.*,
-                COALESCE(NULLIF(titleSignature, ''), '__name__' || LOWER(TRIM(name))) AS recentSignature,
-                COALESCE(year, parsedYear, -1) AS recentYear,
-                CASE
-                    WHEN addedAt > 0
-                         AND addedAt <= (CAST(strftime('%s', 'now') AS INTEGER) + 604800) * 1000
-                    THEN addedAt ELSE 0
-                END AS recentAt
-            FROM movies
-            WHERE sourceId IN (:sourceIds)
-                AND (name LIKE '%' || :query || '%' OR canonicalTitle LIKE '%' || :query || '%')
-        ), newest AS (
-            SELECT recentSignature, recentYear, MAX(recentAt) AS newestAt
-            FROM eligible
-            GROUP BY recentSignature, recentYear
-        ), best_quality AS (
-            SELECT e.recentSignature, e.recentYear, n.newestAt, MAX(e.qualityRank) AS bestQuality
-            FROM eligible e
-            JOIN newest n ON n.recentSignature = e.recentSignature
-                AND n.recentYear = e.recentYear AND n.newestAt = e.recentAt
-            GROUP BY e.recentSignature, e.recentYear, n.newestAt
-        ), picked AS (
-            SELECT e.recentSignature, e.recentYear, q.newestAt, MAX(e.id) AS pickedId
-            FROM eligible e
-            JOIN best_quality q ON q.recentSignature = e.recentSignature
-                AND q.recentYear = e.recentYear AND q.newestAt = e.recentAt
-                AND q.bestQuality = e.qualityRank
-            GROUP BY e.recentSignature, e.recentYear, q.newestAt
-        )
-        SELECT m.* FROM movies m
-        JOIN picked p ON p.pickedId = m.id
-        ORDER BY p.newestAt DESC, m.sortOrder DESC, m.id DESC
-        """,
-    )
-    fun searchRecentlyAddedDistinct(query: String, sourceIds: List<Long>): PagingSource<Int, MovieEntity>
+    fun searchAllDateAddedExcluding(
+        query: String,
+        sourceIds: List<Long>,
+        excludedCategoryIds: List<Long>,
+    ): PagingSource<Int, MovieEntity>
 
     @Query("SELECT * FROM movies WHERE categoryId = :categoryId AND name LIKE '%' || :query || '%' ORDER BY addedAt DESC, sortOrder DESC, id DESC")
     fun searchInCategoryDateAdded(query: String, categoryId: Long): PagingSource<Int, MovieEntity>
@@ -282,31 +217,6 @@ interface MovieDao {
 
     @Query("SELECT COUNT(*) FROM movies WHERE sourceId IN (:sourceIds)")
     fun countAll(sourceIds: List<Long>): Flow<Int>
-
-    @Query(
-        """
-        SELECT COUNT(*) FROM (
-            SELECT 1 FROM movies
-            WHERE sourceId IN (:sourceIds)
-            GROUP BY COALESCE(NULLIF(titleSignature, ''), '__name__' || LOWER(TRIM(name))),
-                COALESCE(year, parsedYear, -1)
-        )
-        """,
-    )
-    fun countRecentlyAddedDistinct(sourceIds: List<Long>): Flow<Int>
-
-    @Query(
-        """
-        SELECT COUNT(*) FROM (
-            SELECT 1 FROM movies
-            WHERE sourceId IN (:sourceIds)
-                AND (categoryId IS NULL OR categoryId NOT IN (:excludedCategoryIds))
-            GROUP BY COALESCE(NULLIF(titleSignature, ''), '__name__' || LOWER(TRIM(name))),
-                COALESCE(year, parsedYear, -1)
-        )
-        """,
-    )
-    fun countRecentlyAddedDistinctExcluding(sourceIds: List<Long>, excludedCategoryIds: List<Long>): Flow<Int>
 
     /** "All Movies" count with hidden categories excluded (matches the filtered ALL list). */
     @Query(

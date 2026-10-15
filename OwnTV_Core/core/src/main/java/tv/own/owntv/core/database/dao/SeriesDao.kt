@@ -150,94 +150,32 @@ interface SeriesDao {
     @Query("SELECT * FROM series WHERE sourceId IN (:sourceIds) ORDER BY addedAt DESC, sortOrder DESC, id DESC")
     fun pagingAllDateAdded(sourceIds: List<Long>): PagingSource<Int, SeriesEntity>
 
+    @Query(
+        "SELECT * FROM series WHERE sourceId IN (:sourceIds) " +
+            "AND (categoryId IS NULL OR categoryId NOT IN (:excludedCategoryIds)) " +
+            "ORDER BY addedAt DESC, sortOrder DESC, id DESC",
+    )
+    fun pagingAllDateAddedExcluding(
+        sourceIds: List<Long>,
+        excludedCategoryIds: List<Long>,
+    ): PagingSource<Int, SeriesEntity>
+
     @Query("SELECT * FROM series WHERE categoryId = :categoryId ORDER BY addedAt DESC, sortOrder DESC, id DESC")
     fun pagingByCategoryDateAdded(categoryId: Long): PagingSource<Int, SeriesEntity>
 
     @Query("SELECT * FROM series WHERE sourceId IN (:sourceIds) AND name LIKE '%' || :query || '%' ORDER BY addedAt DESC, sortOrder DESC, id DESC")
     fun searchAllDateAdded(query: String, sourceIds: List<Long>): PagingSource<Int, SeriesEntity>
 
-    /**
-     * ZenPlay's permanent "added or updated" collection. Xtream stores `last_modified` in
-     * [SeriesEntity.addedAt] (falling back to `added`), so a new episode moves its show to the front
-     * without creating a duplicate. Invalid dates fall through to the deterministic provider/local
-     * ordering, and Room pages the result rather than loading the catalogue into memory.
-     */
     @Query(
-        """
-        WITH eligible AS (
-            SELECT series.*,
-                COALESCE(NULLIF(titleSignature, ''), '__name__' || LOWER(TRIM(name))) AS recentSignature,
-                COALESCE(year, parsedYear, -1) AS recentYear,
-                CASE
-                    WHEN addedAt > 0
-                         AND addedAt <= (CAST(strftime('%s', 'now') AS INTEGER) + 604800) * 1000
-                    THEN addedAt ELSE 0
-                END AS recentAt
-            FROM series
-            WHERE sourceId IN (:sourceIds)
-        ), newest AS (
-            SELECT recentSignature, recentYear, MAX(recentAt) AS newestAt
-            FROM eligible
-            GROUP BY recentSignature, recentYear
-        ), best_quality AS (
-            SELECT e.recentSignature, e.recentYear, n.newestAt, MAX(e.qualityRank) AS bestQuality
-            FROM eligible e
-            JOIN newest n ON n.recentSignature = e.recentSignature
-                AND n.recentYear = e.recentYear AND n.newestAt = e.recentAt
-            GROUP BY e.recentSignature, e.recentYear, n.newestAt
-        ), picked AS (
-            SELECT e.recentSignature, e.recentYear, q.newestAt, MAX(e.id) AS pickedId
-            FROM eligible e
-            JOIN best_quality q ON q.recentSignature = e.recentSignature
-                AND q.recentYear = e.recentYear AND q.newestAt = e.recentAt
-                AND q.bestQuality = e.qualityRank
-            GROUP BY e.recentSignature, e.recentYear, q.newestAt
-        )
-        SELECT s.* FROM series s
-        JOIN picked p ON p.pickedId = s.id
-        ORDER BY p.newestAt DESC, s.sortOrder DESC, s.id DESC
-        """,
+        "SELECT * FROM series WHERE sourceId IN (:sourceIds) " +
+            "AND (categoryId IS NULL OR categoryId NOT IN (:excludedCategoryIds)) " +
+            "AND name LIKE '%' || :query || '%' ORDER BY addedAt DESC, sortOrder DESC, id DESC",
     )
-    fun pagingRecentlyAddedDistinct(sourceIds: List<Long>): PagingSource<Int, SeriesEntity>
-
-    @Query(
-        """
-        WITH eligible AS (
-            SELECT series.*,
-                COALESCE(NULLIF(titleSignature, ''), '__name__' || LOWER(TRIM(name))) AS recentSignature,
-                COALESCE(year, parsedYear, -1) AS recentYear,
-                CASE
-                    WHEN addedAt > 0
-                         AND addedAt <= (CAST(strftime('%s', 'now') AS INTEGER) + 604800) * 1000
-                    THEN addedAt ELSE 0
-                END AS recentAt
-            FROM series
-            WHERE sourceId IN (:sourceIds)
-                AND (name LIKE '%' || :query || '%' OR canonicalTitle LIKE '%' || :query || '%')
-        ), newest AS (
-            SELECT recentSignature, recentYear, MAX(recentAt) AS newestAt
-            FROM eligible
-            GROUP BY recentSignature, recentYear
-        ), best_quality AS (
-            SELECT e.recentSignature, e.recentYear, n.newestAt, MAX(e.qualityRank) AS bestQuality
-            FROM eligible e
-            JOIN newest n ON n.recentSignature = e.recentSignature
-                AND n.recentYear = e.recentYear AND n.newestAt = e.recentAt
-            GROUP BY e.recentSignature, e.recentYear, n.newestAt
-        ), picked AS (
-            SELECT e.recentSignature, e.recentYear, q.newestAt, MAX(e.id) AS pickedId
-            FROM eligible e
-            JOIN best_quality q ON q.recentSignature = e.recentSignature
-                AND q.recentYear = e.recentYear AND q.newestAt = e.recentAt
-                AND q.bestQuality = e.qualityRank
-            GROUP BY e.recentSignature, e.recentYear, q.newestAt
-        )
-        SELECT s.* FROM series s
-        JOIN picked p ON p.pickedId = s.id
-        ORDER BY p.newestAt DESC, s.sortOrder DESC, s.id DESC
-        """,
-    )
-    fun searchRecentlyAddedDistinct(query: String, sourceIds: List<Long>): PagingSource<Int, SeriesEntity>
+    fun searchAllDateAddedExcluding(
+        query: String,
+        sourceIds: List<Long>,
+        excludedCategoryIds: List<Long>,
+    ): PagingSource<Int, SeriesEntity>
 
     @Query("SELECT * FROM series WHERE categoryId = :categoryId AND name LIKE '%' || :query || '%' ORDER BY addedAt DESC, sortOrder DESC, id DESC")
     fun searchInCategoryDateAdded(query: String, categoryId: Long): PagingSource<Int, SeriesEntity>
@@ -291,31 +229,6 @@ interface SeriesDao {
 
     @Query("SELECT COUNT(*) FROM series WHERE sourceId IN (:sourceIds)")
     fun countAll(sourceIds: List<Long>): Flow<Int>
-
-    @Query(
-        """
-        SELECT COUNT(*) FROM (
-            SELECT 1 FROM series
-            WHERE sourceId IN (:sourceIds)
-            GROUP BY COALESCE(NULLIF(titleSignature, ''), '__name__' || LOWER(TRIM(name))),
-                COALESCE(year, parsedYear, -1)
-        )
-        """,
-    )
-    fun countRecentlyAddedDistinct(sourceIds: List<Long>): Flow<Int>
-
-    @Query(
-        """
-        SELECT COUNT(*) FROM (
-            SELECT 1 FROM series
-            WHERE sourceId IN (:sourceIds)
-                AND (categoryId IS NULL OR categoryId NOT IN (:excludedCategoryIds))
-            GROUP BY COALESCE(NULLIF(titleSignature, ''), '__name__' || LOWER(TRIM(name))),
-                COALESCE(year, parsedYear, -1)
-        )
-        """,
-    )
-    fun countRecentlyAddedDistinctExcluding(sourceIds: List<Long>, excludedCategoryIds: List<Long>): Flow<Int>
 
     /** "All Series" count with hidden categories excluded (matches the filtered ALL list). */
     @Query(

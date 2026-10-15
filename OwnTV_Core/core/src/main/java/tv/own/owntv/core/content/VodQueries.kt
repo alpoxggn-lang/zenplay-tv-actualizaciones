@@ -33,6 +33,7 @@ fun moviePagingSource(
     customCategoryDao: CustomCategoryDao,
     contextKey: (Long) -> String?,
     hasManualOrder: (String) -> Boolean,
+    hiddenCategoryIds: Set<Long> = emptySet(),
 ): PagingSource<Int, MovieEntity> {
     val ids = sourceIds.ifEmpty { listOf(-1L) }
     val rating = sort == SettingsRepository.SortMode.RATING
@@ -46,7 +47,9 @@ fun moviePagingSource(
                 playlist -> movieDao.pagingAllOriginal(ids)
                 else -> movieDao.pagingAll(ids)
             }
-            LiveKey.RecentlyAdded -> movieDao.pagingRecentlyAddedDistinct(ids)
+            LiveKey.RecentlyAdded ->
+                if (hiddenCategoryIds.isEmpty()) movieDao.pagingAllDateAdded(ids)
+                else movieDao.pagingAllDateAddedExcluding(ids, hiddenCategoryIds.toList())
             LiveKey.Favorites -> movieDao.pagingFavoritesManual(profileId, ContentOrderEntity.FAV_CONTEXT, ids)
             LiveKey.History -> movieDao.pagingHistory(profileId, ids)
             is LiveKey.Custom ->
@@ -67,7 +70,9 @@ fun moviePagingSource(
         when (key) {
             LiveKey.All, LiveKey.Catchup ->
                 if (dateAdded) movieDao.searchAllDateAdded(query, ids) else movieDao.searchAll(query, ids)
-            LiveKey.RecentlyAdded -> movieDao.searchRecentlyAddedDistinct(query, ids)
+            LiveKey.RecentlyAdded ->
+                if (hiddenCategoryIds.isEmpty()) movieDao.searchAllDateAdded(query, ids)
+                else movieDao.searchAllDateAddedExcluding(query, ids, hiddenCategoryIds.toList())
             LiveKey.Favorites -> movieDao.searchFavorites(query, profileId, ids)
             LiveKey.History -> movieDao.searchHistory(query, profileId, ids)
             is LiveKey.Custom -> customCategoryDao.searchMovies(query, profileId, key.id, ids)
@@ -89,6 +94,7 @@ fun seriesPagingSource(
     customCategoryDao: CustomCategoryDao,
     contextKey: (Long) -> String?,
     hasManualOrder: (String) -> Boolean,
+    hiddenCategoryIds: Set<Long> = emptySet(),
 ): PagingSource<Int, SeriesEntity> {
     val ids = sourceIds.ifEmpty { listOf(-1L) }
     val rating = sort == SettingsRepository.SortMode.RATING
@@ -102,7 +108,9 @@ fun seriesPagingSource(
                 playlist -> seriesDao.pagingAllOriginal(ids)
                 else -> seriesDao.pagingAll(ids)
             }
-            LiveKey.RecentlyAdded -> seriesDao.pagingRecentlyAddedDistinct(ids)
+            LiveKey.RecentlyAdded ->
+                if (hiddenCategoryIds.isEmpty()) seriesDao.pagingAllDateAdded(ids)
+                else seriesDao.pagingAllDateAddedExcluding(ids, hiddenCategoryIds.toList())
             LiveKey.Favorites -> seriesDao.pagingFavoritesManual(profileId, ContentOrderEntity.FAV_CONTEXT, ids)
             LiveKey.History -> seriesDao.pagingHistory(profileId, ids)
             is LiveKey.Custom ->
@@ -123,7 +131,9 @@ fun seriesPagingSource(
         when (key) {
             LiveKey.All, LiveKey.Catchup ->
                 if (dateAdded) seriesDao.searchAllDateAdded(query, ids) else seriesDao.searchAll(query, ids)
-            LiveKey.RecentlyAdded -> seriesDao.searchRecentlyAddedDistinct(query, ids)
+            LiveKey.RecentlyAdded ->
+                if (hiddenCategoryIds.isEmpty()) seriesDao.searchAllDateAdded(query, ids)
+                else seriesDao.searchAllDateAddedExcluding(query, ids, hiddenCategoryIds.toList())
             LiveKey.Favorites -> seriesDao.searchFavorites(query, profileId, ids)
             LiveKey.History -> seriesDao.searchHistory(query, profileId, ids)
             is LiveKey.Custom -> customCategoryDao.searchSeries(query, profileId, key.id, ids)
@@ -149,8 +159,8 @@ fun movieCountFlow(
             if (hiddenCats.isEmpty()) movieDao.countAll(ids)
             else movieDao.countAllExcluding(ids, hiddenCats.toList())
         LiveKey.RecentlyAdded ->
-            if (hiddenCats.isEmpty()) movieDao.countRecentlyAddedDistinct(ids)
-            else movieDao.countRecentlyAddedDistinctExcluding(ids, hiddenCats.toList())
+            if (hiddenCats.isEmpty()) movieDao.countAll(ids)
+            else movieDao.countAllExcluding(ids, hiddenCats.toList())
         LiveKey.Favorites -> movieDao.countFavorites(profileId, ids)
         LiveKey.History -> movieDao.countHistory(profileId, ids)
         is LiveKey.Custom -> customCategoryDao.countMembers(profileId, MediaType.MOVIE, key.id, ids)
@@ -173,8 +183,8 @@ fun seriesCountFlow(
             if (hiddenCats.isEmpty()) seriesDao.countAll(ids)
             else seriesDao.countAllExcluding(ids, hiddenCats.toList())
         LiveKey.RecentlyAdded ->
-            if (hiddenCats.isEmpty()) seriesDao.countRecentlyAddedDistinct(ids)
-            else seriesDao.countRecentlyAddedDistinctExcluding(ids, hiddenCats.toList())
+            if (hiddenCats.isEmpty()) seriesDao.countAll(ids)
+            else seriesDao.countAllExcluding(ids, hiddenCats.toList())
         LiveKey.Favorites -> seriesDao.countFavorites(profileId, ids)
         LiveKey.History -> seriesDao.countHistory(profileId, ids)
         is LiveKey.Custom -> customCategoryDao.countMembers(profileId, MediaType.SERIES, key.id, ids)

@@ -165,9 +165,7 @@ internal class XtreamSyncer(
                                 sourceId = s.id, categoryId = catMap[categoryId], name = name,
                                 posterUrl = cover, plot = plot, rating = rating,
                                 year = year, remoteId = seriesId,
-                                addedAt = (lastModified ?: added)?.takeIf { it > 0L }?.let {
-                                    if (it < 10_000_000_000L) it * 1000L else it
-                                },
+                                addedAt = preferredSeriesAddedAt(lastModified, added),
                                 sortOrder = order++,
                             )
                         }
@@ -506,5 +504,15 @@ internal class XtreamSyncer(
             seenRemoteIds: Set<String>,
         ): List<XtCategory> =
             if (seenRemoteIds.isEmpty()) emptyList() else categories.filter { it.id !in seenRemoteIds }
+
+        /**
+         * Xtream panels commonly send `last_modified="0"` rather than omitting it. Treat zero as
+         * missing before falling back to `added`; otherwise a newly added show receives no date and
+         * incorrectly sinks to the bottom of the added/updated collection.
+         */
+        internal fun preferredSeriesAddedAt(lastModified: Long?, added: Long?): Long? =
+            (lastModified?.takeIf { it > 0L } ?: added?.takeIf { it > 0L })?.let {
+                if (it < 10_000_000_000L) it * 1000L else it
+            }
     }
 }

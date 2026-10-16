@@ -184,6 +184,10 @@ class CompanionHttpServer(
                 scope.launch {
                     try {
                         handleClient(client)
+                    } catch (e: IOException) {
+                        // A cut-off upload or a read timeout. The socket closes unanswered, so the
+                        // phone page reports it could not reach the TV and offers to send again.
+                        Log.w(TAG, "Companion request dropped: ${e.javaClass.simpleName}")
                     } finally {
                         inFlight.release()
                     }

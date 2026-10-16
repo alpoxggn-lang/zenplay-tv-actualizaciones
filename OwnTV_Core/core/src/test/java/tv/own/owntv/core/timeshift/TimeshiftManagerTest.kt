@@ -85,15 +85,26 @@ class TimeshiftManagerTest {
         return conn
     }
 
+    private fun waitUntil(timeoutMs: Long = 5_000L, condition: () -> Boolean): Boolean {
+        val deadline = System.nanoTime() + timeoutMs * 1_000_000L
+        while (System.nanoTime() < deadline) {
+            if (condition()) return true
+            Thread.sleep(20)
+        }
+        return condition()
+    }
+
     @Test
     fun `saves a live stream into keyframe pieces that a player reads back over loopback`() = runBlocking {
         val opened = manager.open("ch1", target(), windowMinutes = 15, firstPieceTimeoutMs = 5_000)
         assertNotNull(opened)
         val session = opened!!.session
-        Thread.sleep(800)
-        assertTrue("several pieces", (session.livePieceIndex() ?: 0) >= 2)
+        // Attach the player before waiting for later pieces. With this test manager's deliberately tiny
+        // 300 ms idle timeout, waiting with no reader correctly parks the buffer and no amount of polling
+        // can make another piece arrive. A real player opens the loopback URL as soon as [open] returns.
         val conn = readSome(session, 0, 188 * 20)
         assertEquals(1, session.readerCount)
+        assertTrue("several pieces", waitUntil { (session.livePieceIndex() ?: 0) >= 2 })
         conn.disconnect()
     }
 
@@ -108,8 +119,7 @@ class TimeshiftManagerTest {
         val back = manager.open("ch1", target(), 15, 5_000)
         assertSame(session, back!!.session)
         assertNotNull(back.resumeAtWallMs)
-        Thread.sleep(300)
-        assertTrue("reconnected once", connections.get() == before + 1)
+        assertTrue("reconnected once", waitUntil { connections.get() == before + 1 })
     }
 
     @Test
@@ -117,8 +127,7 @@ class TimeshiftManagerTest {
         val first = manager.open("ch1", target(), 15, 5_000)!!.session
         val second = manager.open("ch2", target(), 15, 5_000)!!.session
         manager.open("ch3", target(), 15, 5_000)!!.session
-        Thread.sleep(300)
-        assertTrue("the oldest parked buffer is gone", first.isClosed)
+        assertTrue("the oldest parked buffer is gone", waitUntil { first.isClosed })
         assertTrue(!second.isClosed)
     }
 
@@ -138,8 +147,7 @@ class TimeshiftManagerTest {
         manager.open("7:1", target(sourceId = 7), 15, 5_000)!!
         assertTrue(manager.isSaving(7))
         assertTrue(!manager.isSaving(8))
-        Thread.sleep(1_000) // nobody reading: parked, the connection closed
-        assertTrue(!manager.isSaving(7))
+        assertTrue("idle buffer parked", waitUntil { !manager.isSaving(7) })
     }
 
     @Test

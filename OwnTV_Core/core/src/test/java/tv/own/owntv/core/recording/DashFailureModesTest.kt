@@ -111,11 +111,15 @@ class DashFailureModesTest {
 
     // ---- disk ----
 
-    /** Out of room stays a failure however much was captured, because the user must know it is short. */
+    /** Out of room keeps a playable file partial and preserves why it is short. */
     @Test
     fun `running out of room is reported even with bytes on disk`() {
-        val (status, reason) = RecordingRules.outcomeOf(bytes = 900_000_000, failure = RecordingFailure.NO_SPACE)
-        assertEquals(RecordingStatus.FAILED, status)
+        val (status, reason) = RecordingRules.outcomeOf(
+            bytes = 900_000_000,
+            failure = RecordingFailure.NO_SPACE,
+            finishedNaturally = false,
+        )
+        assertEquals(RecordingStatus.PARTIAL, status)
         assertEquals(RecordingFailure.NO_SPACE, reason)
     }
 
@@ -192,16 +196,24 @@ class DashFailureModesTest {
     /** Nothing was written at all: a failure, because there is no file to offer. */
     @Test
     fun `a recording that captured nothing is a failure`() {
-        val (status, _) = RecordingRules.outcomeOf(bytes = 0, failure = RecordingFailure.STREAM_UNAVAILABLE)
+        val (status, _) = RecordingRules.outcomeOf(
+            bytes = 0,
+            failure = RecordingFailure.STREAM_UNAVAILABLE,
+            finishedNaturally = false,
+        )
         assertEquals(RecordingStatus.FAILED, status)
     }
 
     /** But any bytes at all is a recording the user can watch. */
     @Test
     fun `a partial recording is still a recording`() {
-        val (status, reason) = RecordingRules.outcomeOf(bytes = 1, failure = RecordingFailure.NETWORK)
-        assertEquals(RecordingStatus.COMPLETED, status)
-        assertEquals(RecordingFailure.NONE, reason)
+        val (status, reason) = RecordingRules.outcomeOf(
+            bytes = 1,
+            failure = RecordingFailure.NETWORK,
+            finishedNaturally = false,
+        )
+        assertEquals(RecordingStatus.PARTIAL, status)
+        assertEquals(RecordingFailure.NETWORK, reason)
     }
 
     private fun <T> assertNotNull(value: T?): T {

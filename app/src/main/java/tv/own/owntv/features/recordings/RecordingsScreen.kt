@@ -238,11 +238,12 @@ fun RecordingsScreen(
     if (!embedded) androidx.activity.compose.BackHandler(onBack = onBack)
 }
 
-/** The five groups, in the order the screen shows them: most urgent first. */
+/** The result groups, in the order the screen shows them: most urgent first. */
 private enum class RecordingGroup(val labelRes: Int) {
     NOW(R.string.recording_group_now),
     SCHEDULED(R.string.recording_group_scheduled),
     COMPLETED(R.string.recording_group_completed),
+    PARTIAL(R.string.recording_group_partial),
     FAILED(R.string.recording_group_failed),
     MISSED(R.string.recording_group_missed),
 }
@@ -270,6 +271,7 @@ private fun buildRecordingRows(recordings: List<RecordingEntity>): List<Recordin
     // Soonest first: a scheduled list is read forwards, unlike the finished ones.
     val scheduled = recordings.filter { it.status == RecordingStatus.SCHEDULED }.sortedBy { it.startMs }
     val completed = recordings.filter { it.status == RecordingStatus.COMPLETED }
+    val partial = recordings.filter { it.status == RecordingStatus.PARTIAL }
     val failed = recordings.filter { it.status == RecordingStatus.FAILED }
     val missed = recordings.filter { it.status == RecordingStatus.MISSED }
     return buildList {
@@ -277,6 +279,7 @@ private fun buildRecordingRows(recordings: List<RecordingEntity>): List<Recordin
             RecordingGroup.NOW to now,
             RecordingGroup.SCHEDULED to scheduled,
             RecordingGroup.COMPLETED to completed,
+            RecordingGroup.PARTIAL to partial,
             RecordingGroup.FAILED to failed,
             RecordingGroup.MISSED to missed,
         ).forEach { (group, list) ->
@@ -378,7 +381,7 @@ private fun RecordingRow(
         when (recording.status) {
             // No icon: it sits next to Delete, and the glyph made Play the wider of the two for no
             // reason a viewer could name.
-            RecordingStatus.COMPLETED -> OwnTVButton(
+            RecordingStatus.COMPLETED, RecordingStatus.PARTIAL -> OwnTVButton(
                 stringResource(R.string.content_downloads_play),
                 onClick = onPlay,
                 modifier = focusModifier,
@@ -461,6 +464,23 @@ private fun StatusLine(recording: RecordingEntity) {
             color = colors.primary,
             fontWeight = FontWeight.SemiBold,
         )
+        RecordingStatus.PARTIAL -> Text(
+            buildList {
+                add(stringResource(R.string.recording_group_partial))
+                add(
+                    androidx.compose.ui.res.pluralStringResource(
+                        R.plurals.recording_minutes,
+                        recordedMinutes(recording),
+                        recordedMinutes(recording),
+                    ),
+                )
+                if (recording.bytes > 0) add(stringResource(R.string.common_size_mb, sizeMb(recording.bytes)))
+                RecordingRules.displayTextOf(recording.failure, context.resources)?.let(::add)
+            }.joinToString(stringResource(R.string.content_epg_bits_separator)),
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFFF59E0B),
+            fontWeight = FontWeight.SemiBold,
+        )
         // The whole point of the Missed group: the reason, in words, not a code.
         RecordingStatus.FAILED, RecordingStatus.MISSED -> Text(
             RecordingRules.displayTextOf(recording.failure, context.resources)
@@ -541,6 +561,9 @@ private fun whenText(atMs: Long): String =
  * of a minute, and "0 minutes" would read as a failure that it is not.
  */
 private fun recordedMinutes(recording: RecordingEntity): Int {
+    if (recording.capturedDurationMs > 0) {
+        return (recording.capturedDurationMs / 60_000L).toInt().coerceAtLeast(1)
+    }
     val started = recording.startedAt
     val ended = recording.endedAt
     val span = if (started != null && ended != null && ended > started) {

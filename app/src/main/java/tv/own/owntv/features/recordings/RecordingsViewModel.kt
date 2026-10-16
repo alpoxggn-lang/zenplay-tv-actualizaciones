@@ -79,7 +79,7 @@ class RecordingsViewModel(
      * growing file and a picture that stops at whatever byte it started from.
      */
     fun play(recording: RecordingEntity) {
-        if (recording.status != RecordingStatus.COMPLETED) return
+        if (recording.status != RecordingStatus.COMPLETED && recording.status != RecordingStatus.PARTIAL) return
         val path = recording.filePath ?: return
         _lastPlayedId.value = recording.id
         viewModelScope.launch {

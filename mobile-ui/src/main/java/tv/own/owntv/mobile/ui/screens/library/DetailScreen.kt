@@ -181,7 +181,7 @@ fun DetailScreen(
             )
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
                 if (tab == LibraryTab.SERIES) {
-                    val target = nextUp ?: episodes.sortedWith(compareBy<EpisodeEntity>({ it.seasonNumber }, { it.episodeNumber })).firstOrNull()
+                    val target = nextUp ?: episodes.sortedWith(tv.own.owntv.core.content.EpisodeOrder.episodes).firstOrNull()
                     val targetMs = target?.let { e -> episodeProgress[e.id]?.takeIf { it.durationMs > 1L }?.positionMs } ?: 0L
                     if (target != null) {
                         ZenPlayButton(

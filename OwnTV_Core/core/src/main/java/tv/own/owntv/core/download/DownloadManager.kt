@@ -9,11 +9,14 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import tv.own.owntv.core.database.dao.DownloadDao
 import tv.own.owntv.core.database.entity.DownloadEntity
 import tv.own.owntv.core.model.DownloadStatus
 import tv.own.owntv.core.model.MediaType
+import tv.own.owntv.core.storage.MediaFolders
 import tv.own.owntv.core.storage.MediaRoot
 import tv.own.owntv.core.storage.MediaTarget
 import tv.own.owntv.core.storage.StorageAccess
@@ -46,6 +49,8 @@ class DownloadManager(
     private val engine: DownloadEngine,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /** Serializes physical-target creation and row/file mutations, including owner cleanup. */
+    private val mutationMutex = Mutex()
 
     init {
         // Anything left QUEUED — or RUNNING when the process was killed — is picked up again.
@@ -65,7 +70,8 @@ class DownloadManager(
     fun observe(profileId: Long): Flow<List<DownloadEntity>> = downloadDao.observeForProfile(profileId)
 
     /** Episode downloads for one series (poster-panel aggregate status). */
-    fun observeForSeries(seriesId: Long): Flow<List<DownloadEntity>> = downloadDao.observeForSeries(seriesId)
+    fun observeForSeries(profileId: Long, seriesId: Long): Flow<List<DownloadEntity>> =
+        downloadDao.observeForSeries(profileId, seriesId)
 
     /** Free/total space of the volume holding the current download root (for the Downloads storage bar). */
     suspend fun storageInfo(): DownloadStorageInfo = withContext(Dispatchers.IO) {
@@ -92,56 +98,93 @@ class DownloadManager(
      * nothing would leave the Download button looking broken.
      */
     fun enqueue(
-        profileId: Long, mediaType: MediaType, itemId: Long, title: String, posterUrl: String?,
+        profileId: Long, sourceId: Long, contentKey: String,
+        mediaType: MediaType, itemId: Long, title: String, posterUrl: String?,
         streamUrl: String, relativeDir: String, fileName: String,
     ) {
         scope.launch {
-            val root = MediaRoot.of(context, settings.downloadRoot.first())
-            val target = root.child(relativeDir, fileName)
-            if (target == null) {
-                android.util.Log.w(TAG, "cannot create download target in ${root.stored} for $fileName")
+            val inserted = mutationMutex.withLock {
+                if (profileId < 0L || sourceId < 0L || contentKey.isBlank() ||
+                    !engine.accepts(profileId, sourceId)
+                ) return@withLock false
+                // Check before touching storage: an existing row may have been moved/exported to a
+                // different path, and creating its old scoped target would leak an empty orphan.
+                if (downloadDao.getByIdentity(profileId, sourceId, contentKey) != null) {
+                    return@withLock false
+                }
+                val root = MediaRoot.of(context, settings.downloadRoot.first())
+                val target = root.child(
+                    DownloadIdentity.scopedDirectory(profileId, sourceId, relativeDir),
+                    DownloadIdentity.scopedFileName(fileName, contentKey),
+                )
+                if (target == null) {
+                    android.util.Log.w(TAG, "cannot create download target in ${root.stored} for $fileName")
+                }
+                val rowId = downloadDao.insertIfAbsent(
+                    DownloadEntity(
+                        profileId = profileId, sourceId = sourceId, contentKey = contentKey,
+                        mediaType = mediaType, itemId = itemId, title = title,
+                        posterUrl = posterUrl, streamUrl = streamUrl, filePath = target?.stored,
+                        status = DownloadStatus.QUEUED,
+                    ),
+                )
+                if (rowId == -1L) deleteFileIfUnreferenced(target?.stored)
+                rowId != -1L
             }
-            downloadDao.upsert(
-                DownloadEntity(
-                    profileId = profileId, mediaType = mediaType, itemId = itemId, title = title,
-                    posterUrl = posterUrl, streamUrl = streamUrl, filePath = target?.stored,
-                    status = DownloadStatus.QUEUED,
-                ),
-            )
-            kick()
+            if (inserted) kick()
         }
     }
 
     fun retry(download: DownloadEntity) {
         scope.launch {
-            // Stop a still-running attempt BEFORE deleting its file — otherwise the writer keeps
-            // streaming into the unlinked file and "completes" a download that no longer exists.
-            engine.suspendTransfer(download.id)
-            try {
-                // Start fresh. Truncated rather than deleted: dropping a SAF document would throw
-                // away the entry the user's folder grant points at, and the retry would then have
-                // nowhere to write at all. For an ordinary file the two are the same thing.
-                MediaTarget.of(context, download.filePath)?.truncate()
-                downloadDao.updateProgress(download.id, DownloadStatus.QUEUED, 0, download.totalBytes, System.currentTimeMillis())
-            } finally {
-                engine.release(download.id)
+            val queued = mutationMutex.withLock {
+                val owned = owned(download) ?: return@withLock false
+                // Stop a still-running attempt BEFORE touching its file — otherwise the writer keeps
+                // streaming into the old target while retry resets the row underneath it.
+                engine.suspendTransfer(owned.id)
+                try {
+                    // v46 and older did not isolate paths by profile/source. If another migrated row
+                    // still references this target, repoint this row to a new scoped target before
+                    // truncating so retry cannot destroy the other profile's completed download.
+                    val target = privateRetryTarget(owned) ?: return@withLock false
+                    target.truncate()
+                    downloadDao.updateProgressForProfile(
+                        owned.id,
+                        owned.profileId,
+                        DownloadStatus.QUEUED,
+                        0,
+                        owned.totalBytes,
+                        System.currentTimeMillis(),
+                    ) > 0
+                } finally {
+                    engine.release(owned.id)
+                }
             }
-            kick()
+            if (queued) kick()
         }
     }
 
     /** Stop the running download but keep the partial file so it can resume. */
     fun pause(download: DownloadEntity) {
         scope.launch {
-            // Wait for the writer to actually stop before recording how far it got (DL2) — cancel()
-            // alone returns while the transfer is still appending bytes.
-            engine.suspendTransfer(download.id)
-            try {
-                val d = downloadDao.getById(download.id) ?: download
-                val bytes = DownloadResume.bytesOnDisk(MediaTarget.of(context, d.filePath), d.downloadedBytes)
-                downloadDao.updateProgress(d.id, DownloadStatus.PAUSED, bytes, d.totalBytes, System.currentTimeMillis())
-            } finally {
-                engine.release(download.id)
+            mutationMutex.withLock {
+                val owned = owned(download) ?: return@withLock
+                // Wait for the writer to actually stop before recording how far it got (DL2).
+                engine.suspendTransfer(owned.id)
+                try {
+                    val d = downloadDao.getByIdForProfile(owned.id, owned.profileId) ?: return@withLock
+                    val bytes = DownloadResume.bytesOnDisk(MediaTarget.of(context, d.filePath), d.downloadedBytes)
+                    downloadDao.updateProgressForProfile(
+                        d.id,
+                        d.profileId,
+                        DownloadStatus.PAUSED,
+                        bytes,
+                        d.totalBytes,
+                        System.currentTimeMillis(),
+                    )
+                } finally {
+                    engine.release(owned.id)
+                }
             }
         }
     }
@@ -149,24 +192,117 @@ class DownloadManager(
     /** Continue a paused download from where it stopped (HTTP Range). */
     fun resume(download: DownloadEntity) {
         scope.launch {
-            val d = downloadDao.getById(download.id) ?: download
-            val bytes = DownloadResume.bytesOnDisk(MediaTarget.of(context, d.filePath), d.downloadedBytes)
-            downloadDao.updateProgress(d.id, DownloadStatus.QUEUED, bytes, d.totalBytes, System.currentTimeMillis())
-            kick()
+            val queued = mutationMutex.withLock {
+                val d = owned(download) ?: return@withLock false
+                // A paused v46 row may still share its title-based path with another owner. Give it
+                // a private destination before it becomes QUEUED; otherwise WorkManager could append
+                // this stream to another profile's completed file.
+                val target = privateRetryTarget(d) ?: return@withLock false
+                val bytes = DownloadResume.bytesOnDisk(target, d.downloadedBytes)
+                downloadDao.updateProgressForProfile(
+                    d.id,
+                    d.profileId,
+                    DownloadStatus.QUEUED,
+                    bytes,
+                    d.totalBytes,
+                    System.currentTimeMillis(),
+                ) > 0
+            }
+            if (queued) kick()
         }
     }
 
     fun delete(download: DownloadEntity) {
         scope.launch {
-            engine.suspendTransfer(download.id)
-            try {
-                MediaTarget.of(context, download.filePath)?.delete()
-                downloadDao.delete(download)
-            } finally {
-                engine.release(download.id)
+            val deleted = mutationMutex.withLock {
+                val owned = owned(download) ?: return@withLock false
+                engine.suspendTransfer(owned.id)
+                try {
+                    val removed = downloadDao.deleteByIdForProfile(owned.id, owned.profileId) > 0
+                    if (removed) deleteFileIfUnreferenced(owned.filePath)
+                    removed
+                } finally {
+                    engine.release(owned.id)
+                }
             }
-            kick()
+            if (deleted) kick()
         }
+    }
+
+    /** Cancel and remove every download owned by a profile before its FK cascade removes the rows. */
+    suspend fun removeForProfile(profileId: Long) {
+        if (profileId < 0L) return
+        engine.revokeProfile(profileId)
+        mutationMutex.withLock {
+            removeRows(downloadDao.getAllForProfile(profileId)) {
+                downloadDao.deleteAllForProfile(profileId)
+            }
+        }
+        kick()
+    }
+
+    /** Cancel and remove every download from a playlist before its catalogue/credentials disappear. */
+    suspend fun removeForSource(sourceId: Long) {
+        if (sourceId < 0L) return
+        engine.revokeSource(sourceId)
+        mutationMutex.withLock {
+            removeRows(downloadDao.getAllForSource(sourceId)) {
+                downloadDao.deleteAllForSource(sourceId)
+            }
+        }
+        kick()
+    }
+
+    private suspend fun removeRows(rows: List<DownloadEntity>, deleteRows: suspend () -> Unit) {
+        if (rows.isEmpty()) return
+        rows.forEach { engine.suspendTransfer(it.id) }
+        try {
+            deleteRows()
+            rows.mapNotNull { it.filePath }.distinct().forEach { deleteFileIfUnreferenced(it) }
+        } finally {
+            rows.forEach { engine.release(it.id) }
+        }
+    }
+
+    /** A migrated shared target is read-only to this row until retry gives it a private path. */
+    private suspend fun privateRetryTarget(download: DownloadEntity): MediaTarget? {
+        val current = MediaTarget.of(context, download.filePath) ?: return null
+        val path = download.filePath ?: return null
+        if (downloadDao.countForFilePath(path) <= 1) return current
+
+        val root = MediaRoot.of(context, settings.downloadRoot.first())
+        val requested = "${StorageAccess.sanitize(download.title)}.${StorageAccess.extOf(download.streamUrl)}"
+        val replacement = root.child(
+            DownloadIdentity.scopedDirectory(
+                download.profileId,
+                download.sourceId,
+                MediaFolders.folderFor(download.mediaType),
+            ),
+            DownloadIdentity.scopedFileName(requested, download.contentKey),
+        ) ?: return null
+        val moved = downloadDao.updateFilePathForProfile(
+            download.id,
+            download.profileId,
+            replacement.stored,
+            System.currentTimeMillis(),
+        )
+        return replacement.takeIf { moved > 0 }
+    }
+
+    private suspend fun deleteFileIfUnreferenced(filePath: String?) {
+        val path = filePath?.takeIf { it.isNotBlank() } ?: return
+        if (downloadDao.countForFilePath(path) == 0) MediaTarget.of(context, path)?.delete()
+    }
+
+    /**
+     * Resolve the row again and bind every user action to the profile that is active now. A stale
+     * Compose callback from the previous profile is therefore harmless, even when it still holds a
+     * perfectly valid row id.
+     */
+    private suspend fun owned(requested: DownloadEntity): DownloadEntity? {
+        val activeProfileId = settings.activeProfileId.first()
+        if (activeProfileId < 0L || requested.profileId != activeProfileId) return null
+        return downloadDao.getByIdForProfile(requested.id, activeProfileId)
     }
 
     private fun kick() {

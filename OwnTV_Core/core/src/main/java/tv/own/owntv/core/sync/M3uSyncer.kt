@@ -544,31 +544,7 @@ internal class M3uSyncer(
         val manifestType: String? = null,
     )
 
-    private data class ParsedM3uEpisode(val show: String, val season: Int, val episode: Int, val title: String?)
-
-    /**
-     * Splits an M3U series entry title like "Stranger Things S01E05" / "Show 2x03 - Pilot" into
-     * show + season + episode (+ optional episode title). Entries without a recognizable pattern
-     * become season 1 with sequential episode numbers ("Tales From The Crypt (1989-90s)").
-     */
-    private fun parseM3uEpisode(rawName: String): ParsedM3uEpisode {
-        val name = rawName.trim()
-        M3U_EPISODE_SXXEYY.find(name)?.let { m ->
-            val show = name.substring(0, m.range.first).trim(' ', '-', '.', '_', ':')
-            val title = name.substring(m.range.last + 1).trim(' ', '-', '.', '_', ':').takeIf { it.isNotEmpty() }
-            if (show.isNotEmpty()) {
-                return ParsedM3uEpisode(show, m.groupValues[1].toInt(), m.groupValues[2].toInt(), title)
-            }
-        }
-        M3U_EPISODE_NXN.find(name)?.let { m ->
-            val show = name.substring(0, m.range.first).trim(' ', '-', '.', '_', ':')
-            val title = name.substring(m.range.last + 1).trim(' ', '-', '.', '_', ':').takeIf { it.isNotEmpty() }
-            if (show.isNotEmpty()) {
-                return ParsedM3uEpisode(show, m.groupValues[1].toInt(), m.groupValues[2].toInt(), title)
-            }
-        }
-        return ParsedM3uEpisode(show = name, season = 1, episode = 0, title = null) // episode 0 → sequential
-    }
+    internal data class ParsedM3uEpisode(val show: String, val season: Int, val episode: Int, val title: String?)
 
     /**
      * Size of a local playlist, for the progress log — read without opening the stream, so the
@@ -603,11 +579,34 @@ internal class M3uSyncer(
     companion object {
         private const val TAG = SyncSupport.TAG
 
-        /** "S01E05" / "s1 e5" — the common episode marker in M3U series playlists. */
-        private val M3U_EPISODE_SXXEYY = Regex("""(?i)\bS(\d{1,2})\s*[.\-_ ]?\s*E(\d{1,3})\b""")
+        /** "S01E05", year seasons such as S2019E05 and long anime episode numbers. */
+        private val M3U_EPISODE_SXXEYY = Regex("""(?i)\bS(\d{1,4})\s*[.\-_ ]?\s*E(\d{1,4})\b""")
+
+        /** "Season 1 Episode 5" / "Season 1 - Ep. 5". */
+        private val M3U_EPISODE_WORDS = Regex("""(?i)\bSeason\s*(\d{1,4})\s*[.,:\-_ ]*\s*(?:Episode|Ep\.?)\s*(\d{1,4})\b""")
 
         /** "1x05" alternative marker. */
         private val M3U_EPISODE_NXN = Regex("""(?i)\b(\d{1,2})x(\d{1,3})\b""")
+
+        internal fun parseM3uEpisode(rawName: String): ParsedM3uEpisode {
+            val name = rawName.trim()
+            for (pattern in listOf(M3U_EPISODE_SXXEYY, M3U_EPISODE_WORDS, M3U_EPISODE_NXN)) {
+                val match = pattern.find(name) ?: continue
+                val show = name.substring(0, match.range.first).trim(' ', '-', '.', '_', ':')
+                val title = name.substring(match.range.last + 1)
+                    .trim(' ', '-', '.', '_', ':')
+                    .takeIf { it.isNotEmpty() }
+                if (show.isNotEmpty()) {
+                    return ParsedM3uEpisode(
+                        show,
+                        match.groupValues[1].toInt(),
+                        match.groupValues[2].toInt(),
+                        title,
+                    )
+                }
+            }
+            return ParsedM3uEpisode(show = name, season = 1, episode = 0, title = null)
+        }
 
         /** Bound on the in-memory series accumulator (S5) — episode rows buffered before an early
          *  flush. Matched to the bulk-insert chunk so a flush is one normal-sized DB batch. */

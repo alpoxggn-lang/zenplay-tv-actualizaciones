@@ -63,6 +63,7 @@ class RecordingScheduler(
                     status = RecordingStatus.MISSED,
                     failure = RecordingFailure.UNKNOWN,
                     bytes = 0,
+                    capturedDurationMs = 0,
                     filePath = null,
                     startedAt = null,
                     endedAt = now,

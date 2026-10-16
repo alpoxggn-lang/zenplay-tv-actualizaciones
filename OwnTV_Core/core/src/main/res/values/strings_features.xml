@@ -351,6 +351,8 @@
     <string name="recording_failed_network">The connection was lost</string>
     <!-- Translators: Shown on a recording that captured nothing because the channel never started playing. -->
     <string name="recording_failed_unavailable">The channel would not play</string>
+    <!-- Translators: Reason shown for a playable partial recording stopped before its requested end. -->
+    <string name="recording_partial_interrupted">Stopped before the programme ended</string>
     <!-- Translators: Shown on a recording whose channel has since been removed from the user's playlist. -->
     <string name="recording_failed_channel_gone">That channel is no longer in your playlist</string>
     <!-- Translators: Shown on a recording that failed for a reason the app could not identify. -->
@@ -368,6 +370,8 @@
     <string name="recording_group_scheduled">Scheduled</string>
     <!-- Translators: Section heading for recordings that finished and can be watched. -->
     <string name="recording_group_completed">Recorded</string>
+    <!-- Translators: Section heading for playable recordings that did not capture the whole programme. -->
+    <string name="recording_group_partial">Partial recordings</string>
     <!-- Translators: Section heading for recordings that started but stopped before the end. -->
     <string name="recording_group_failed">Failed</string>
     <!-- Translators: Section heading for recordings that never started at all, so the programme was not captured. -->

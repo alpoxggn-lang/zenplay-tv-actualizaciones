@@ -39,6 +39,16 @@ data class XtEpisode(
 )
 data class XtSeriesInfo(val episodes: List<XtEpisode>)
 
+/** Assigns a stable in-season position when a panel omits or zeroes `episode_num`. */
+internal fun numberBlankEpisodes(episodes: List<XtEpisode>): List<XtEpisode> {
+    val position = HashMap<Int, Int>()
+    return episodes.map { episode ->
+        val next = (position[episode.seasonNumber] ?: 0) + 1
+        position[episode.seasonNumber] = next
+        if (episode.episodeNumber > 0) episode else episode.copy(episodeNumber = next)
+    }
+}
+
 /** What a real request for an `.m3u8` live URL got back — see [XtreamClient.probeHls]. */
 sealed interface HlsProbe {
     /** A playlist came back. Proof the panel serves HLS, whatever it advertises. */
@@ -218,7 +228,11 @@ class XtreamClient(private val http: HttpClient) {
      */
     suspend fun getSeriesInfo(s: SourceEntity, seriesId: String): XtSeriesInfo {
         val episodes = ArrayList<XtEpisode>()
-        http.get(api(s, "get_series_info", "&series_id=$seriesId"), s.userAgent) { input ->
+        http.get(
+            api(s, "get_series_info", "&series_id=$seriesId"),
+            s.userAgent,
+            maxAttempts = SERIES_INFO_MAX_ATTEMPTS,
+        ) { input ->
             JsonReader(input.reader(Charsets.UTF_8)).use { reader ->
                 reader.isLenient = true
                 if (reader.peek() != JsonToken.BEGIN_OBJECT) { reader.skipValue(); return@use }
@@ -237,7 +251,7 @@ class XtreamClient(private val http: HttpClient) {
                 reader.endObject()
             }
         }
-        return XtSeriesInfo(episodes)
+        return XtSeriesInfo(numberBlankEpisodes(episodes))
     }
 
     /** `episodes` as `{ season → [episodes] }`. */
@@ -245,24 +259,86 @@ class XtreamClient(private val http: HttpClient) {
         reader.beginObject()
         while (reader.hasNext()) {
             val season = reader.nextName().toIntOrNull() ?: 0
-            if (reader.peek() != JsonToken.BEGIN_ARRAY) { reader.skipValue(); continue }
-            reader.beginArray()
-            while (reader.hasNext()) readEpisode(reader, out, season)
-            reader.endArray()
+            when (reader.peek()) {
+                JsonToken.BEGIN_ARRAY -> {
+                    reader.beginArray()
+                    while (reader.hasNext()) readEpisode(reader, out, season)
+                    reader.endArray()
+                }
+                JsonToken.BEGIN_OBJECT -> {
+                    reader.beginObject()
+                    readKeyedEpisodes(reader, out, season, firstKey = null)
+                }
+                else -> reader.skipValue()
+            }
         }
         reader.endObject()
     }
 
-    /** `episodes` as a flat `[episodes]` — season comes from each episode's own field. */
+    /**
+     * `episodes` as a flat array or as nested season arrays. PHP encodes a 0,1,2 season map as an
+     * array, which is common when a show has Specials; both layouts are accepted.
+     */
     private fun readEpisodesArray(reader: JsonReader, out: MutableList<XtEpisode>) {
         reader.beginArray()
-        while (reader.hasNext()) readEpisode(reader, out, 0)
+        var index = 0
+        while (reader.hasNext()) {
+            when (reader.peek()) {
+                JsonToken.BEGIN_ARRAY -> {
+                    reader.beginArray()
+                    while (reader.hasNext()) readEpisode(reader, out, index)
+                    reader.endArray()
+                }
+                JsonToken.BEGIN_OBJECT -> {
+                    reader.beginObject()
+                    if (!reader.hasNext()) {
+                        reader.endObject()
+                    } else {
+                        val first = reader.nextName()
+                        if (first.toIntOrNull() != null) {
+                            readKeyedEpisodes(reader, out, index, firstKey = first)
+                        } else {
+                            readEpisodeFields(reader, out, 0, firstName = first)
+                        }
+                    }
+                }
+                else -> reader.skipValue()
+            }
+            index++
+        }
         reader.endArray()
+    }
+
+    /** Reads an episode list encoded as an object with numeric keys. */
+    private fun readKeyedEpisodes(
+        reader: JsonReader,
+        out: MutableList<XtEpisode>,
+        season: Int,
+        firstKey: String?,
+    ) {
+        var key = firstKey
+        while (key != null || reader.hasNext()) {
+            val name = key ?: reader.nextName()
+            key = null
+            if (name.toIntOrNull() != null) readEpisode(reader, out, season) else reader.skipValue()
+        }
+        reader.endObject()
     }
 
     /** One episode object — tolerant of string/number/null fields and an in-object `season`. */
     private fun readEpisode(reader: JsonReader, out: MutableList<XtEpisode>, seasonFallback: Int) {
         if (reader.peek() != JsonToken.BEGIN_OBJECT) { reader.skipValue(); return }
+        reader.beginObject()
+        readEpisodeFields(reader, out, seasonFallback, firstName = null)
+    }
+
+    /** Reads fields from an already-open episode object. */
+    private fun readEpisodeFields(
+        reader: JsonReader,
+        out: MutableList<XtEpisode>,
+        seasonFallback: Int,
+        firstName: String?,
+    ) {
         var id: String? = null
         var epNum = 0
         var title = ""
@@ -270,9 +346,11 @@ class XtreamClient(private val http: HttpClient) {
         var season = seasonFallback
         var airDate: Long? = null
         var added: Long? = null
-        reader.beginObject()
-        while (reader.hasNext()) {
-            when (reader.nextName()) {
+        var pending = firstName
+        while (pending != null || reader.hasNext()) {
+            val name = pending ?: reader.nextName()
+            pending = null
+            when (name) {
                 "id" -> id = reader.nextStringOrNull()
                 "episode_num" -> epNum = reader.nextIntOrNull() ?: epNum
                 "title" -> title = reader.nextStringOrNull() ?: title
@@ -569,6 +647,16 @@ class XtreamClient(private val http: HttpClient) {
         }
     }
 
+    /** True only when `player_api.php` positively identifies an Xtream account. */
+    suspend fun isXtreamAccount(s: SourceEntity): Boolean = try {
+        fetchAccountStatus(s).let { it.status != null || !it.authOk }
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        Log.i(TAG, "isXtreamAccount: no (${error.javaClass.simpleName})")
+        false
+    }
+
     /** Convenience delegate returning only [XtAccountDetails.expiryMs]. */
     suspend fun accountExpiryMs(s: SourceEntity): Long? = fetchAccountDetails(s)?.expiryMs
 
@@ -812,6 +900,8 @@ class XtreamClient(private val http: HttpClient) {
         val DEBUG = Log.isLoggable(TAG, Log.DEBUG)
         /** Category lists are tiny; a retry on a connect/DNS blip saves the whole sync phase. */
         const val CATEGORY_MAX_ATTEMPTS = 3
+        /** A show's episode list gets one retry when a kept-alive connection is dropped. */
+        const val SERIES_INFO_MAX_ATTEMPTS = 2
         /** Enough of an HLS response to see `#EXTM3U` (or that an HTML error page came instead). */
         const val HLS_PROBE_BYTES = 512
     }

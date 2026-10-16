@@ -218,7 +218,10 @@ class HeroPreviewEngine(
             // decoding off did so to work around a broken vendor decoder, and the home screen was the one
             // place still handing that decoder a 4K stream.
             .setRenderersFactory(ownTVRenderers(context, forceStereo = true, softwareFirst = !hwDecodingEnabled))
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource))
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(dataSource)
+                    .setDrmSessionManagerProvider(tv.own.owntv.core.drm.InlineClearKeyDrmProvider),
+            )
             .setLoadControl(loadControl)
             .build()
             .apply {

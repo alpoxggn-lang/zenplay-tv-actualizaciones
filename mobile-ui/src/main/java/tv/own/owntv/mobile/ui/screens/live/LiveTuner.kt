@@ -169,6 +169,7 @@ class LiveTuner(
                 profileId = profileId,
                 sourceId = ch.sourceId,
                 channelId = ch.id,
+                channelRemoteId = ch.remoteId,
                 channelName = ch.name,
                 channelIconUrl = ch.logoUrl,
                 epgChannelId = ch.epgChannelId,

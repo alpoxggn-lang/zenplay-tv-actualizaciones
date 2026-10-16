@@ -131,7 +131,7 @@ fun RecordingsScreen(
                             RecordingRow(
                                 recording = recording,
                                 onClick = {
-                                    if (recording.status == RecordingStatus.COMPLETED) vm.play(recording)
+                                    if (recording.status == RecordingStatus.COMPLETED || recording.status == RecordingStatus.PARTIAL) vm.play(recording)
                                     else menuFor = recording
                                 },
                                 onLongClick = { menuFor = recording },
@@ -143,7 +143,7 @@ fun RecordingsScreen(
                         RecordingRow(
                             recording = recording,
                             onClick = {
-                                if (recording.status == RecordingStatus.COMPLETED) vm.play(recording)
+                                if (recording.status == RecordingStatus.COMPLETED || recording.status == RecordingStatus.PARTIAL) vm.play(recording)
                                 else menuFor = recording
                             },
                             onLongClick = { menuFor = recording },
@@ -178,7 +178,7 @@ private enum class RecordingTab(val labelRes: Int) {
     fun holds(status: RecordingStatus): Boolean = when (this) {
         ACTIVE -> status == RecordingStatus.RECORDING
         SCHEDULED -> status == RecordingStatus.SCHEDULED
-        COMPLETED -> status == RecordingStatus.COMPLETED
+        COMPLETED -> status == RecordingStatus.COMPLETED || status == RecordingStatus.PARTIAL
         FAILED -> status == RecordingStatus.FAILED || status == RecordingStatus.MISSED
     }
 }
@@ -257,7 +257,7 @@ private fun RecordingRow(recording: RecordingEntity, onClick: () -> Unit, onLong
             )
         },
         trailing = {
-            if (recording.status == RecordingStatus.COMPLETED) {
+            if (recording.status == RecordingStatus.COMPLETED || recording.status == RecordingStatus.PARTIAL) {
                 Icon(
                     imageVector = MobileIcons.PlayArrow,
                     contentDescription = stringResource(R.string.content_downloads_play),
@@ -285,6 +285,20 @@ private fun statusLine(recording: RecordingEntity): String {
             recordedMinutes(recording),
             recordedMinutes(recording),
         )
+        RecordingStatus.PARTIAL -> buildList {
+            add(stringResource(R.string.recording_group_partial))
+            add(
+                pluralStringResource(
+                    R.plurals.recording_minutes,
+                    recordedMinutes(recording),
+                    recordedMinutes(recording),
+                ),
+            )
+            if (recording.bytes > 0) {
+                add(stringResource(R.string.common_size_mb, megabytes(recording.bytes)))
+            }
+            RecordingRules.displayTextOf(recording.failure, context.resources)?.let(::add)
+        }.joinToString(stringResource(R.string.content_epg_bits_separator))
         RecordingStatus.FAILED, RecordingStatus.MISSED ->
             RecordingRules.displayTextOf(recording.failure, context.resources)
                 ?: stringResource(R.string.recording_failed_unknown)
@@ -301,7 +315,7 @@ private fun RecordingMenu(
 ) {
     MobileBottomSheet(onDismissRequest = onDismiss, title = recording.title) {
         when (recording.status) {
-            RecordingStatus.COMPLETED -> MenuRow(R.string.content_downloads_play, MobileIcons.PlayArrow) {
+            RecordingStatus.COMPLETED, RecordingStatus.PARTIAL -> MenuRow(R.string.content_downloads_play, MobileIcons.PlayArrow) {
                 vm.play(recording); onDismiss()
             }
             RecordingStatus.RECORDING -> MenuRow(R.string.recording_stop, MobileIcons.Pause) {
@@ -318,7 +332,7 @@ private fun RecordingMenu(
         // Nothing to delete while it is only scheduled: there is no file yet, and Cancel is what
         // "do not do this" means.
         // Only a finished recording has a file worth copying anywhere.
-        if (recording.status == RecordingStatus.COMPLETED) {
+        if (recording.status == RecordingStatus.COMPLETED || recording.status == RecordingStatus.PARTIAL) {
             MenuRow(R.string.settings_export, MobileIcons.Save) { onSaveCopy(); onDismiss() }
         }
         // Where the file actually is, spelled out in full and copied on a tap — the download menu's
@@ -371,6 +385,9 @@ private fun MenuRow(
 
 /** Minutes actually captured, from the clock where there is one and the programme's length otherwise. */
 private fun recordedMinutes(recording: RecordingEntity): Int {
+    if (recording.capturedDurationMs > 0) {
+        return (recording.capturedDurationMs / 60_000L).toInt().coerceAtLeast(1)
+    }
     val started = recording.startedAt
     val ended = recording.endedAt
     val span = if (started != null && ended != null && ended > started) {
@@ -380,6 +397,11 @@ private fun recordedMinutes(recording: RecordingEntity): Int {
     }
     return (span / 60_000L).toInt().coerceAtLeast(1)
 }
+
+private fun megabytes(bytes: Long): String = NumberFormat.getNumberInstance().apply {
+    minimumFractionDigits = 1
+    maximumFractionDigits = 1
+}.format(bytes.coerceAtLeast(0) / 1_048_576.0)
 
 private fun gigabytes(bytes: Long): String = NumberFormat.getNumberInstance().apply {
     minimumFractionDigits = 1

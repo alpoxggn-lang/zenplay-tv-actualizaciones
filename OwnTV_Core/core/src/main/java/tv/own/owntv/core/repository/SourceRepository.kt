@@ -8,6 +8,7 @@ import kotlinx.coroutines.sync.withLock
 import tv.own.owntv.core.database.dao.SourceDao
 import tv.own.owntv.core.database.entity.ProfileSourceCrossRef
 import tv.own.owntv.core.database.entity.SourceEntity
+import tv.own.owntv.core.download.DownloadManager
 import tv.own.owntv.core.model.SourceType
 import tv.own.owntv.core.sync.ImportStage
 import tv.own.owntv.core.sync.SyncContentTypes
@@ -28,6 +29,7 @@ class SourceRepository(
     private val categoryDao: tv.own.owntv.core.database.dao.CategoryDao,
     private val playbackQuirkDao: tv.own.owntv.core.database.dao.PlaybackQuirkDao,
     private val playbackPrefsDao: tv.own.owntv.core.database.dao.PlaybackPrefsDao,
+    private val downloadManager: DownloadManager,
 ) {
     fun observeSources(profileId: Long): Flow<List<SourceEntity>> = sourceDao.observeForProfile(profileId)
 
@@ -86,6 +88,9 @@ class SourceRepository(
      * are keyed by content, not by a foreign key, so without this they outlived the playlist forever.
      */
     suspend fun deleteSource(source: SourceEntity) {
+        // Revoke first: no queued/running transfer may keep the deleted provider credentials alive,
+        // and app-private files must not outlive the source that authorized them.
+        downloadManager.removeForSource(source.id)
         sourceDao.delete(source)
         runCatching { playbackQuirkDao.deleteBySource(source.id) }
         runCatching { playbackPrefsDao.deleteBySource(source.id) }

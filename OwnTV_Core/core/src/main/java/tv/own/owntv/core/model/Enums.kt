@@ -41,9 +41,11 @@ enum class DownloadStatus { QUEUED, RUNNING, PAUSED, COMPLETED, FAILED }
  * [MISSED] is the one that does not exist for downloads, and it is the whole reason the Recordings
  * screen has a fourth group: a live programme that could not be recorded when it aired is gone, so
  * "it did not happen, and here is why" is a result the user has to be told, not an error to retry.
- * [FAILED] is a recording that started and then stopped; [MISSED] never started at all.
+ * [PARTIAL] owns a playable file that stopped early or contains a known gap, [FAILED] owns no
+ * usable capture, and [MISSED] never started at all. Keeping PARTIAL separate from COMPLETED is what
+ * prevents a one-byte/truncated file from being presented as a successful programme.
  */
-enum class RecordingStatus { SCHEDULED, RECORDING, COMPLETED, FAILED, MISSED, CANCELLED }
+enum class RecordingStatus { SCHEDULED, RECORDING, COMPLETED, PARTIAL, FAILED, MISSED, CANCELLED }
 
 /**
  * Why a recording failed or was missed — the sentence the Recordings screen shows instead of a
@@ -73,6 +75,9 @@ enum class RecordingFailure {
 
     /** The provider stopped serving the stream, or never did. */
     STREAM_UNAVAILABLE,
+
+    /** The capture was stopped before its requested window ended (user, process, or device). */
+    INTERRUPTED,
 
     /** The playlist or channel the row points at is no longer in the catalogue. */
     CHANNEL_GONE,

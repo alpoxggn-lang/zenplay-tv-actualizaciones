@@ -61,6 +61,19 @@ interface ChannelDao {
     @Query("SELECT * FROM channels WHERE sourceId = :sourceId AND remoteId = :remoteId LIMIT 1")
     suspend fun findByRemote(sourceId: Long, remoteId: String): ChannelEntity?
 
+    /**
+     * At most two source-scoped matches for a guide identity.
+     *
+     * The recorder deliberately asks for two rather than `LIMIT 1`: one result is a safe fallback
+     * for a pre-v48 timer, while two prove that the EPG id is shared and therefore cannot identify
+     * which stream the user scheduled.
+     */
+    @Query(
+        "SELECT * FROM channels WHERE sourceId = :sourceId " +
+            "AND LOWER(TRIM(epgChannelId)) = LOWER(TRIM(:epgChannelId)) ORDER BY id ASC LIMIT 2",
+    )
+    suspend fun findRecordingCandidatesByEpg(sourceId: Long, epgChannelId: String): List<ChannelEntity>
+
     @Query("SELECT * FROM channels WHERE sourceId = :sourceId AND name = :name LIMIT 1")
     suspend fun findByName(sourceId: Long, name: String): ChannelEntity?
 

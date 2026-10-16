@@ -180,8 +180,14 @@ val dataModule = module {
     // The one place a user deletion is written: it records the tombstone local sync needs and does
     // the delete in the same transaction. db, favoriteDao, historyDao, progressDao, customCategoryDao, userData
     single { tv.own.owntv.core.backup.UserDataWriter(get(), get(), get(), get(), get(), get()) }
-    // sourceDao, syncManager, userDataResolver, channelDao, movieDao, seriesDao, categoryDao
-    single { SourceRepository(get(), get(), get(), get(), get(), get(), get(), playbackQuirkDao = get(), playbackPrefsDao = get()) }
+    // sourceDao, syncManager, userDataResolver, channelDao, movieDao, seriesDao, categoryDao,
+    // playbackQuirkDao, playbackPrefsDao, downloadManager
+    single {
+        SourceRepository(
+            get(), get(), get(), get(), get(), get(), get(),
+            playbackQuirkDao = get(), playbackPrefsDao = get(), downloadManager = get(),
+        )
+    }
     // settings, sourceRepository, channelDao, movieDao, seriesDao
     single { tv.own.owntv.core.nav.NavVisibility(get(), get(), get(), get(), get()) }
     single {
@@ -250,9 +256,10 @@ val dataModule = module {
     // Same idea as the sync trackers: the download engine reports its running transfer here so the
     // shell's status pill can show it in both apps.
     single { tv.own.owntv.core.download.DownloadActivityTracker() }
-    // downloadDao, okHttpClient, sourceDao, movieDao, seriesDao, streamUrlResolver, activityTracker
+    // downloadDao, okHttpClient, sourceDao, movieDao, seriesDao, streamUrlResolver, activityTracker,
+    // contentAccessPolicy (execution-time profile/source/content gate)
     // (the middle four are D-3: Stalker downloads resolve the stored cmd at download-start time)
-    single { DownloadEngine(androidContext(), get(), get(), get(), get(), get(), get(), get()) }
+    single { DownloadEngine(androidContext(), get(), get(), get(), get(), get(), get(), get(), get()) }
     // context, downloadDao, settings, engine
     single { DownloadManager(androidContext(), get(), get(), get()) }
     // The recording half of the same idea: several can run at once (D10), so the tracker keeps a
@@ -299,10 +306,10 @@ val dataModule = module {
             get(),
         )
     }
-    // profileDao, sourceDao, settings, launcherIntegration, openSubtitlesAccounts — creating,
-    // editing, switching and deleting a profile, shared by both apps' profile gates.
+    // profileDao, sourceDao, settings, launcherIntegration, openSubtitlesAccounts, avatars,
+    // downloadManager — creating, editing, switching and deleting a profile, shared by both apps.
     single { tv.own.owntv.core.profile.ProfileAvatarStore(androidContext()) }
-    single { tv.own.owntv.core.profile.ProfileManager(get(), get(), get(), get(), get(), get()) }
+    single { tv.own.owntv.core.profile.ProfileManager(get(), get(), get(), get(), get(), get(), get()) }
     single { tv.own.owntv.core.profile.ProfileCustomizationAccess(get(), get()) }
     single { tv.own.owntv.core.content.ContentAccessPolicy(get(), get(), get(), get(), get()) }
     // context, okHttpClient — in-app updates from GitHub Releases
@@ -312,5 +319,5 @@ val dataModule = module {
     // profileDao, sourceDao, sourceRepository, backup, settings, connectivity, importFinalizer,
     // launcherIntegration, catalogSyncScheduler, stalkerAuth — onboarding: add a source, sync it,
     // undo it when it fails. Factory, not single: each wizard run owns its own state machine.
-    factory { tv.own.owntv.core.setup.SourceImporter(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    factory { tv.own.owntv.core.setup.SourceImporter(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
 }

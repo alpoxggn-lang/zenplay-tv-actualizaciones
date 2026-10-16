@@ -195,6 +195,7 @@ class EpgViewModel(
                     profileId = pid,
                     sourceId = storedChannel.sourceId,
                     channelId = storedChannel.id,
+                    channelRemoteId = storedChannel.remoteId,
                     channelName = storedChannel.name,
                     channelIconUrl = storedChannel.logoUrl,
                     epgChannelId = storedChannel.epgChannelId,

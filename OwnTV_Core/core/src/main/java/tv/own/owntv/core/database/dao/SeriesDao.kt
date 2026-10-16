@@ -122,6 +122,16 @@ interface SeriesDao {
     @Query("SELECT * FROM episodes WHERE seriesId = :seriesId AND remoteId = :remoteId LIMIT 1")
     suspend fun findEpisodeByRemote(seriesId: Long, remoteId: String): EpisodeEntity?
 
+    /**
+     * Recovery lookup for an episode without a provider id. Source scoping happens through its
+     * parent series and LIMIT 2 lets the caller reject a reused/ambiguous stream URL.
+     */
+    @Query(
+        "SELECT e.* FROM episodes e INNER JOIN series s ON s.id = e.seriesId " +
+            "WHERE s.sourceId = :sourceId AND e.streamUrl = :streamUrl LIMIT 2",
+    )
+    suspend fun findEpisodesByStreamUrl(sourceId: Long, streamUrl: String): List<EpisodeEntity>
+
     @Query("SELECT * FROM episodes WHERE seriesId = :seriesId AND seasonNumber = :season AND episodeNumber = :episode LIMIT 1")
     suspend fun findEpisodeByNumber(seriesId: Long, season: Int, episode: Int): EpisodeEntity?
 

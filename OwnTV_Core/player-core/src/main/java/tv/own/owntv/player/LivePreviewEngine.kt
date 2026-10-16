@@ -2841,7 +2841,9 @@ class LivePreviewEngine(
                     )
                     .setTsSubtitleFormats(listOf(cc1)),
             )
+                .setDrmSessionManagerProvider(tv.own.owntv.core.drm.InlineClearKeyDrmProvider)
             cachedHlsCcFactory = HlsMediaSource.Factory(cachedHttpDataSource!!)
+                .setDrmSessionManagerProvider(tv.own.owntv.core.drm.InlineClearKeyDrmProvider)
                 .setExtractorFactory(DefaultHlsExtractorFactory(0, true))
                 // Media3 defaults this to zero, which it documents as an *infinite* timeout: a rendition
                 // whose chunk can't be timestamp-aligned with the primary one parks its loading thread in
@@ -3000,7 +3002,10 @@ class LivePreviewEngine(
         return ExoPlayer.Builder(context)
             .setRenderersFactory(renderers)
             .setTrackSelector(trackSelector)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(httpDataSourceFor(currentUa)))
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(httpDataSourceFor(currentUa))
+                    .setDrmSessionManagerProvider(tv.own.owntv.core.drm.InlineClearKeyDrmProvider),
+            )
             .setLoadControl(loadControl)
             .build()
             .apply {

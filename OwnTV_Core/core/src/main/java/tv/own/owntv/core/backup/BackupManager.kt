@@ -522,6 +522,8 @@ class BackupManager(
         val primary = runCatching { read(file) }
         primary.getOrNull()?.let { return it }
         (primary.exceptionOrNull() as? WrongPasswordException)?.let { throw it }
+        // The kind only — never the message, which could quote file content.
+        Log.w(TAG, "Backup unreadable: ${primary.exceptionOrNull()?.javaClass?.simpleName}")
         val bak = File(file.parentFile, "${file.name}$BAK_SUFFIX")
         if (bak.exists()) {
             runCatching { read(bak) }.getOrNull()?.let { return it }

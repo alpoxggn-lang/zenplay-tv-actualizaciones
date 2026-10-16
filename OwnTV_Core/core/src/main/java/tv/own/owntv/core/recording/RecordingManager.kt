@@ -146,6 +146,7 @@ class RecordingManager(
             status = RecordingStatus.SCHEDULED,
             failure = RecordingFailure.NONE,
             bytes = 0,
+            capturedDurationMs = 0,
             startedAt = null,
             endedAt = null,
             updatedAt = System.currentTimeMillis(),
@@ -193,6 +194,7 @@ class RecordingManager(
                 profileId = profileId,
                 sourceId = source.id,
                 channelId = channel.id,
+                channelRemoteId = channel.remoteId,
                 channelName = channel.name,
                 channelIconUrl = channel.logoUrl,
                 epgChannelId = channel.epgChannelId,
@@ -263,6 +265,7 @@ class RecordingManager(
                 status = RecordingStatus.CANCELLED,
                 failure = RecordingFailure.NONE,
                 bytes = 0,
+                capturedDurationMs = 0,
                 filePath = null,
                 startedAt = null,
                 endedAt = System.currentTimeMillis(),
@@ -316,6 +319,7 @@ class RecordingManager(
                         profileId = rule.profileId,
                         sourceId = channel.sourceId,
                         channelId = channel.id,
+                        channelRemoteId = channel.remoteId,
                         channelName = channel.name,
                         channelIconUrl = channel.logoUrl,
                         epgChannelId = channel.epgChannelId,
@@ -336,8 +340,8 @@ class RecordingManager(
 
 
     /**
-     * Stop a recording that is running, keeping what it has captured — a `.ts` is playable to
-     * whatever point it reached, so this is a finished short recording and not a failure.
+     * Stop a recording that is running, keeping what it has captured. A non-empty `.ts` remains
+     * playable, but is labelled PARTIAL/INTERRUPTED rather than pretending the programme completed.
      */
     fun stop(recording: RecordingEntity) {
         scope.launch {
@@ -345,16 +349,22 @@ class RecordingManager(
             try {
                 val row = recordingDao.getById(recording.id) ?: return@launch
                 val bytes = MediaTarget.of(context, row.filePath)?.length() ?: 0L
-                val (status, failure) = RecordingRules.outcomeOf(bytes, RecordingFailure.NONE)
+                val endedAt = System.currentTimeMillis()
+                val (status, failure) = RecordingRules.outcomeOf(
+                    bytes = bytes,
+                    failure = RecordingFailure.INTERRUPTED,
+                    finishedNaturally = false,
+                )
                 recordingDao.updateProgress(
                     id = row.id,
                     status = status,
                     failure = failure,
                     bytes = bytes,
+                    capturedDurationMs = RecordingRules.capturedDurationMs(row.startedAt, endedAt),
                     filePath = row.filePath,
                     startedAt = row.startedAt,
-                    endedAt = System.currentTimeMillis(),
-                    timestamp = System.currentTimeMillis(),
+                    endedAt = endedAt,
+                    timestamp = endedAt,
                 )
             } finally {
                 engine.release(recording.id)
@@ -371,6 +381,7 @@ class RecordingManager(
                 status = RecordingStatus.CANCELLED,
                 failure = RecordingFailure.NONE,
                 bytes = 0,
+                capturedDurationMs = 0,
                 filePath = null,
                 startedAt = null,
                 endedAt = System.currentTimeMillis(),
@@ -412,6 +423,7 @@ class RecordingManager(
                 status = recording.status,
                 failure = recording.failure,
                 bytes = recording.bytes,
+                capturedDurationMs = recording.capturedDurationMs,
                 filePath = movedTo,
                 startedAt = recording.startedAt,
                 endedAt = recording.endedAt,

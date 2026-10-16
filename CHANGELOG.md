@@ -7,6 +7,21 @@
 > Issue numbers that are part of a title are fine; explanatory parentheticals are not. The detail —
 > what, why, files and verification — belongs in the commit message, never here.
 
+## v2.2.8 — 2026-10-15
+
+### ✨ Funciones nuevas
+- **Actualizaciones de la app reanudables aunque se cierre o reinicie el dispositivo**
+- **Compatibilidad con enlaces Xtream get.php, temporadas especiales y episodios sin numeración**
+- **Reproducción de canales ClearKey con claves incluidas en la lista**
+
+### 🐛 Correcciones
+- **Descargas aisladas y autorizadas por perfil y proveedor**
+- **Grabaciones programadas conservan el canal tras actualizar el catálogo**
+- **Grabaciones interrumpidas muestran la duración capturada como parcial**
+- **El bloqueo por intentos de PIN sobrevive reinicios de la app y del dispositivo**
+- **Las copias de seguridad incompletas ya no se confunden con una contraseña incorrecta**
+- **Los especiales aparecen después de las temporadas normales**
+
 ## v2.2.7 — 2026-10-15
 
 ### ✨ Funciones nuevas

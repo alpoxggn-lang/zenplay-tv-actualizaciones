@@ -4,6 +4,7 @@ import android.content.Context
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
@@ -35,6 +36,10 @@ import tv.own.owntv.core.stalker.StreamUrlResolver
 import java.io.File
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
+
+/** Persist/mux terminal recording state even when the byte-pump job is already cancelling. */
+internal suspend fun <T> withRecordingFinalization(block: suspend () -> T): T =
+    withContext(NonCancellable) { block() }
 
 /**
  * The byte pump behind live recording: [tv.own.owntv.core.download.DownloadEngine]'s shape, with the
@@ -116,7 +121,8 @@ class RecordingEngine(
             // Checked once per pass, not per row: it is one system call and every row this pass gets
             // the same answer.
             val meteredRefused = connectivity.isMeteredNow() && !settings.recordingOverMobileData()
-            for (row in recordingDao.dueAt(now)) {
+            for (scheduledRow in recordingDao.dueAt(now)) {
+                var row = scheduledRow
                 if (active.containsKey(row.id) || row.id in suppressed) continue
                 // A blank stream URL means "somebody else is writing this file": a
                 // "record what I'm watching" row, whose bytes come from the player's already-open
@@ -130,9 +136,39 @@ class RecordingEngine(
                 // creating a file or opening the network. CHANNEL_GONE is intentionally also used for
                 // a newly hidden/restricted channel so a kids profile is not told blocked content
                 // still exists.
-                if (!recordingExecutionAllowed(row, channelDao, contentAccess)) {
+                val channel = resolveRecordingChannel(
+                    row = row,
+                    channelById = channelDao::getById,
+                    channelByRemote = channelDao::findByRemote,
+                    channelsByEpg = channelDao::findRecordingCandidatesByEpg,
+                )
+                if (channel == null || !contentAccess.allows(row.profileId, channel)) {
                     markMissed(row, RecordingFailure.CHANNEL_GONE)
                     continue
+                }
+                // The local channel id and URL are catalogue data, not durable identities. Once a
+                // safe source-scoped match has been found, bind the timer to that current row before
+                // opening a provider connection. This also backfills channelRemoteId for pre-v48
+                // timers, so a later sync can use the provider identity instead of the EPG fallback.
+                if (channel.id != row.channelId || channel.remoteId != row.channelRemoteId ||
+                    channel.streamUrl != row.streamUrl || channel.httpHeaders != row.httpHeaders
+                ) {
+                    val duplicate = recordingDao.forProgramme(row.profileId, channel.id, row.programmeStartMs)
+                    if (duplicate != null && duplicate.id != row.id) {
+                        markMissed(row, RecordingFailure.CHANNEL_GONE)
+                        continue
+                    }
+                    row = row.copy(
+                        channelId = channel.id,
+                        channelRemoteId = channel.remoteId,
+                        channelName = channel.name,
+                        channelIconUrl = channel.logoUrl,
+                        epgChannelId = channel.epgChannelId ?: row.epgChannelId,
+                        streamUrl = channel.streamUrl,
+                        httpHeaders = channel.httpHeaders,
+                        updatedAt = clock(),
+                    )
+                    recordingDao.update(row)
                 }
                 // Said as a MISSED row with a reason rather than by deferring the work. A download
                 // waits for Wi-Fi because the film is there tomorrow; a live programme is not.
@@ -208,6 +244,7 @@ class RecordingEngine(
         val row = recordingDao.getById(id) ?: return
         val target = MediaTarget.of(context, row.filePath) ?: return
         val startedAt = clock()
+        val actualStartedAt = row.startedAt ?: startedAt
         if (!canRecordInto(target)) {
             android.util.Log.w(TAG, "recording target unavailable id=$id path=${row.filePath}")
             finish(row, bytes = 0, failure = RecordingFailure.NO_SPACE, startedAt = startedAt)
@@ -218,19 +255,22 @@ class RecordingEngine(
             status = RecordingStatus.RECORDING,
             failure = RecordingFailure.NONE,
             bytes = target.length(),
+            capturedDurationMs = RecordingRules.capturedDurationMs(actualStartedAt, startedAt),
             filePath = target.stored,
-            startedAt = startedAt,
+            startedAt = actualStartedAt,
             endedAt = null,
             timestamp = clock(),
         )
 
+        val activeRow = row.copy(startedAt = actualStartedAt)
         var failure = RecordingFailure.NONE
+        var finishedNaturally = false
         var attempt = 0
         try {
             while (currentCoroutineContext().isActive && !RecordingRules.shouldStop(clock(), row.stopMs)) {
                 attempt++
                 val reason = try {
-                    attemptRecord(row, target, onProgress)
+                    attemptRecord(activeRow, target, onProgress)
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -249,7 +289,11 @@ class RecordingEngine(
                 // NONE means the attempt ended of its own accord rather than by failing: the window
                 // closed, the playlist said `#EXT-X-ENDLIST`, or an archive stream served the whole
                 // programme. None of those is worth reconnecting for.
-                if (reason == RecordingFailure.NONE) break
+                if (reason == RecordingFailure.NONE) {
+                    finishedNaturally = RecordingSchedule.isCatchUp(row) ||
+                        RecordingRules.shouldStop(clock(), row.stopMs)
+                    break
+                }
                 failure = reason
                 if (RecordingRules.shouldStop(clock(), row.stopMs)) break
                 delay(RecordingRules.retryDelayMs(attempt))
@@ -259,8 +303,17 @@ class RecordingEngine(
             // loop's overrun backstop, still has its bytes written down and its file kept. A DASH
             // recording's two halves are put together here, before the size is read, so the row
             // records the finished file rather than an empty one.
-            val finished = finishDashSession(id, target) ?: target
-            finish(row, finished.length(), failure, startedAt, finished.stored)
+            withRecordingFinalization {
+                val finished = finishDashSession(id, target) ?: target
+                finish(
+                    row = row,
+                    bytes = finished.length(),
+                    failure = failure,
+                    startedAt = startedAt,
+                    filePath = finished.stored,
+                    finishedNaturally = finishedNaturally || RecordingRules.shouldStop(clock(), row.stopMs),
+                )
+            }
         }
     }
 
@@ -350,6 +403,7 @@ class RecordingEngine(
                                 status = RecordingStatus.RECORDING,
                                 failure = RecordingFailure.NONE,
                                 bytes = bytes,
+                                capturedDurationMs = RecordingRules.capturedDurationMs(row.startedAt, now),
                                 filePath = target.stored,
                                 startedAt = row.startedAt ?: now,
                                 endedAt = null,
@@ -705,7 +759,14 @@ class RecordingEngine(
             // first success, and leaving gigabytes behind forever is its own fault.
             temps.forEach { it.delete() }
             val finished = result.movedTo ?: target
-            finish(row, finished.length(), RecordingFailure.NONE, row.startedAt ?: clock(), finished.stored)
+            finish(
+                row = row,
+                bytes = finished.length(),
+                failure = RecordingFailure.INTERRUPTED,
+                startedAt = row.startedAt ?: clock(),
+                filePath = finished.stored,
+                finishedNaturally = false,
+            )
         }
     }
 
@@ -741,6 +802,7 @@ class RecordingEngine(
             status = RecordingStatus.RECORDING,
             failure = RecordingFailure.NONE,
             bytes = bytes,
+            capturedDurationMs = RecordingRules.capturedDurationMs(row.startedAt, now),
             filePath = target.stored,
             startedAt = row.startedAt ?: now,
             endedAt = null,
@@ -764,17 +826,22 @@ class RecordingEngine(
         startedAt: Long,
         /** Where the file actually is — a muxed DASH recording has moved from `.ts` to `.mp4`. */
         filePath: String? = null,
+        /** True only after the requested window or a finite catch-up stream actually ended. */
+        finishedNaturally: Boolean = false,
     ) {
-        val (status, reason) = RecordingRules.outcomeOf(bytes, failure)
+        val endedAt = clock()
+        val actualStart = row.startedAt ?: startedAt
+        val (status, reason) = RecordingRules.outcomeOf(bytes, failure, finishedNaturally)
         recordingDao.updateProgress(
             id = row.id,
             status = status,
             failure = reason,
             bytes = bytes,
+            capturedDurationMs = RecordingRules.capturedDurationMs(actualStart, endedAt),
             filePath = filePath ?: row.filePath,
-            startedAt = row.startedAt ?: startedAt,
-            endedAt = clock(),
-            timestamp = clock(),
+            startedAt = actualStart,
+            endedAt = endedAt,
+            timestamp = endedAt,
         )
     }
 
@@ -786,6 +853,7 @@ class RecordingEngine(
             status = RecordingStatus.MISSED,
             failure = failure,
             bytes = 0,
+            capturedDurationMs = 0,
             filePath = null,
             startedAt = null,
             endedAt = clock(),
@@ -862,13 +930,59 @@ class RecordingEngine(
 }
 
 /**
- * Re-authorize a persisted scheduled row at its execution boundary.
+ * Resolve a timer's current channel without ever crossing its playlist or guessing between matches.
  *
- * The row's source is checked against the channel as well as [ContentAccessPolicy]: a stale local
- * channel id must never let a recording migrate silently to a different playlist after a catalogue
- * replacement. Every uncertainty is a denial; callers must not open a stream or output file when
- * this returns false.
+ * Provider remote identity is strongest. Pre-v48 rows do not have it, so their source-scoped EPG id
+ * is accepted only when exactly one current channel carries it. The old local id is accepted only
+ * when every durable identity the timer does have still agrees with the row at that id.
  */
+internal suspend fun resolveRecordingChannel(
+    row: RecordingEntity,
+    channelById: suspend (Long) -> ChannelEntity?,
+    channelByRemote: suspend (Long, String) -> ChannelEntity?,
+    channelsByEpg: suspend (Long, String) -> List<ChannelEntity>,
+): ChannelEntity? {
+    val stableRemote = row.channelRemoteId?.trim()?.takeIf { it.isNotEmpty() }
+    val stableEpg = row.epgChannelId?.trim()?.takeIf { it.isNotEmpty() }
+
+    channelById(row.channelId)?.let { current ->
+        // Source alone cannot prove that a Room row id was not reused by a clear/re-import. Feeds
+        // without either provider/EPG identity may keep working only while their exact stored URL
+        // and name still agree; any catalogue change then fails closed instead of guessing.
+        val unchangedIdentitylessRow = stableRemote == null && stableEpg == null &&
+            current.streamUrl == row.streamUrl && current.name == row.channelName
+        if (current.sourceId == row.sourceId &&
+            (stableRemote != null || stableEpg != null || unchangedIdentitylessRow)
+        ) {
+            val remoteAgrees = stableRemote == null || current.remoteId == stableRemote
+            val epgAgrees = stableEpg == null || current.epgChannelId?.trim()?.equals(stableEpg, ignoreCase = true) == true
+            if (remoteAgrees && epgAgrees) return current
+        }
+    }
+
+    if (stableRemote != null) {
+        channelByRemote(row.sourceId, stableRemote)?.let { remote ->
+            val epgAgrees = stableEpg == null ||
+                remote.epgChannelId?.trim()?.equals(stableEpg, ignoreCase = true) == true
+            if (remote.sourceId == row.sourceId && remote.remoteId == stableRemote && epgAgrees) return remote
+        }
+        // A durable provider identity was present and disappeared. Falling back to an EPG id could
+        // silently move a timer to a simulcast or regional variant, so fail closed.
+        return null
+    }
+
+    if (stableEpg != null) {
+        val matches = channelsByEpg(row.sourceId, stableEpg)
+            .filter { candidate ->
+                candidate.sourceId == row.sourceId &&
+                    candidate.epgChannelId?.trim()?.equals(stableEpg, ignoreCase = true) == true
+            }
+        if (matches.size == 1) return matches.single()
+    }
+    return null
+}
+
+/** Re-authorize a persisted row whose exact local id is still current. */
 internal suspend fun recordingExecutionAllowed(
     row: RecordingEntity,
     channelById: suspend (Long) -> ChannelEntity?,
@@ -878,13 +992,3 @@ internal suspend fun recordingExecutionAllowed(
     if (channel.sourceId != row.sourceId) return false
     return authorize(row.profileId, channel)
 }
-
-private suspend fun recordingExecutionAllowed(
-    row: RecordingEntity,
-    channelDao: ChannelDao,
-    contentAccess: ContentAccessPolicy,
-): Boolean = recordingExecutionAllowed(
-    row = row,
-    channelById = channelDao::getById,
-    authorize = { profileId, channel -> contentAccess.allows(profileId, channel) },
-)

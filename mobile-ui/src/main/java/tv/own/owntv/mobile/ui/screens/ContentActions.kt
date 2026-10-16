@@ -18,6 +18,7 @@ import tv.own.owntv.core.database.dao.ProfileDao
 import tv.own.owntv.core.database.dao.SeriesDao
 import tv.own.owntv.core.database.dao.SourceDao
 import tv.own.owntv.core.database.entity.FavoriteEntity
+import tv.own.owntv.core.download.DownloadIdentity
 import tv.own.owntv.core.download.DownloadManager
 import tv.own.owntv.core.model.MediaType
 import tv.own.owntv.core.repository.activeProfileSources
@@ -88,6 +89,8 @@ class ContentActions(
                 if (!contentAccess.allows(pid, movie)) return
                 downloadManager.enqueue(
                     profileId = pid,
+                    sourceId = movie.sourceId,
+                    contentKey = DownloadIdentity.movie(movie),
                     mediaType = MediaType.MOVIE,
                     itemId = movie.id,
                     title = movie.name,
@@ -104,6 +107,8 @@ class ContentActions(
                 seriesDao.episodesBySeriesOnce(show.id).forEach { episode ->
                     downloadManager.enqueue(
                         profileId = pid,
+                        sourceId = show.sourceId,
+                        contentKey = DownloadIdentity.episode(show, episode),
                         mediaType = MediaType.EPISODE,
                         itemId = episode.id,
                         title = episode.name.takeIf { it.isNotBlank() } ?: show.name,

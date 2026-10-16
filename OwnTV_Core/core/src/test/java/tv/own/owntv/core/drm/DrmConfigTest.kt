@@ -79,9 +79,48 @@ class DrmConfigTest {
         // A type with no key, and a key with no type.
         assertNull(DrmConfig.fromKodiProps(mapOf("license_type" to "com.widevine.alpha")))
         assertNull(DrmConfig.fromKodiProps(mapOf("license_key" to "https://h/k")))
-        // Inline ClearKey data is a local key, not a licence server — a different mechanism.
+        // A malformed inline key is still rejected.
         assertNull(DrmConfig.fromKodiProps(mapOf("license_type" to "org.w3c.clearkey", "license_key" to "a1b2:c3d4")))
+        assertNull(DrmConfig.fromKodiProps(mapOf("license_type" to "com.widevine.alpha", "license_key" to "$KID:$KEY")))
         assertNull(DrmConfig.fromKodiProps(emptyMap()))
+    }
+
+    @Test
+    fun `inline clearkey pairs and jwk sets are accepted and stored`() {
+        val pair = DrmConfig.fromKodiProps(
+            mapOf("license_type" to "org.w3c.clearkey", "license_key" to "$KID:${KEY.uppercase()}"),
+        )
+        assertEquals("", pair?.licenseUrl)
+        assertEquals(mapOf(KID to KEY), pair?.clearKeys)
+        assertEquals(pair, DrmConfig.decode(DrmConfig.encode(pair)))
+
+        val jwks = """{"keys":[{"kty":"oct","kid":"${b64url(KID)}","k":"${b64url(KEY)}"}]}"""
+        val jwk = DrmConfig.fromKodiProps(
+            mapOf("license_type" to "clearkey", "license_key" to jwks),
+        )
+        assertEquals(mapOf(KID to KEY), jwk?.clearKeys)
+    }
+
+    @Test
+    fun `inline clearkey playlist entry parses`() {
+        val entries = parse(
+            """
+            #EXTM3U
+            #EXTINF:-1 group-title="Test",Inline ClearKey
+            #KODIPROP:inputstream.adaptive.license_type=clearkey
+            #KODIPROP:inputstream.adaptive.license_key=$KID:$KEY
+            https://host/live/cenc.mpd
+            """.trimIndent(),
+        )
+        assertEquals(mapOf(KID to KEY), entries[0].drm?.clearKeys)
+    }
+
+    private fun b64url(hex: String): String = java.util.Base64.getUrlEncoder().withoutPadding()
+        .encodeToString(ByteArray(hex.length / 2) { hex.substring(it * 2, it * 2 + 2).toInt(16).toByte() })
+
+    private companion object {
+        const val KID = "0123456789abcdef0123456789abcdef"
+        const val KEY = "fedcba9876543210fedcba9876543210"
     }
 
     // --- encode / decode ---

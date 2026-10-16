@@ -54,6 +54,14 @@ data class RecordingEntity(
     /** Which playlist's connection this spends (D10/D11). A plain column — see the class KDoc. */
     val sourceId: Long,
     val channelId: Long,
+    /**
+     * The provider's stable channel identity at scheduling time.
+     *
+     * Unlike [channelId], this survives a catalogue replacement. A null value is expected on rows
+     * created before v48 and on feeds that do not publish stable ids; those rows can still be
+     * re-matched by the source-scoped [epgChannelId] when that match is unambiguous.
+     */
+    val channelRemoteId: String? = null,
     val channelName: String,
     val channelIconUrl: String? = null,
     /** The stable guide key, for re-matching after a re-sync and for series rules (A11). */
@@ -78,6 +86,8 @@ data class RecordingEntity(
     val failure: RecordingFailure = RecordingFailure.NONE,
     val filePath: String? = null,
     val bytes: Long = 0,
+    /** Wall-clock time for which this capture actually ran, persisted for honest partial results. */
+    val capturedDurationMs: Long = 0,
     val startedAt: Long? = null,
     val endedAt: Long? = null,
     /** The series rule that created this row, null when the user scheduled it by hand (A11). */

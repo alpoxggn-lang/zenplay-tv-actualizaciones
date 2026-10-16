@@ -648,7 +648,10 @@ class ExoSubtitleEngine(
         )
         return ExoPlayer.Builder(context)
             .setRenderersFactory(renderers)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource))
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(dataSource)
+                    .setDrmSessionManagerProvider(tv.own.owntv.core.drm.InlineClearKeyDrmProvider),
+            )
             .setLoadControl(loadControl)
             .setTrackSelector(trackSelector)
             .build()

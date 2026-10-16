@@ -73,11 +73,14 @@ class DownloadsViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private suspend fun canAccess(d: DownloadEntity, profileId: Long): Boolean = when (d.mediaType) {
-        MediaType.MOVIE -> movieDao.getById(d.itemId)?.let { contentAccess.allows(profileId, it) } == true
-        MediaType.EPISODE -> seriesDao.getEpisodeById(d.itemId)
-            ?.let { contentAccess.allows(profileId, it) } == true
-        else -> false
+    private suspend fun canAccess(d: DownloadEntity, profileId: Long): Boolean {
+        if (profileId < 0L || d.profileId != profileId) return false
+        return when (d.mediaType) {
+            MediaType.MOVIE -> movieDao.getById(d.itemId)?.let { contentAccess.allows(profileId, it) } == true
+            MediaType.EPISODE -> seriesDao.getEpisodeById(d.itemId)
+                ?.let { contentAccess.allows(profileId, it) } == true
+            else -> false
+        }
     }
 
     /**
@@ -233,9 +236,11 @@ class DownloadsViewModel(
      * working the next time the app starts.
      */
     fun export(download: DownloadEntity, target: Uri) {
-        val source = MediaTarget.of(context, download.filePath) ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            if (!canAccess(download, download.profileId)) return@launch
+            val pid = settings.activeProfileId.first().takeIf { it >= 0L } ?: return@launch
+            val owned = downloadDao.getByIdForProfile(download.id, pid) ?: return@launch
+            if (!canAccess(owned, pid)) return@launch
+            val source = MediaTarget.of(context, owned.filePath) ?: return@launch
             val copied = runCatching {
                 context.contentResolver.openOutputStream(target)?.use { out ->
                     source.openInput().use { it.copyTo(out) }
@@ -243,22 +248,30 @@ class DownloadsViewModel(
             }.getOrDefault(false)
             if (!copied) return@launch
             if (!StorageAccess.persistAccess(context, target)) return@launch
-            downloadDao.upsert(
-                download.copy(filePath = target.toString(), updatedAt = System.currentTimeMillis()),
+            val moved = downloadDao.updateFilePathForProfile(
+                owned.id,
+                pid,
+                target.toString(),
+                System.currentTimeMillis(),
             )
-            source.delete()
+            if (moved == 0) return@launch
+            // v46 and older could point two profiles at the same physical file. Moving this row
+            // must not erase the original while another migrated row still owns it.
+            if (owned.filePath?.let { downloadDao.countForFilePath(it) } == 0) source.delete()
         }
     }
 
     fun retry(download: DownloadEntity) {
         viewModelScope.launch {
-            if (canAccess(download, download.profileId)) downloadManager.retry(download)
+            val pid = settings.activeProfileId.first()
+            if (canAccess(download, pid)) downloadManager.retry(download)
         }
     }
     fun pause(download: DownloadEntity) = downloadManager.pause(download)
     fun resume(download: DownloadEntity) {
         viewModelScope.launch {
-            if (canAccess(download, download.profileId)) downloadManager.resume(download)
+            val pid = settings.activeProfileId.first()
+            if (canAccess(download, pid)) downloadManager.resume(download)
         }
     }
     fun delete(download: DownloadEntity) = downloadManager.delete(download)

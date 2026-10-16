@@ -1,5 +1,6 @@
 package tv.own.owntv.core.setup
 
+import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,7 +14,10 @@ import tv.own.owntv.core.database.dao.SourceDao
 import tv.own.owntv.core.database.entity.ProfileSourceCrossRef
 import tv.own.owntv.core.database.entity.SourceEntity
 import tv.own.owntv.core.launcher.LauncherIntegrationRepository
+import tv.own.owntv.core.model.SourceType
 import tv.own.owntv.core.network.ConnectivityObserver
+import tv.own.owntv.core.parser.XtreamClient
+import tv.own.owntv.core.parser.XtreamM3uLink
 import tv.own.owntv.core.repository.SourceRepository
 import tv.own.owntv.core.settings.PlaylistRefresh
 import tv.own.owntv.core.settings.SettingsRepository
@@ -57,6 +61,7 @@ class SourceImporter(
     private val catalogSyncScheduler: CatalogSyncScheduler,
     private val stalkerAuth: StalkerAuthManager,
     private val profileManager: ProfileManager,
+    private val xtreamClient: XtreamClient,
 ) {
 
     sealed interface SetupFailure {
@@ -233,15 +238,54 @@ class SourceImporter(
         autoRefresh: PlaylistRefresh = PlaylistRefresh.OFF,
         makeDefault: Boolean = false,
         httpReferer: String = "",
-    ) = runImport(autoRefresh, requiresNetwork = !url.isLocalPlaylistPath(), makeDefault = makeDefault) { profileId ->
-        sourceRepository.addM3uSource(
-            profileId = profileId,
-            name = name.trim(),
-            url = url.trim(),
-            userAgent = userAgent.trim().takeIf { it.isNotBlank() },
-            epgUrl = epgUrl.trim().takeIf { it.isNotBlank() },
-            httpReferer = httpReferer.trim().takeIf { it.isNotBlank() },
-        )
+    ) {
+        XtreamM3uLink.parse(url)?.let { link ->
+            _state.value = ImportState.Running
+            val probe = SourceEntity(
+                name = name,
+                type = SourceType.XTREAM,
+                url = link.server,
+                username = link.username,
+                password = link.password,
+                userAgent = userAgent.trim().takeIf { it.isNotBlank() },
+            )
+            val isXtream = try {
+                xtreamClient.isXtreamAccount(probe)
+            } catch (cancelled: CancellationException) {
+                _state.value = ImportState.Idle
+                throw cancelled
+            }
+            if (isXtream) {
+                Log.i(TAG, "M3U get.php link identified as Xtream")
+                return xtream(
+                    name = name,
+                    server = link.server,
+                    username = link.username,
+                    password = link.password,
+                    userAgent = userAgent,
+                    epgUrl = epgUrl,
+                    autoRefresh = autoRefresh,
+                    preferHls = link.preferHls,
+                    makeDefault = makeDefault,
+                    httpReferer = httpReferer,
+                )
+            }
+        }
+        val playlistUrl = XtreamM3uLink.clean(url)
+        runImport(
+            autoRefresh,
+            requiresNetwork = !playlistUrl.isLocalPlaylistPath(),
+            makeDefault = makeDefault,
+        ) { profileId ->
+            sourceRepository.addM3uSource(
+                profileId = profileId,
+                name = name.trim(),
+                url = playlistUrl,
+                userAgent = userAgent.trim().takeIf { it.isNotBlank() },
+                epgUrl = epgUrl.trim().takeIf { it.isNotBlank() },
+                httpReferer = httpReferer.trim().takeIf { it.isNotBlank() },
+            )
+        }
     }
 
     private suspend fun runImport(
@@ -487,6 +531,8 @@ class SourceImporter(
     }
 
     private companion object {
+        const val TAG = "SourceImporter"
+
         /** Sentinel sourceId for the pre-save Stalker handshake. */
         const val STALKER_TEST_SOURCE_ID = -1L
     }

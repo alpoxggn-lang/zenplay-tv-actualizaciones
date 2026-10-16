@@ -26,10 +26,12 @@ import tv.own.owntv.core.network.StreamHeaders
  */
 data class DrmConfig(
     val scheme: Scheme,
-    /** Licence server URL. Always an `http(s)` URL — see [fromKodiProps]. */
+    /** Licence server URL, or empty when [clearKeys] contains inline ClearKey material. */
     val licenseUrl: String,
     /** Extra headers for the LICENCE request, which is a separate call from the manifest's. */
     val headers: Map<String, String> = emptyMap(),
+    /** Lowercase 128-bit hexadecimal key ID to key, for inline ClearKey declarations. */
+    val clearKeys: Map<String, String> = emptyMap(),
 ) {
     enum class Scheme(val key: String) {
         WIDEVINE("widevine"),
@@ -45,6 +47,7 @@ data class DrmConfig(
                 put(KEY_SCHEME, c.scheme.key)
                 put(KEY_LICENSE, c.licenseUrl)
                 if (c.headers.isNotEmpty()) put(KEY_HEADERS, JSONObject(c.headers))
+                if (c.clearKeys.isNotEmpty()) put(KEY_CLEAR_KEYS, JSONObject(c.clearKeys))
             }.toString()
         }
 
@@ -58,7 +61,13 @@ data class DrmConfig(
             return runCatching {
                 val o = JSONObject(text)
                 val scheme = Scheme.entries.firstOrNull { it.key == o.optString(KEY_SCHEME) } ?: return null
-                val license = o.optString(KEY_LICENSE).takeIf { it.isNotBlank() } ?: return null
+                val clearKeys = o.optJSONObject(KEY_CLEAR_KEYS)?.let { keys ->
+                    keys.keys().asSequence().associateWith { keys.optString(it) }
+                }.orEmpty()
+                if (scheme != Scheme.CLEARKEY && clearKeys.isNotEmpty()) return null
+                if (clearKeys.any { (kid, key) -> !isHex128(kid) || !isHex128(key) }) return null
+                val license = o.optString(KEY_LICENSE)
+                if (license.isBlank() && clearKeys.isEmpty()) return null
                 val headers = o.optJSONObject(KEY_HEADERS)?.let { h ->
                     val out = LinkedHashMap<String, String>(4)
                     h.keys().forEach { k ->
@@ -67,7 +76,7 @@ data class DrmConfig(
                     }
                     out
                 } ?: emptyMap()
-                DrmConfig(scheme, license, headers)
+                DrmConfig(scheme, license, headers, clearKeys)
             }.getOrNull()
         }
 
@@ -80,9 +89,7 @@ data class DrmConfig(
          * a missing config fails exactly as it does today:
          *
          *  - Only Widevine and ClearKey. PlayReady is untestable here and nobody has asked.
-         *  - Only an `http(s)` licence URL. Kodi also allows an inline ClearKey key (`kid:key` or a
-         *    JWK blob), which needs a local licence callback rather than a licence server — a
-         *    different mechanism, not a variation of this one.
+         *  - An `http(s)` licence URL, or — ClearKey only — inline `kid:key` pairs or a JWK set.
          *  - Only the plain passthrough request/response templates. Kodi's `license_key` may carry
          *    `url|headers|postDataTemplate|responseTemplate`; anything but an empty or `R{SSM}`/`B`
          *    template means the portal expects a request body we do not build.
@@ -95,6 +102,9 @@ data class DrmConfig(
                 else -> return null
             }
             val raw = props[PROP_LICENSE_KEY]?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+            if (scheme == Scheme.CLEARKEY) {
+                inlineClearKeys(raw)?.let { return DrmConfig(scheme, licenseUrl = "", clearKeys = it) }
+            }
             // `|` splits the Kodi licence spec, but an unsplit value is just the URL.
             val parts = raw.split('|')
             val url = parts[0].trim()
@@ -105,6 +115,38 @@ data class DrmConfig(
             val headers = parts.getOrNull(1)?.let { parseLicenseHeaders(it) } ?: emptyMap()
             return DrmConfig(scheme, url, headers)
         }
+
+        /** Inline ClearKey pairs or JWK set, normalized to lowercase hexadecimal. */
+        private fun inlineClearKeys(raw: String): Map<String, String>? {
+            val pairs = if (raw.startsWith("{")) {
+                val keys = runCatching { JSONObject(raw).getJSONArray("keys") }.getOrNull() ?: return null
+                (0 until keys.length()).map { index ->
+                    val jwk = keys.optJSONObject(index) ?: return null
+                    val kid = base64UrlToHex(jwk.optString("kid")) ?: return null
+                    val key = base64UrlToHex(jwk.optString("k")) ?: return null
+                    kid to key
+                }
+            } else {
+                raw.split(',').map { pair ->
+                    val colon = pair.indexOf(':')
+                    if (colon <= 0) return null
+                    pair.substring(0, colon).trim().replace("-", "").lowercase() to
+                        pair.substring(colon + 1).trim().lowercase()
+                }
+            }
+            if (pairs.isEmpty() || pairs.any { (kid, key) -> !isHex128(kid) || !isHex128(key) }) return null
+            return pairs.toMap()
+        }
+
+        private fun base64UrlToHex(value: String): String? {
+            val bytes = runCatching {
+                java.util.Base64.getUrlDecoder().decode(value.trimEnd('='))
+            }.getOrNull() ?: return null
+            return bytes.joinToString("") { "%02x".format(it) }
+        }
+
+        private fun isHex128(value: String): Boolean =
+            value.length == 32 && value.all { it in '0'..'9' || it in 'a'..'f' }
 
         /** `Key=Value&Key=Value`, percent-encoded — the same encoding as `…stream_headers`. */
         private fun parseLicenseHeaders(raw: String): Map<String, String> {
@@ -141,5 +183,6 @@ data class DrmConfig(
         private const val KEY_SCHEME = "scheme"
         private const val KEY_LICENSE = "license"
         private const val KEY_HEADERS = "headers"
+        private const val KEY_CLEAR_KEYS = "clearKeys"
     }
 }

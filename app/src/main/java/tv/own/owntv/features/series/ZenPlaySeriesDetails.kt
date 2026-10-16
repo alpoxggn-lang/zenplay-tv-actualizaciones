@@ -113,7 +113,7 @@ internal fun ZenPlaySeriesDetails(
     val seasons = episodes.map { it.seasonNumber }.distinct().sorted()
     val activeSeason = if (selectedSeason in seasons) selectedSeason else seasons.firstOrNull() ?: 1
     val seasonEpisodes = episodes.filter { it.seasonNumber == activeSeason }.sortedBy { it.episodeNumber }
-    val firstEpisode = episodes.sortedWith(compareBy<EpisodeEntity>({ it.seasonNumber }, { it.episodeNumber })).firstOrNull()
+    val firstEpisode = episodes.sortedWith(tv.own.owntv.core.content.EpisodeOrder.episodes).firstOrNull()
     val target = nextUpId?.let { id -> episodes.firstOrNull { it.id == id } } ?: firstEpisode
     val targetPos = target?.let { episodeProgress[it.id]?.takeIf { p -> p.durationMs > 1L }?.positionMs } ?: 0L
     val resuming = targetPos >= 10_000L

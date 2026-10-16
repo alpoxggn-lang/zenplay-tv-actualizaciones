@@ -654,6 +654,138 @@ class OwnTVDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrateVersion46ToCurrent_scopesDownloadsBySourceAndStableIdentity() {
+        context.deleteDatabase(DB_NAME)
+        val db46 = context.openOrCreateDatabase(DB_NAME, Context.MODE_PRIVATE, null)
+        try {
+            executeSchemaQueries(db46, "tv.own.owntv.core.database.OwnTVDatabase/46.json")
+            db46.execSQL(
+                "INSERT INTO profiles (id, name, avatarColor, avatarId, avatarPath, isKids, pinHash, createdAt) " +
+                    "VALUES (1, 'Primary', 1, 1, NULL, 0, NULL, 1), (2, 'Second', 2, 2, NULL, 0, NULL, 2)",
+            )
+            db46.execSQL(
+                "INSERT INTO sources (id, name, type, url, syncLive, syncMovies, syncSeries, importPortalEpg, " +
+                    "hlsSupported, preferHls, livePrerollSecs, liveLatencyCustomSecs, maxConnections, " +
+                    "maxConnectionsProbedAt, createdAt) VALUES " +
+                    "(10, 'Playlist', '${SourceType.XTREAM.name}', 'https://example.test', 1, 1, 1, 1, 0, 0, -1, -1, 0, 0, 1)",
+            )
+            db46.execSQL(
+                "INSERT INTO movies (id, sourceId, name, streamUrl, remoteId, sortOrder) " +
+                    "VALUES (40, 10, 'Movie', 'https://example.test/movie.mp4', 'movie-40', 0)",
+            )
+            db46.execSQL(
+                "INSERT INTO series (id, sourceId, name, remoteId, sortOrder) " +
+                    "VALUES (50, 10, 'Show', 'show-50', 0)",
+            )
+            db46.execSQL(
+                "INSERT INTO seasons (id, seriesId, seasonNumber) VALUES (60, 50, 1)",
+            )
+            db46.execSQL(
+                "INSERT INTO episodes (id, seriesId, seasonId, seasonNumber, episodeNumber, name, streamUrl, remoteId) " +
+                    "VALUES (70, 50, 60, 1, 1, 'Episode', 'https://example.test/episode.mp4', 'episode-70')",
+            )
+            db46.execSQL(
+                "INSERT INTO downloads (id, profileId, mediaType, itemId, title, streamUrl, filePath, status, downloadedBytes, totalBytes, createdAt, updatedAt) VALUES " +
+                    "(100, 1, '${MediaType.MOVIE.name}', 40, 'Movie', 'https://example.test/movie.mp4', '/legacy/Movies/Movie.mp4', 'COMPLETED', 10, 10, 1, 2), " +
+                    "(101, 1, '${MediaType.EPISODE.name}', 70, 'Episode', 'https://example.test/episode.mp4', '/legacy/Series/Episode.mp4', 'PAUSED', 5, 10, 3, 4), " +
+                    "(102, 2, '${MediaType.MOVIE.name}', 40, 'Movie', 'https://example.test/movie.mp4', '/legacy/Movies/Movie.mp4', 'QUEUED', 0, 0, 5, 6)",
+            )
+            db46.version = 46
+        } finally {
+            db46.close()
+        }
+
+        val db = openWithAllMigrations()
+        try {
+            val sqlite = openForAssertions(db)
+            assertColumnExists(sqlite, "downloads", "sourceId")
+            assertColumnExists(sqlite, "downloads", "contentKey")
+            assertIndexExists(sqlite, "index_downloads_sourceId")
+            assertIndexExists(sqlite, "index_downloads_profileId_sourceId_contentKey")
+            assertMissing(sqlite, "index", "index_downloads_profileId_mediaType_itemId")
+            assertColumnValue(sqlite, "downloads", "sourceId", 100, 10L)
+            assertColumnValue(sqlite, "downloads", "sourceId", 101, 10L)
+            assertColumnValue(sqlite, "downloads", "sourceId", 102, 10L)
+            sqlite.prepare("SELECT contentKey FROM downloads WHERE id = 100").use {
+                assertTrue(it.step())
+                assertEquals("legacy:1:10:MOVIE:40:100", it.getText(0))
+            }
+            // The same provider item downloaded by another profile is preserved, not collapsed.
+            assertCount(sqlite, "downloads", 3)
+            // Room cannot move filesystem data during migration. Both legacy owners remain explicit
+            // so runtime retry/delete/export can use reference counting instead of losing either row.
+            assertEquals(
+                2L,
+                countRows(
+                    sqlite,
+                    "SELECT COUNT(*) FROM downloads WHERE filePath = '/legacy/Movies/Movie.mp4'",
+                ),
+            )
+            sqlite.prepare("SELECT status FROM downloads WHERE id = 102").use {
+                assertTrue(it.step())
+                // Ambiguous legacy writers never auto-resume into another owner's physical file.
+                assertEquals("FAILED", it.getText(0))
+            }
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun migrateVersion46ToCurrent_backfillsStableRecordingIdentityAndCapturedDuration() {
+        context.deleteDatabase(DB_NAME)
+        val db46 = context.openOrCreateDatabase(DB_NAME, Context.MODE_PRIVATE, null)
+        try {
+            executeSchemaQueries(db46, "tv.own.owntv.core.database.OwnTVDatabase/46.json")
+            db46.execSQL(
+                "INSERT INTO profiles (id, name, avatarColor, avatarId, avatarPath, isKids, pinHash, createdAt) " +
+                    "VALUES (1, 'Primary', 1, 1, NULL, 0, NULL, 1)",
+            )
+            db46.execSQL(
+                "INSERT INTO sources (id, name, type, url, syncLive, syncMovies, syncSeries, importPortalEpg, " +
+                    "hlsSupported, preferHls, livePrerollSecs, liveLatencyCustomSecs, maxConnections, " +
+                    "maxConnectionsProbedAt, createdAt) VALUES " +
+                    "(10, 'Playlist', '${SourceType.XTREAM.name}', 'https://example.test', 1, 1, 1, 1, 0, 0, -1, -1, 0, 0, 1)",
+            )
+            db46.execSQL(
+                "INSERT INTO channels (id, sourceId, name, streamUrl, epgChannelId, remoteId, sortOrder, " +
+                    "catchup, catchupDays, contentHash) VALUES " +
+                    "(40, 10, 'News', 'https://example.test/live/40.ts', 'news.example', 'provider-40', 0, 0, 0, 0)",
+            )
+            db46.execSQL(
+                "INSERT INTO recordings (id, profileId, sourceId, channelId, channelName, epgChannelId, " +
+                    "streamUrl, title, programmeStartMs, programmeStopMs, startMs, stopMs, status, failure, " +
+                    "filePath, bytes, startedAt, endedAt, createdAt, updatedAt) VALUES " +
+                    "(100, 1, 10, 40, 'News', 'news.example', 'https://example.test/live/40.ts', " +
+                    "'Evening News', 1000, 5000, 1000, 5000, 'COMPLETED', 'NONE', " +
+                    "'/recordings/news.ts', 4096, 1200, 4800, 1, 2)",
+            )
+            db46.version = 46
+        } finally {
+            db46.close()
+        }
+
+        val db = openWithAllMigrations()
+        try {
+            val sqlite = openForAssertions(db)
+            assertColumnExists(sqlite, "recordings", "channelRemoteId")
+            assertColumnExists(sqlite, "recordings", "capturedDurationMs")
+            sqlite.prepare(
+                "SELECT channelRemoteId, capturedDurationMs, status, bytes FROM recordings WHERE id = 100",
+            ).use {
+                assertTrue(it.step())
+                assertEquals("provider-40", it.getText(0))
+                assertEquals(3_600L, it.getLong(1))
+                // Migration records what was captured without rewriting an already persisted result.
+                assertEquals("COMPLETED", it.getText(2))
+                assertEquals(4_096L, it.getLong(3))
+            }
+        } finally {
+            db.close()
+        }
+    }
+
     private fun normNameOf(db: SQLiteConnection, epgChannelId: String): String? =
         db.prepare("SELECT normName FROM epg_channels WHERE epgChannelId = ?").use {
             it.bindText(1, epgChannelId)

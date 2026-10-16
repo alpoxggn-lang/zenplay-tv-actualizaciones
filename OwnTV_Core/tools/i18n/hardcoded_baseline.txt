@@ -149,8 +149,6 @@
 1	core/src/main/java/tv/own/owntv/core/database/entity/ContentEntities.kt	.ts
 2	core/src/main/java/tv/own/owntv/core/database/entity/UserDataEntities.kt	contextKey
 1	core/src/main/java/tv/own/owntv/core/database/entity/UserDataEntities.kt	custom_category_members
-1	core/src/main/java/tv/own/owntv/core/database/entity/UserDataEntities.kt	itemId
-2	core/src/main/java/tv/own/owntv/core/database/entity/UserDataEntities.kt	mediaType
 1	core/src/main/java/tv/own/owntv/core/metadata/MetadataBudget.kt	day_count
 1	core/src/main/java/tv/own/owntv/core/metadata/MetadataBudget.kt	day_start
 1	core/src/main/java/tv/own/owntv/core/metadata/MetadataBudget.kt	hour_count

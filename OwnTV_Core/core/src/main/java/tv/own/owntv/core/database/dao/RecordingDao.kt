@@ -92,7 +92,7 @@ interface RecordingDao {
     suspend fun forProgramme(profileId: Long, channelId: Long, programmeStartMs: Long): RecordingEntity?
 
     @Query(
-        "UPDATE recordings SET status = :status, failure = :failure, bytes = :bytes, " +
+        "UPDATE recordings SET status = :status, failure = :failure, bytes = :bytes, capturedDurationMs = :capturedDurationMs, " +
             "filePath = :filePath, startedAt = :startedAt, endedAt = :endedAt, updatedAt = :timestamp WHERE id = :id",
     )
     suspend fun updateProgress(
@@ -100,6 +100,7 @@ interface RecordingDao {
         status: RecordingStatus,
         failure: RecordingFailure,
         bytes: Long,
+        capturedDurationMs: Long,
         filePath: String?,
         startedAt: Long?,
         endedAt: Long?,

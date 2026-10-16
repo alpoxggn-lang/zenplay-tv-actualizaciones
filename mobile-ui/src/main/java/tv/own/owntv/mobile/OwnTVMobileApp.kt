@@ -90,6 +90,11 @@ class OwnTVMobileApp : Application(), androidx.work.Configuration.Provider {
         // ZenPlay updates are distributed separately; an upstream APK has a different identity.
         // ZenPlay: in-app updates from ZenPlay's own GitHub releases (see ZenPlayUpdates).
         CoreBuildInfo.releaseRepo = tv.own.owntv.mobile.zenplay.ZenPlayUpdates.REPO
+        // Restore the durable PIN-attempt buckets before profiles or settings can validate a PIN.
+        tv.own.owntv.core.util.PinAttemptGuard.initialize(this)
+        // Route installer confirmation through the resumed screen, or a user-tapped notification
+        // when WorkManager completes while the phone/tablet is in the background.
+        tv.own.owntv.core.update.UpdateUserInteractionTracker.initialize(this)
         // First thing after the context exists: a crash from here on leaves a trace on disk instead
         // of dying with the process, with the playback ring attached.
         CrashRecorder.diagnostics = { tv.own.owntv.player.LiveDiagnosticsLog.snapshot() }
@@ -114,6 +119,9 @@ class OwnTVMobileApp : Application(), androidx.work.Configuration.Provider {
                 liveModule, libraryModule, guideModule, homeModule, searchModule,
                 downloadsModule, settingsModule, tv.own.owntv.mobile.di.zenPlayModule,
             )
+        }
+        tv.own.owntv.core.update.UpdateUserInteractionTracker.bindInstallRecovery {
+            org.koin.core.context.GlobalContext.get().get<tv.own.owntv.core.update.UpdateManager>()
         }
         // ZenPlay: ExoPlayer first for films and episodes, Spanish first, and the TV guide on its own.
         tv.own.owntv.mobile.zenplay.ZenPlayDefaults.start(

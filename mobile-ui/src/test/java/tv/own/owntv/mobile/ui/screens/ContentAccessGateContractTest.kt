@@ -47,8 +47,9 @@ class ContentAccessGateContractTest {
         val downloads = source("tv/own/owntv/mobile/ui/screens/downloads/DownloadsViewModel.kt")
 
         assertTrue(downloads.contains("list.filter { canAccess(it, pid) }"))
-        assertTrue(downloads.contains("if (!canAccess(download, download.profileId)) return@launch"))
-        assertTrue(downloads.contains("if (canAccess(download, download.profileId)) downloadManager.retry(download)"))
-        assertTrue(downloads.contains("if (canAccess(download, download.profileId)) downloadManager.resume(download)"))
+        assertTrue(downloads.contains("val owned = downloadDao.getByIdForProfile(download.id, pid) ?: return@launch"))
+        assertTrue(downloads.contains("if (!canAccess(owned, pid)) return@launch"))
+        assertTrue(downloads.contains("if (canAccess(download, pid)) downloadManager.retry(download)"))
+        assertTrue(downloads.contains("if (canAccess(download, pid)) downloadManager.resume(download)"))
     }
 }

@@ -1,5 +1,6 @@
 package tv.own.owntv.core.database.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -270,13 +271,18 @@ data class UserDataTombstoneEntity(
     ],
     indices = [
         Index("profileId"),
+        Index("sourceId"),
         Index("status"),
-        Index(value = ["profileId", "mediaType", "itemId"], unique = true),
+        Index(value = ["profileId", "sourceId", "contentKey"], unique = true),
     ],
 )
 data class DownloadEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val profileId: Long,
+    /** Playlist owner captured at enqueue time; unlike [itemId], it survives catalogue refreshes. */
+    @ColumnInfo(defaultValue = "-1") val sourceId: Long = -1,
+    /** Stable provider identity; see [tv.own.owntv.core.download.DownloadIdentity]. */
+    @ColumnInfo(defaultValue = "''") val contentKey: String = "",
     /** Movies & series episodes only — never LIVE. */
     val mediaType: MediaType,
     val itemId: Long,

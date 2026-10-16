@@ -207,9 +207,10 @@ class CompanionHttpServerTest {
         assertNull(read("x".repeat(200), "200", 64))
     }
 
-    @Test
-    fun `a truncated body does not hang or throw`() {
-        assertEquals("abc", read("abc", "500", CompanionHttpProtocol.FORM_BODY_LIMIT))
+    /** It must not hang either; the server catches the throw and drops the request unanswered. */
+    @Test(expected = java.io.EOFException::class)
+    fun `a body that stops short of its Content-Length is refused, not kept in part`() {
+        read("abc", "500", CompanionHttpProtocol.FORM_BODY_LIMIT)
     }
 
     /** A JSON null must be dropped, not turned into the string "null" — the sender omits optional

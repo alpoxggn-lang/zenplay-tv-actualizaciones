@@ -140,7 +140,7 @@ class LauncherLaunchResolver(
     }
 
     private suspend fun orderedEpisodes(seriesId: Long): List<EpisodeEntity> =
-        seriesDao.episodesBySeries(seriesId).first().sortedWith(compareBy<EpisodeEntity> { it.seasonNumber }.thenBy { it.episodeNumber })
+        seriesDao.episodesBySeries(seriesId).first().sortedWith(tv.own.owntv.core.content.EpisodeOrder.episodes)
 
     private fun isCompleted(positionMs: Long, durationMs: Long): Boolean =
         durationMs > 0 && positionMs >= (durationMs * 0.95f).toLong()

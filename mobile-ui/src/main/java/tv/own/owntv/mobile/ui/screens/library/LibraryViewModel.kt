@@ -54,6 +54,7 @@ import tv.own.owntv.core.database.entity.MetadataCacheEntity
 import tv.own.owntv.core.database.entity.MovieEntity
 import tv.own.owntv.core.database.entity.PlaybackProgressEntity
 import tv.own.owntv.core.database.entity.SeriesEntity
+import tv.own.owntv.core.download.DownloadIdentity
 import tv.own.owntv.core.download.DownloadManager
 import tv.own.owntv.core.live.LiveKey
 import tv.own.owntv.core.live.parseLiveKey
@@ -626,6 +627,8 @@ class LibraryViewModel(
                 if (!contentAccess.allows(pid, movie)) return@launch
                 downloadManager.enqueue(
                     profileId = pid,
+                    sourceId = movie.sourceId,
+                    contentKey = DownloadIdentity.movie(movie),
                     mediaType = MediaType.MOVIE,
                     itemId = movie.id,
                     title = movie.name,
@@ -641,6 +644,8 @@ class LibraryViewModel(
                 seriesDao.episodesBySeriesOnce(show.id).forEach { episode ->
                     downloadManager.enqueue(
                         profileId = pid,
+                        sourceId = show.sourceId,
+                        contentKey = DownloadIdentity.episode(show, episode),
                         mediaType = MediaType.EPISODE,
                         itemId = episode.id,
                         title = episode.name.takeIf { it.isNotBlank() } ?: show.name,
@@ -663,8 +668,9 @@ class LibraryViewModel(
         ctx.flatMapLatest { c ->
             if (c.profileId < 0) flowOf(emptyList()) else downloadManager.observe(c.profileId)
         }.map { list -> list.filter { it.mediaType == MediaType.MOVIE && it.itemId == itemId } }
-    } else {
-        downloadManager.observeForSeries(itemId)
+    } else ctx.flatMapLatest { c ->
+        if (c.profileId < 0) flowOf(emptyList())
+        else downloadManager.observeForSeries(c.profileId, itemId)
     }
 
     /** Start the failed rows over. */

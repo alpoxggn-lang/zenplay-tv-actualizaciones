@@ -103,6 +103,12 @@ class OwnTVApp : Application(), SingletonImageLoader.Factory, androidx.work.Conf
         // default that happens to be right for one app is a trap for every other one.
         // ZenPlay: no public release feed — a manual check must never offer an OwnTV build.
         tv.own.owntv.core.CoreBuildInfo.releaseRepo = "alpoxggn-lang/zenplay-tv-actualizaciones"
+        // PIN lockouts are security state, not UI state: restore them before any screen or Koin
+        // singleton can validate a profile PIN, including after a process restart or device reboot.
+        tv.own.owntv.core.util.PinAttemptGuard.initialize(this)
+        // PackageInstaller confirmation may arrive after WorkManager finished in the background.
+        // Core only opens it directly while an Activity is actually resumed; otherwise it notifies.
+        tv.own.owntv.core.update.UpdateUserInteractionTracker.initialize(this)
         // First thing after the context exists: a crash from here on leaves a trace on disk that the
         // user can export from Settings, instead of being lost with the process.
         tv.own.owntv.core.util.CrashRecorder.diagnostics = { tv.own.owntv.player.LiveDiagnosticsLog.snapshot() }
@@ -122,6 +128,9 @@ class OwnTVApp : Application(), SingletonImageLoader.Factory, androidx.work.Conf
             // Mobile-only types are additive: shared readers/player/session remain the exact same
             // instances above, so switching layout never creates a second playback or data graph.
             modules(tv.own.owntv.mobile.di.universalHostModules)
+        }
+        tv.own.owntv.core.update.UpdateUserInteractionTracker.bindInstallRecovery {
+            GlobalContext.get().get<tv.own.owntv.core.update.UpdateManager>()
         }
         // The manifest intentionally removes WorkManager's generic Startup initializer so this app
         // can install TvWorkerFactory. Initialise it here, after Koin (the delegated workers use it),

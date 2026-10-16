@@ -33,6 +33,7 @@ import tv.own.owntv.core.database.entity.MetadataCacheEntity
 import tv.own.owntv.core.database.entity.MovieEntity
 import tv.own.owntv.core.database.entity.PlaybackProgressEntity
 import tv.own.owntv.core.database.entity.SeriesEntity
+import tv.own.owntv.core.download.DownloadIdentity
 import tv.own.owntv.core.download.DownloadManager
 import tv.own.owntv.core.metadata.MetadataMode
 import tv.own.owntv.core.metadata.MetadataRepository
@@ -144,9 +145,10 @@ class DetailViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /** Every episode download of the open show — the show-level button's aggregate. */
-    val seriesDownloads: StateFlow<List<DownloadEntity>> = target
-        .flatMapLatest { t ->
-            if (t?.tab != LibraryTab.SERIES) flowOf(emptyList()) else downloadManager.observeForSeries(t.id)
+    val seriesDownloads: StateFlow<List<DownloadEntity>> = combine(target, profileId) { t, pid -> t to pid }
+        .flatMapLatest { (t, pid) ->
+            if (t?.tab != LibraryTab.SERIES || pid < 0) flowOf(emptyList())
+            else downloadManager.observeForSeries(pid, t.id)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -358,6 +360,8 @@ class DetailViewModel(
                 if (!contentAccess.allows(pid, film)) return@launch
                 downloadManager.enqueue(
                     profileId = pid,
+                    sourceId = film.sourceId,
+                    contentKey = DownloadIdentity.movie(film),
                     mediaType = MediaType.MOVIE,
                     itemId = film.id,
                     title = film.name,
@@ -404,6 +408,8 @@ class DetailViewModel(
     private suspend fun downloadEpisode(show: SeriesEntity, episode: EpisodeEntity, profileId: Long) {
         downloadManager.enqueue(
             profileId = profileId,
+            sourceId = show.sourceId,
+            contentKey = DownloadIdentity.episode(show, episode),
             mediaType = MediaType.EPISODE,
             itemId = episode.id,
             title = episode.name.takeIf { it.isNotBlank() } ?: show.name,

@@ -77,25 +77,39 @@ class RecordingRulesTest {
     // --- How a recording is closed out ---
 
     @Test
-    fun `any bytes at all is a completed recording`() {
-        // A ts file is playable to whatever point it reached, so a programme cut short is still a
-        // recording the user can watch — marking it failed would hide a file that is on disk.
+    fun `only a naturally finished capture is completed`() {
         assertEquals(
             RecordingStatus.COMPLETED to RecordingFailure.NONE,
-            RecordingRules.outcomeOf(bytes = 1, failure = RecordingFailure.NONE),
-        )
-        assertEquals(
-            RecordingStatus.COMPLETED to RecordingFailure.NONE,
-            RecordingRules.outcomeOf(bytes = 900_000_000, failure = RecordingFailure.NETWORK),
+            RecordingRules.outcomeOf(bytes = 1, failure = RecordingFailure.NONE, finishedNaturally = true),
         )
     }
 
     @Test
-    fun `running out of room stays a failure however much was captured`() {
-        // The user has to be told why it is short, and "completed" would not tell them.
+    fun `playable short or damaged captures are partial and keep their reason`() {
         assertEquals(
-            RecordingStatus.FAILED to RecordingFailure.NO_SPACE,
-            RecordingRules.outcomeOf(bytes = 4_000_000_000L, failure = RecordingFailure.NO_SPACE),
+            RecordingStatus.PARTIAL to RecordingFailure.NETWORK,
+            RecordingRules.outcomeOf(
+                bytes = 900_000_000,
+                failure = RecordingFailure.NETWORK,
+                finishedNaturally = true,
+            ),
+        )
+        assertEquals(
+            RecordingStatus.PARTIAL to RecordingFailure.INTERRUPTED,
+            RecordingRules.outcomeOf(bytes = 1, failure = RecordingFailure.NONE, finishedNaturally = false),
+        )
+    }
+
+    @Test
+    fun `running out of room keeps a playable capture partial and preserves the reason`() {
+        // The user can still play what exists, while NO_SPACE explains why it is short.
+        assertEquals(
+            RecordingStatus.PARTIAL to RecordingFailure.NO_SPACE,
+            RecordingRules.outcomeOf(
+                bytes = 4_000_000_000L,
+                failure = RecordingFailure.NO_SPACE,
+                finishedNaturally = false,
+            ),
         )
     }
 
@@ -103,13 +117,20 @@ class RecordingRulesTest {
     fun `nothing written is a failure, and it keeps the reason`() {
         assertEquals(
             RecordingStatus.FAILED to RecordingFailure.NO_CONNECTION,
-            RecordingRules.outcomeOf(bytes = 0, failure = RecordingFailure.NO_CONNECTION),
+            RecordingRules.outcomeOf(bytes = 0, failure = RecordingFailure.NO_CONNECTION, finishedNaturally = false),
         )
         // Nothing written and nothing said: the channel never played.
         assertEquals(
             RecordingStatus.FAILED to RecordingFailure.STREAM_UNAVAILABLE,
-            RecordingRules.outcomeOf(bytes = 0, failure = RecordingFailure.NONE),
+            RecordingRules.outcomeOf(bytes = 0, failure = RecordingFailure.NONE, finishedNaturally = false),
         )
+    }
+
+    @Test
+    fun `captured duration is stable and never negative`() {
+        assertEquals(90_000L, RecordingRules.capturedDurationMs(1_000L, 91_000L))
+        assertEquals(0L, RecordingRules.capturedDurationMs(2_000L, 1_000L))
+        assertEquals(0L, RecordingRules.capturedDurationMs(null, 1_000L))
     }
 
     // --- Clash and refusal → MISSED (D10) ---

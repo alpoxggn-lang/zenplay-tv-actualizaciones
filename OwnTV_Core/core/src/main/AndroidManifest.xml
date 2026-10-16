@@ -93,6 +93,12 @@
                 <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
+
+        <!-- PackageInstaller reports through an explicit receiver so a confirmation/failure is not
+             lost when Android kills the process after the foreground download finishes. -->
+        <receiver
+            android:name="tv.own.owntv.core.update.UpdateInstallStatusReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

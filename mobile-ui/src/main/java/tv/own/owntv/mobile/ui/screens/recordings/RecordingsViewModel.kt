@@ -85,7 +85,7 @@ class RecordingsViewModel(
     val playing: StateFlow<Boolean> = _playing.asStateFlow()
 
     fun play(recording: RecordingEntity) {
-        if (recording.status != RecordingStatus.COMPLETED) return
+        if (recording.status != RecordingStatus.COMPLETED && recording.status != RecordingStatus.PARTIAL) return
         val path = recording.filePath ?: return
         viewModelScope.launch {
             _playing.value = vodTuner.playRecording(path, recording.title, recording.channelIconUrl)

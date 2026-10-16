@@ -7,6 +7,7 @@ import tv.own.owntv.core.database.dao.ProfileDao
 import tv.own.owntv.core.database.dao.SourceDao
 import tv.own.owntv.core.database.entity.ProfileEntity
 import tv.own.owntv.core.database.entity.ProfileSourceCrossRef
+import tv.own.owntv.core.download.DownloadManager
 import tv.own.owntv.core.launcher.LauncherIntegrationRepository
 import tv.own.owntv.core.settings.SettingsRepository
 import tv.own.owntv.core.subtitles.OpenSubtitlesAccountManager
@@ -29,6 +30,7 @@ class ProfileManager(
     private val launcherIntegration: LauncherIntegrationRepository,
     private val openSubtitlesAccounts: OpenSubtitlesAccountManager,
     private val avatars: ProfileAvatarStore,
+    private val downloadManager: DownloadManager,
 ) {
 
     /** Serializes identity-changing operations so switch/delete cannot invalidate each other's check. */
@@ -190,6 +192,9 @@ class ProfileManager(
         // …and its picture, which nothing else would ever clean up.
         avatars.clear(stored.id)
         settings.setStartupChannel(stored.id, null)
+        // Stop workers and erase app-managed media before the profile FK cascade removes the rows
+        // needed to locate those files.
+        downloadManager.removeForProfile(stored.id)
         profileDao.delete(stored)
         true
     }

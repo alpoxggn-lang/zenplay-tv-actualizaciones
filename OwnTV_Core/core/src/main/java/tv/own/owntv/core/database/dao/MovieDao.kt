@@ -48,6 +48,15 @@ interface MovieDao {
     @Query("SELECT * FROM movies WHERE sourceId = :sourceId AND remoteId = :remoteId LIMIT 1")
     suspend fun findByRemote(sourceId: Long, remoteId: String): MovieEntity?
 
+    /**
+     * Recovery lookup for providers (notably plain M3U) that do not publish a remote id.
+     *
+     * Two rows are enough: callers must accept this fallback only when the stream URL is unique
+     * inside its source. A duplicated URL is deliberately ambiguous and therefore fails closed.
+     */
+    @Query("SELECT * FROM movies WHERE sourceId = :sourceId AND streamUrl = :streamUrl LIMIT 2")
+    suspend fun findByStreamUrl(sourceId: Long, streamUrl: String): List<MovieEntity>
+
     @Query("SELECT * FROM movies WHERE sourceId = :sourceId AND remoteId IN (:remoteIds)")
     suspend fun findByRemoteIds(sourceId: Long, remoteIds: List<String>): List<MovieEntity>
 

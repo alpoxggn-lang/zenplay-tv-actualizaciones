@@ -214,6 +214,7 @@
     <string name="recording_failed_clash">Otra grabación estaba usando la conexión</string>
     <string name="recording_failed_network">Se perdió la conexión</string>
     <string name="recording_failed_unavailable">El canal no se reprodujo</string>
+    <string name="recording_partial_interrupted">Se detuvo antes de que terminara el programa</string>
     <string name="recording_failed_channel_gone">Ese canal ya no está en tu lista</string>
     <string name="recording_failed_unknown">No se grabó</string>
     <string name="recording_title">Grabaciones</string>
@@ -222,6 +223,7 @@
     <string name="recording_group_now">Grabando ahora</string>
     <string name="recording_group_scheduled">Programada</string>
     <string name="recording_group_completed">Grabado</string>
+    <string name="recording_group_partial">Grabaciones parciales</string>
     <string name="recording_group_failed">Fallida</string>
     <string name="recording_group_missed">Perdida</string>
     <string name="recording_record">Grabar</string>

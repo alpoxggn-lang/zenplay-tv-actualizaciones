@@ -146,7 +146,7 @@ class LauncherRecommendationPlanner(
      * observes afterwards.
      */
     suspend fun orderedEpisodes(seriesId: Long): List<EpisodeEntity> =
-        seriesDao.episodesBySeriesOnce(seriesId).sortedWith(compareBy<EpisodeEntity> { it.seasonNumber }.thenBy { it.episodeNumber })
+        seriesDao.episodesBySeriesOnce(seriesId).sortedWith(tv.own.owntv.core.content.EpisodeOrder.episodes)
 
     fun movieStableKey(movie: MovieEntity): String =
         "movie:${movie.sourceId}:${movie.remoteId ?: movie.name}"

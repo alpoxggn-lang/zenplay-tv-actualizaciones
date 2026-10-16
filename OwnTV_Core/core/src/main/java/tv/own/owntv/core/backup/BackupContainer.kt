@@ -167,8 +167,9 @@ object BackupContainer {
      */
     fun open(file: File, passphrase: String? = null): Payload = when (probe(file)) {
         Kind.LEGACY_JSON -> Payload(json = file.readText(), wallpaper = null)
-        Kind.CONTAINER -> unzip(file.readBytes())
-        Kind.ENCRYPTED_CONTAINER -> unzip(decryptContainer(file.readBytes(), passphrase))
+        // Streamed, not read whole: on a TV every full copy of a large backup counts.
+        Kind.CONTAINER -> file.inputStream().buffered().use { unzip(it) }
+        Kind.ENCRYPTED_CONTAINER -> unzip(decryptContainer(file.readBytes(), passphrase).inputStream())
         Kind.UNKNOWN -> error("Not an OwnTV backup file")
     }
 
@@ -179,18 +180,23 @@ object BackupContainer {
         val headerEnd = MAGIC.size + 4 + headerLen
         require(headerLen in 1..MAX_HEADER_BYTES && headerEnd <= bytes.size) { "Corrupt backup header" }
         val header = JSONObject(String(bytes, MAGIC.size + 4, headerLen, Charsets.UTF_8))
-        val key = BackupCrypto.deriveKey(pass, header) ?: throw BackupManager.WrongPasswordException()
-        // GCM authenticates: a wrong passphrase fails here rather than yielding garbage.
-        return runCatching { BackupCrypto.decryptBytes(key, bytes.copyOfRange(headerEnd, bytes.size)) }
-            .getOrElse { throw BackupManager.WrongPasswordException() }
+        val key = BackupCrypto.deriveKey(pass, header) ?: error("Corrupt backup header")
+        // GCM authenticates: a wrong passphrase fails here rather than yielding garbage. Only that
+        // tag mismatch is a wrong password — anything else (out of memory on a large backup, say)
+        // propagates as itself, or the user is asked again for a password that was right.
+        return try {
+            BackupCrypto.decryptBytes(key, bytes, headerEnd)
+        } catch (_: javax.crypto.AEADBadTagException) {
+            throw BackupManager.WrongPasswordException()
+        }
     }
 
-    private fun unzip(bytes: ByteArray): Payload {
+    private fun unzip(input: java.io.InputStream): Payload {
         var json: String? = null
         var wallpaper: Asset? = null
         val subtitles = LinkedHashMap<String, ByteArray>()
         val avatars = LinkedHashMap<String, ByteArray>()
-        ZipInputStream(bytes.inputStream()).use { zis ->
+        ZipInputStream(input).use { zis ->
             while (true) {
                 val entry = zis.nextEntry ?: break
                 val name = entry.name

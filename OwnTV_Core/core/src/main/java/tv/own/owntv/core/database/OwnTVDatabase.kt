@@ -118,7 +118,7 @@ import tv.own.owntv.core.database.dao.SubtitleDao
         SeriesFtsEntity::class,
         EpisodeFtsEntity::class,
     ],
-    version = 46, // v7: content_order (Move). v8: contentHash + browse/unique indexes. v9: EPG contentHash + natural key. v10: TMDB metadata cache. v11: movies/series rating-sort indexes. v12: metadata_cache trailerKey. v13: metadata_cache logoPath. v14: sources.mac (Stalker portal). v15: external-subtitle cache/selection/timing tables. v16: subtitle_link (downloaded-sub ↔ content). v17: sources.syncLive/Movies/Series (skip-sync enabledScope). v18: series.episodesSyncedAt (episode-cache freshness, S8). v19: epg_channels.iconUrl (XMLTV channel logos). v20: channels (sourceId, number) index for direct tune. v21: series.addedAt + date-added sort indexes. v22: series_sort_order (per-series season/episode order). v23: sources.hlsSupported and sources.preferHls. v24: custom_category_members (user custom categories, #87). v25: sources.livePrerollSecs (per-playlist "Pre-buffer"). v26: channels.catchupType + channels.httpHeaders (M3U catch-up styles + per-channel HTTP headers). v27: sources.maxConnections (Xtream session limit read at sync). v28: movies.httpHeaders + episodes.httpHeaders (per-item M3U HTTP headers). v29: optional Stalker serial/device IDs/signature. v30: source-scoped Now Trending snapshots. v31: indexed provider-title metadata and persistent Trending attempt state. v32: playback_prefs (per-item zoom + volume, keyed by the P6 stable content key). v33: channels/movies/episodes drmConfig (M3U Widevine/ClearKey licence details, #115). v34: sources.liveEnginePreference + sources.liveLatencyMode/liveLatencyCustomSecs (per-playlist Live TV engine and Live latency). v35: playback_prefs.audioDelayMs (per-item A/V-sync memory). v36: user_data_tombstones (deleted favorites/history/resume/memberships, so local sync propagates a deletion instead of undoing it). v37: episodes.airDateMs + metadata_cache.airDate (when an episode first aired — the provider's date, with TMDB's as the fallback) profiles.avatarPath (a picture of the user's own instead of a drawn tile). v38: sources.importPortalEpg (whether a Stalker portal's own guide may be imported). v39: recordings + recording_rules (live recording and its standing "record every showing" rules; never synced, never backed up). v40: sources.maxConnectionsProbedAt (when the app measured how many streams the provider really allows, for the providers that never say). v41: epg_channels.normName/normId (the matcher's normalized forms, stored at sync instead of recomputed per keystroke) and an epg_programmes (startMs, stopMs) index for time-bounded guide reads. v42: catalog_backfill (the Stalker VOD pages setup deliberately did not fetch, drained in the background — plan N1b). v43: channels/movies/episodes manifestType (the container an M3U entry declares via #KODIPROP:…manifest_type) and channels.directSource (the Xtream panel’s own URL, kept as a last-resort retry only). v44: playback_quirks (what a stream needs, shared by all profiles), playback_prefs.sourceId/audioLang/subtitleLang, and five per-playlist overrides on sources (catch-up zone/offset, VOD engine, tune timeout, Referer). v45: metadata_cache.originalLanguage (TMDB's original language, for the "Original language" audio choice). v46: playback_quirks.softwareDecode dropped (never written).
+    version = 48, // v7: content_order (Move). v8: contentHash + browse/unique indexes. v9: EPG contentHash + natural key. v10: TMDB metadata cache. v11: movies/series rating-sort indexes. v12: metadata_cache trailerKey. v13: metadata_cache logoPath. v14: sources.mac (Stalker portal). v15: external-subtitle cache/selection/timing tables. v16: subtitle_link (downloaded-sub ↔ content). v17: sources.syncLive/Movies/Series (skip-sync enabledScope). v18: series.episodesSyncedAt (episode-cache freshness, S8). v19: epg_channels.iconUrl (XMLTV channel logos). v20: channels (sourceId, number) index for direct tune. v21: series.addedAt + date-added sort indexes. v22: series_sort_order (per-series season/episode order). v23: sources.hlsSupported and sources.preferHls. v24: custom_category_members (user custom categories, #87). v25: sources.livePrerollSecs (per-playlist "Pre-buffer"). v26: channels.catchupType + channels.httpHeaders (M3U catch-up styles + per-channel HTTP headers). v27: sources.maxConnections (Xtream session limit read at sync). v28: movies.httpHeaders + episodes.httpHeaders (per-item M3U HTTP headers). v29: optional Stalker serial/device IDs/signature. v30: source-scoped Now Trending snapshots. v31: indexed provider-title metadata and persistent Trending attempt state. v32: playback_prefs (per-item zoom + volume, keyed by the P6 stable content key). v33: channels/movies/episodes drmConfig (M3U Widevine/ClearKey licence details, #115). v34: sources.liveEnginePreference + sources.liveLatencyMode/liveLatencyCustomSecs (per-playlist Live TV engine and Live latency). v35: playback_prefs.audioDelayMs (per-item A/V-sync memory). v36: user_data_tombstones (deleted favorites/history/resume/memberships, so local sync propagates a deletion instead of undoing it). v37: episodes.airDateMs + metadata_cache.airDate (when an episode first aired — the provider's date, with TMDB's as the fallback) profiles.avatarPath (a picture of the user's own instead of a drawn tile). v38: sources.importPortalEpg (whether a Stalker portal's own guide may be imported). v39: recordings + recording_rules (live recording and its standing "record every showing" rules; never synced, never backed up). v40: sources.maxConnectionsProbedAt (when the app measured how many streams the provider really allows, for the providers that never say). v41: epg_channels.normName/normId (the matcher's normalized forms, stored at sync instead of recomputed per keystroke) and an epg_programmes (startMs, stopMs) index for time-bounded guide reads. v42: catalog_backfill (the Stalker VOD pages setup deliberately did not fetch, drained in the background — plan N1b). v43: channels/movies/episodes manifestType (the container an M3U entry declares via #KODIPROP:…manifest_type) and channels.directSource (the Xtream panel’s own URL, kept as a last-resort retry only). v44: playback_quirks (what a stream needs, shared by all profiles), playback_prefs.sourceId/audioLang/subtitleLang, and five per-playlist overrides on sources (catch-up zone/offset, VOD engine, tune timeout, Referer). v45: metadata_cache.originalLanguage (TMDB's original language, for the "Original language" audio choice). v46: playback_quirks.softwareDecode dropped (never written). v47: stable, source-scoped download identities. v48: stable recording channel identity and partial-capture duration.
 
     exportSchema = true,
 )
@@ -1233,6 +1233,94 @@ abstract class OwnTVDatabase : RoomDatabase() {
         }
 
         /**
+         * v46 → v47: downloads gain a playlist owner and a stable content identity.
+         *
+         * `itemId` is a Room row id and can name different content after a clear/re-import. It is
+         * retained as a fast pointer, while `sourceId` + `contentKey` become the unique identity.
+         * Existing rows receive a collision-proof legacy key and their source is recovered from the
+         * current catalogue where possible. New rows use `DownloadIdentity` and can be re-linked by
+         * provider remote id after a refresh.
+         */
+        val MIGRATION_46_47 = object : androidx.room.migration.Migration(46, 47) {
+            override fun migrate(db: SQLiteConnection) {
+                if (!hasColumn(db, "downloads", "sourceId")) {
+                    db.execSQL("ALTER TABLE `downloads` ADD COLUMN `sourceId` INTEGER NOT NULL DEFAULT -1")
+                }
+                if (!hasColumn(db, "downloads", "contentKey")) {
+                    db.execSQL("ALTER TABLE `downloads` ADD COLUMN `contentKey` TEXT NOT NULL DEFAULT ''")
+                }
+                db.execSQL(
+                    "UPDATE `downloads` SET `sourceId` = CASE " +
+                        "WHEN `mediaType` = 'MOVIE' THEN COALESCE(" +
+                        "(SELECT `sourceId` FROM `movies` WHERE `movies`.`id` = `downloads`.`itemId`), -1) " +
+                        "WHEN `mediaType` = 'EPISODE' THEN COALESCE(" +
+                        "(SELECT `series`.`sourceId` FROM `episodes` INNER JOIN `series` " +
+                        "ON `series`.`id` = `episodes`.`seriesId` WHERE `episodes`.`id` = `downloads`.`itemId`), -1) " +
+                        "ELSE -1 END WHERE `sourceId` = -1",
+                )
+                // Legacy ids are deliberately unique even if a broken provider reused a Room id.
+                // They remain playable, but only new d1 keys are parsed for post-sync re-linking.
+                db.execSQL(
+                    "UPDATE `downloads` SET `contentKey` = " +
+                        "'legacy:' || `profileId` || ':' || `sourceId` || ':' || `mediaType` || ':' || `itemId` || ':' || `id` " +
+                        "WHERE `contentKey` = ''",
+                )
+                // The old title-based naming scheme allowed different rows (and profiles) to point
+                // at one physical file. Never auto-resume one of those ambiguous writers after the
+                // upgrade: retry will give it a private profile/source/content-key path first. A
+                // COMPLETED/PAUSED row remains readable, and reference-counted runtime operations
+                // make deleting/exporting one owner harmless to the others.
+                db.execSQL(
+                    "UPDATE `downloads` SET `status` = 'FAILED' " +
+                        "WHERE `status` IN ('QUEUED', 'RUNNING') AND `filePath` IS NOT NULL " +
+                        "AND `filePath` IN (SELECT `filePath` FROM `downloads` " +
+                        "WHERE `filePath` IS NOT NULL GROUP BY `filePath` HAVING COUNT(*) > 1)",
+                )
+                db.execSQL("DROP INDEX IF EXISTS `index_downloads_profileId_mediaType_itemId`")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_downloads_sourceId` ON `downloads` (`sourceId`)")
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_downloads_profileId_sourceId_contentKey` " +
+                        "ON `downloads` (`profileId`, `sourceId`, `contentKey`)",
+                )
+                healSchema(db)
+            }
+        }
+
+        /**
+         * v47 → v48: recording timers survive catalogue row-id replacement and terminal rows retain
+         * the amount of time actually captured. Existing timers are backfilled from their current
+         * channel only when both the local id and source still agree; otherwise execution performs
+         * the stricter source + EPG rematch. Existing terminal rows recover duration from their
+         * persisted start/end clocks without changing their historical status. The remote id is
+         * backfilled only when source, local id and normalized EPG identity all still agree.
+         */
+        val MIGRATION_47_48 = object : androidx.room.migration.Migration(47, 48) {
+            override fun migrate(db: SQLiteConnection) {
+                if (!hasColumn(db, "recordings", "channelRemoteId")) {
+                    db.execSQL("ALTER TABLE `recordings` ADD COLUMN `channelRemoteId` TEXT")
+                }
+                if (!hasColumn(db, "recordings", "capturedDurationMs")) {
+                    db.execSQL(
+                        "ALTER TABLE `recordings` ADD COLUMN `capturedDurationMs` INTEGER NOT NULL DEFAULT 0",
+                    )
+                }
+                db.execSQL(
+                    "UPDATE `recordings` SET `channelRemoteId` = (" +
+                        "SELECT `remoteId` FROM `channels` WHERE `channels`.`id` = `recordings`.`channelId` " +
+                        "AND `channels`.`sourceId` = `recordings`.`sourceId` " +
+                        "AND LOWER(TRIM(`channels`.`epgChannelId`)) = LOWER(TRIM(`recordings`.`epgChannelId`))" +
+                        ") WHERE `channelRemoteId` IS NULL AND `epgChannelId` IS NOT NULL AND TRIM(`epgChannelId`) != ''",
+                )
+                db.execSQL(
+                    "UPDATE `recordings` SET `capturedDurationMs` = CASE " +
+                        "WHEN `startedAt` IS NOT NULL AND `endedAt` IS NOT NULL AND `endedAt` > `startedAt` " +
+                        "THEN `endedAt` - `startedAt` ELSE 0 END WHERE `capturedDurationMs` = 0",
+                )
+                healSchema(db)
+            }
+        }
+
+        /**
          * v44 → v45: nullable `originalLanguage` on metadata_cache (N14, "Original language" audio). The
          * cache is disposable; a row from before this version reads null and is re-fetched on play.
          */
@@ -1403,6 +1491,8 @@ abstract class OwnTVDatabase : RoomDatabase() {
             MIGRATION_43_44,
             MIGRATION_44_45,
             MIGRATION_45_46,
+            MIGRATION_46_47,
+            MIGRATION_47_48,
         )
 
         /**

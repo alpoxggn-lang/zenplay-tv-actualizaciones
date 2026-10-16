@@ -65,19 +65,27 @@ object RecordingRules {
     /**
      * How a recording that actually ran should be closed out.
      *
-     * **Any bytes at all is a success.** A `.ts` file is playable to whatever point it reached, so
-     * ten minutes of a programme that dropped is a recording the user can watch, not a failure — and
-     * marking it FAILED would hide a file that is on disk. The one exception is running out of room,
-     * which stays a failure however much was captured, because the user has to know why it is short.
-     *
-     * Nothing written at all is a failure whatever the reason: there is no file to offer.
+     * A non-empty file is playable, but that does not make it complete. A capture is COMPLETED only
+     * when its requested window/finite archive finished and no failure was observed. Bytes kept after
+     * an early stop, a network gap or a full disk are PARTIAL: still playable and visible, but with
+     * the real reason retained. Nothing written at all remains FAILED because there is no file to
+     * offer.
      */
-    fun outcomeOf(bytes: Long, failure: RecordingFailure): Pair<RecordingStatus, RecordingFailure> = when {
-        failure == RecordingFailure.NO_SPACE -> RecordingStatus.FAILED to RecordingFailure.NO_SPACE
-        bytes > 0 -> RecordingStatus.COMPLETED to RecordingFailure.NONE
-        failure != RecordingFailure.NONE -> RecordingStatus.FAILED to failure
-        else -> RecordingStatus.FAILED to RecordingFailure.STREAM_UNAVAILABLE
+    fun outcomeOf(
+        bytes: Long,
+        failure: RecordingFailure,
+        finishedNaturally: Boolean,
+    ): Pair<RecordingStatus, RecordingFailure> = when {
+        bytes <= 0 && failure != RecordingFailure.NONE -> RecordingStatus.FAILED to failure
+        bytes <= 0 -> RecordingStatus.FAILED to RecordingFailure.STREAM_UNAVAILABLE
+        failure != RecordingFailure.NONE -> RecordingStatus.PARTIAL to failure
+        !finishedNaturally -> RecordingStatus.PARTIAL to RecordingFailure.INTERRUPTED
+        else -> RecordingStatus.COMPLETED to RecordingFailure.NONE
     }
+
+    /** Stable duration stored with terminal rows; bad or inverted clocks never produce negatives. */
+    fun capturedDurationMs(startedAt: Long?, endedAt: Long): Long =
+        startedAt?.let { (endedAt - it).coerceAtLeast(0L) } ?: 0L
 
     /**
      * How long to wait before reconnecting after attempt [attempt], capped so a channel that is down
@@ -126,6 +134,7 @@ object RecordingRules {
         RecordingFailure.CLASH -> res.getString(R.string.recording_failed_clash)
         RecordingFailure.NETWORK -> res.getString(R.string.recording_failed_network)
         RecordingFailure.STREAM_UNAVAILABLE -> res.getString(R.string.recording_failed_unavailable)
+        RecordingFailure.INTERRUPTED -> res.getString(R.string.recording_partial_interrupted)
         RecordingFailure.CHANNEL_GONE -> res.getString(R.string.recording_failed_channel_gone)
         RecordingFailure.ENCRYPTED -> res.getString(R.string.recording_failed_encrypted)
         RecordingFailure.DRM_PROTECTED -> res.getString(R.string.recording_failed_drm)

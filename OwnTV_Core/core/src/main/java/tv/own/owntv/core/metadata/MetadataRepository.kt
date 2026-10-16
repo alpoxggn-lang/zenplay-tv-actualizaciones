@@ -1,6 +1,7 @@
 package tv.own.owntv.core.metadata
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
@@ -95,9 +96,14 @@ class MetadataRepository(
 
         // null = transport failure (offline / rate-limited / proxy down): bail WITHOUT negative-caching,
         // so the title retries next time instead of showing no metadata for 7 days.
-        val hits = runCatching { provider.searchMovie(q.query, q.year, includeAdult) }
-            .onFailure { Log.w(TAG, "resolveMovie search failed: ${it.message}") }
-            .getOrNull() ?: return null
+        val hits = try {
+            provider.searchMovie(q.query, q.year, includeAdult)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            Log.w(TAG, "resolveMovie search failed: ${failure.message}")
+            null
+        } ?: return null
 
         // An override is the user telling us the exact name → trust TMDB's top relevance hit directly
         // (no fuzzy threshold) so a hand-typed title isn't rejected over punctuation/formatting differences.
@@ -139,9 +145,14 @@ class MetadataRepository(
         if (q.query.isBlank()) return null
 
         // Same as resolveMovie: null = transport failure → no negative-cache, retry next open.
-        val hits = runCatching { provider.searchTv(q.query, q.year, includeAdult) }
-            .onFailure { Log.w(TAG, "resolveSeries search failed: ${it.message}") }
-            .getOrNull() ?: return null
+        val hits = try {
+            provider.searchTv(q.query, q.year, includeAdult)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            Log.w(TAG, "resolveSeries search failed: ${failure.message}")
+            null
+        } ?: return null
 
         // An override is the user telling us the exact name → trust TMDB's top relevance hit directly.
         val best: Scored? = if (q.isOverride) hits.firstOrNull()?.let { Scored(it, 1.0) } else pickBest(q.query, q.year, hits)
@@ -470,13 +481,17 @@ class MetadataRepository(
      */
     private suspend fun healNegativeMatchesOnce() {
         if (!healNeeded.get()) return
-        runCatching {
+        try {
             if (settings.metadataMatchHealVersion() < MATCH_HEURISTICS_VERSION) {
                 dao.clearNegativeMatches()
                 settings.setMetadataMatchHealVersion(MATCH_HEURISTICS_VERSION)
             }
-        }.onSuccess { healNeeded.set(false) }
-            .onFailure { Log.w(TAG, "negative-match heal failed: ${it.message}") }
+            healNeeded.set(false)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            Log.w(TAG, "negative-match heal failed: ${failure.message}")
+        }
     }
 
     /**

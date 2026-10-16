@@ -44,8 +44,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
@@ -62,7 +64,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
@@ -425,6 +429,15 @@ fun MobileShell(
     }
 
     val settingsTitle = settingsPageTitleRes(currentRoute) ?: morePageTitleRes(currentRoute)
+    // Keep the ZenPlay cyan identity, but deepen it in the optional light theme so selected icons
+    // continue to pass as controls rather than pale decoration. Text follows the theme's contrast.
+    val chromeAccent = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
+        ZenPlayChromeCyan
+    } else {
+        ZenPlayChromeCyanDark
+    }
+    val chromeText = MaterialTheme.colorScheme.onSurface
+    val chromeMuted = MaterialTheme.colorScheme.onSurfaceVariant
 
     // Downloads is a tab on a rail but a row in More on a phone, where no tab is selected to name it
     // — without this the bar would call it "Home", which is where it is not.
@@ -513,10 +526,18 @@ fun MobileShell(
                 TopAppBar(
                     // Transparent container plus the glass modifier, rather than a colour: the bar has
                     // to let the wallpaper through it, and a container colour cannot.
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        navigationIconContentColor = chromeText,
+                        titleContentColor = chromeText,
+                        actionIconContentColor = chromeText,
+                    ),
                     windowInsets = WindowInsets(0, 0, 0, 0),
                     modifier = Modifier
                         .glassSurface(GlassSurface.TOPBAR, MobileTopBarShape)
+                        // A very light brand wash keeps the chrome recognisably ZenPlay without
+                        // adding another sampled/blurred layer on budget phones.
+                        .background(ZenPlayChromeWash, MobileTopBarShape)
                         .clip(MobileTopBarShape),
                     title = {
                         // Primary destinations use the requested icon-only ZenPlay header. Detail
@@ -625,6 +646,7 @@ fun MobileShell(
                                 .padding(horizontal = shellInsetH)
                                 .height(MobileDimens.NavIslandHeight)
                                 .glassSurface(GlassSurface.SIDEBAR, MobileNavShape)
+                                .background(ZenPlayNavigationWash, MobileNavShape)
                                 .clip(MobileNavShape),
                         ) {
                             destinations.forEach { destination ->
@@ -634,6 +656,13 @@ fun MobileShell(
                                     onClick = { navController.onNavClick(destination, current, shellViewModel) },
                                     icon = { NavIcon(destination) },
                                     label = { NavLabel(destination) },
+                                    colors = NavigationBarItemDefaults.colors(
+                                        selectedIconColor = chromeAccent,
+                                        selectedTextColor = chromeText,
+                                        indicatorColor = ZenPlayChromePurple.copy(alpha = 0.24f),
+                                        unselectedIconColor = chromeMuted,
+                                        unselectedTextColor = chromeMuted,
+                                    ),
                                     modifier = Modifier.longPressResetsScroll(destination, shellViewModel),
                                 )
                             }
@@ -673,6 +702,7 @@ fun MobileShell(
                     modifier = Modifier
                         .padding(start = MobileDimens.ShellInset, bottom = shellBottom)
                         .glassSurface(GlassSurface.SIDEBAR, MobileNavShape)
+                        .background(ZenPlayNavigationWash, MobileNavShape)
                         .clip(MobileNavShape),
                 ) {
                     // Eight destinations do not fit down the short side of a phone held sideways, and
@@ -698,6 +728,13 @@ fun MobileShell(
                                     onClick = { navController.onNavClick(destination, current, shellViewModel) },
                                     icon = { NavIcon(destination) },
                                     label = { NavLabel(destination) },
+                                    colors = NavigationRailItemDefaults.colors(
+                                        selectedIconColor = chromeAccent,
+                                        selectedTextColor = chromeText,
+                                        indicatorColor = ZenPlayChromePurple.copy(alpha = 0.24f),
+                                        unselectedIconColor = chromeMuted,
+                                        unselectedTextColor = chromeMuted,
+                                    ),
                                     modifier = Modifier.longPressResetsScroll(destination, shellViewModel),
                                 )
                             }
@@ -818,6 +855,22 @@ private val CompactShellInset = 8.dp
 
 /** Vertical gap between shell islands on compact phones. */
 private val CompactShellGap = 6.dp
+
+/** Silver-grey chrome with the two ZenPlay accents, kept translucent over the existing glass. */
+private val ZenPlayChromeSilver = Color(0xFFE8EDF7)
+private val ZenPlayChromeCyan = Color(0xFF53DFFF)
+private val ZenPlayChromeCyanDark = Color(0xFF00677D)
+private val ZenPlayChromePurple = Color(0xFFA774FF)
+private val ZenPlayChromeWash = Brush.horizontalGradient(
+    0f to ZenPlayChromeCyan.copy(alpha = 0.055f),
+    0.52f to ZenPlayChromeSilver.copy(alpha = 0.035f),
+    1f to ZenPlayChromePurple.copy(alpha = 0.055f),
+)
+private val ZenPlayNavigationWash = Brush.horizontalGradient(
+    0f to ZenPlayChromeSilver.copy(alpha = 0.075f),
+    0.50f to Color(0xFF77839A).copy(alpha = 0.055f),
+    1f to ZenPlayChromePurple.copy(alpha = 0.075f),
+)
 
 @Composable
 private fun NavIcon(destination: MobileDestination) {

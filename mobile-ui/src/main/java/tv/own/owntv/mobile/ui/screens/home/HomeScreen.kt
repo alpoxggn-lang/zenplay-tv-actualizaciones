@@ -3,6 +3,7 @@ package tv.own.owntv.mobile.ui.screens.home
 import tv.own.owntv.mobile.ui.components.ChannelLogoImage
 import tv.own.owntv.mobile.ui.components.MobileIcons
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
@@ -66,7 +67,6 @@ import tv.own.owntv.mobile.R
 import tv.own.owntv.mobile.ui.components.ContentActionsMenu
 import tv.own.owntv.mobile.ui.components.ContentTarget
 import tv.own.owntv.mobile.ui.components.PosterCard
-import tv.own.owntv.mobile.ui.components.SectionHeader
 import tv.own.owntv.mobile.ui.nav.posterKey
 import tv.own.owntv.mobile.ui.screens.ObeyScrollToTop
 import tv.own.owntv.mobile.ui.screens.library.LibraryTab
@@ -127,6 +127,8 @@ fun HomeScreen(
             else -> state.hasContent(row)
         }
     }
+    val homeConfiguration = LocalConfiguration.current
+    val featuredMaxWidth = if (homeConfiguration.smallestScreenWidthDp >= 600) 1040.dp else 720.dp
 
     LazyColumn(
         state = listState,
@@ -148,7 +150,7 @@ fun HomeScreen(
                         if (item.isSeries) onOpenSeries(item.id) else vm.playMovie(item.id, 0L, onPlayerOpened)
                     },
                     onOpenDetails = { item -> if (item.isSeries) onOpenSeries(item.id) else onOpenMovie(item.id) },
-                    modifier = Modifier.widthIn(max = 720.dp),
+                    modifier = Modifier.widthIn(max = featuredMaxWidth),
                 )
             }
         }
@@ -286,7 +288,7 @@ private fun HeroRow(
 ) {
     val state = rememberLazyListState()
     Column {
-        SectionHeader(title = stringResource(R.string.home_row_keep_watching))
+        HomeSectionHeader(title = stringResource(R.string.home_row_keep_watching))
         // One card per screenful is right on a phone, where the card IS the screen. On a tablet the
         // same sum makes a 1250dp card that swallows Home whole and hides every row under it, so the
         // card stops growing and the row simply shows more than one — which is what the width is for.
@@ -297,7 +299,7 @@ private fun HeroRow(
         LazyRow(
             state = state,
             flingBehavior = rememberSnapFlingBehavior(state),
-            horizontalArrangement = Arrangement.spacedBy(MobileDimens.GapMedium),
+            horizontalArrangement = Arrangement.spacedBy(MobileDimens.GroupGap),
             contentPadding = PaddingValues(horizontal = MobileDimens.ScreenPaddingH),
         ) {
             items(items.size, key = { items[it].rowKey() }) { index ->
@@ -359,6 +361,7 @@ private fun HeroCard(
             .aspectRatio(16f / 9f)
             .clip(MobileCardShape)
             .background(emptyFill)
+            .border(1.dp, HomeCardFrameBrush, MobileCardShape)
             .combinedClickable(onClick = onPlay, onLongClick = onLongClick),
     ) {
         // Underneath the picture, so a channel with no logo and a film with no backdrop are still a
@@ -381,6 +384,17 @@ private fun HeroCard(
                 },
             )
         }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.horizontalGradient(
+                        0f to Color.Black.copy(alpha = 0.34f),
+                        0.52f to Color.Transparent,
+                        1f to Color.Black.copy(alpha = 0.08f),
+                    ),
+                ),
+        )
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -467,9 +481,9 @@ private fun ContinueRow(
     onMenu: (ContentTarget) -> Unit,
 ) {
     Column {
-        SectionHeader(title = title)
+        HomeSectionHeader(title = title)
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(MobileDimens.GapSmall),
+            horizontalArrangement = Arrangement.spacedBy(MobileDimens.GroupGap),
             contentPadding = PaddingValues(horizontal = MobileDimens.ScreenPaddingH),
         ) {
             items(items.size, key = { items[it].stableKey }) { index ->
@@ -517,7 +531,7 @@ private fun LiveRow(
     onMenu: (ContentTarget) -> Unit,
 ) {
     Column {
-        SectionHeader(
+        HomeSectionHeader(
             title = title,
             actionLabel = stringResource(
                 when (mode) {
@@ -528,7 +542,7 @@ private fun LiveRow(
             onAction = onToggleMode,
         )
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(MobileDimens.GapSmall),
+            horizontalArrangement = Arrangement.spacedBy(MobileDimens.GroupGap),
             contentPadding = PaddingValues(horizontal = MobileDimens.ScreenPaddingH),
         ) {
             items(channels.size, key = { channels[it].id }) { index ->
@@ -559,6 +573,12 @@ private fun ChannelCard(channel: ChannelEntity, onClick: () -> Unit, onLongClick
         modifier = Modifier
             .width(ChannelCardWidth)
             .clip(MobileCardShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.72f))
+            .border(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f),
+                MobileCardShape,
+            )
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(MobileDimens.GapSmall),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -589,6 +609,11 @@ private fun OnNowCard(
             .width(OnNowCardWidth)
             .clip(MobileCardShape)
             .background(MaterialTheme.colorScheme.surfaceContainer)
+            .border(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f),
+                MobileCardShape,
+            )
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(MobileDimens.GapSmall),
         verticalAlignment = Alignment.CenterVertically,
@@ -746,6 +771,13 @@ private val ChannelCardWidth = 96.dp
 private val ChannelLogoSize = 56.dp
 private val OnNowCardWidth = 240.dp
 private val WeatherIconSize = 18.dp
+private val HomeCardFrameBrush = Brush.linearGradient(
+    listOf(
+        Color.White.copy(alpha = 0.18f),
+        Color(0xFF53DFFF).copy(alpha = 0.10f),
+        Color(0xFFA774FF).copy(alpha = 0.14f),
+    ),
+)
 
 /** Wide enough to be the card Home is built around, and no wider. */
 private val HeroCardMaxWidth = 560.dp

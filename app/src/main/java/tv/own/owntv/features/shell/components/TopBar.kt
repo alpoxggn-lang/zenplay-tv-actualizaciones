@@ -4,6 +4,8 @@ import android.text.format.DateFormat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -73,6 +76,24 @@ import java.util.Date
 private val TopBarChipCorner = 14.dp
 private val TopBarPanelCorner = 20.dp
 private const val TopBarFrost = 0.45f
+private val ZenPlayNavCyan = Color(0xFF20B9E8)
+private val ZenPlayNavPurple = Color(0xFF7650E8)
+private val ZenPlayNavFocusedFill = Brush.horizontalGradient(
+    listOf(Color(0xD9338FCA), Color(0xD9653EC7)),
+)
+private val ZenPlayNavSelectedFill = Brush.horizontalGradient(
+    listOf(ZenPlayNavCyan.copy(alpha = 0.17f), ZenPlayNavPurple.copy(alpha = 0.22f)),
+)
+private val ZenPlayNavRim = Brush.horizontalGradient(
+    listOf(ZenPlayNavCyan.copy(alpha = 0.72f), ZenPlayNavPurple.copy(alpha = 0.78f)),
+)
+private val ZenPlayTopBarRim = Brush.horizontalGradient(
+    listOf(
+        ZenPlayNavCyan.copy(alpha = 0.34f),
+        Color.White.copy(alpha = 0.10f),
+        ZenPlayNavPurple.copy(alpha = 0.34f),
+    ),
+)
 
 @Composable
 fun TopBar(
@@ -147,10 +168,17 @@ fun TopBar(
             .clip(RoundedCornerShape(TopBarPanelCorner))
             .glass(
                 GlassSurface.TOPBAR,
-                colors.surfaceContainer.copy(alpha = 0.72f),
+                Color(0xFF141D35).copy(alpha = 0.76f),
                 RoundedCornerShape(TopBarPanelCorner),
                 frostScale = 0.72f,
                 condenseChrome = true,
+            )
+            // A cached one-pixel brand rim gives the grey-blue panel definition without another
+            // backdrop sample or a costly blur layer on entry-level Fire TV hardware.
+            .border(
+                width = 1.dp,
+                brush = ZenPlayTopBarRim,
+                shape = RoundedCornerShape(TopBarPanelCorner),
             )
             .padding(horizontal = 8.dp, vertical = 2.dp)
             .onFocusChanged { if (it.hasFocus) onFocused() }
@@ -213,10 +241,10 @@ fun TopBar(
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .widthIn(
-                        min = if (compact) 96.dp else 124.dp,
-                        max = if (compact) 108.dp else 144.dp,
+                        min = if (compact) 104.dp else 132.dp,
+                        max = if (compact) 116.dp else 156.dp,
                     )
-                    .height(if (compact) 36.dp else 44.dp)
+                    .height(if (compact) 38.dp else 46.dp)
                     .focusProperties { canFocus = false }
                     .testTag("zenplay_header_wordmark"),
             )
@@ -230,10 +258,12 @@ private fun NowPlayingNavButton(onClick: () -> Unit, compact: Boolean) {
     FocusableSurface(
         onClick = onClick,
         shape = RoundedCornerShape(TopBarChipCorner),
-        focusedContainerColor = colors.primaryContainer,
+        focusedContainerColor = Color.Transparent,
         unfocusedContainerColor = Color.Transparent,
+        showFocusBorder = false,
         contentAlignment = Alignment.Center,
     ) { focused ->
+        TopBarFocusChrome(focused = focused, selected = false)
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -241,14 +271,14 @@ private fun NowPlayingNavButton(onClick: () -> Unit, compact: Boolean) {
         ) {
             OwnTVIcon(
                 icon = OwnTVIcon.PLAY,
-                tint = if (focused) colors.onPrimaryContainer else colors.primary,
+                tint = if (focused) Color.White else colors.tertiary,
                 modifier = Modifier.size(18.dp),
             )
             if (!compact) {
                 Text(
                     stringResource(R.string.shell_now_playing),
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (focused) colors.onPrimaryContainer else colors.onSurface,
+                    color = if (focused) Color.White else colors.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -271,10 +301,12 @@ private fun ProfileNavButton(
         onClick = onClick,
         onLongClick = onLongClick,
         shape = RoundedCornerShape(TopBarChipCorner),
-        focusedContainerColor = colors.primaryContainer,
+        focusedContainerColor = Color.Transparent,
         unfocusedContainerColor = Color.Transparent,
+        showFocusBorder = false,
         contentAlignment = Alignment.Center,
     ) { focused ->
+        TopBarFocusChrome(focused = focused, selected = false)
         Row(
             modifier = Modifier.padding(horizontal = if (showName) 9.dp else 5.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -285,7 +317,7 @@ private fun ProfileNavButton(
                 Text(
                     profileName,
                     style = MaterialTheme.typography.labelLarge,
-                    color = if (focused) colors.onPrimaryContainer else colors.onSurface,
+                    color = if (focused) Color.White else colors.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.widthIn(max = 130.dp),
@@ -307,14 +339,16 @@ private fun SearchNavButton(
         selected = selected,
         modifier = modifier.size(44.dp),
         shape = RoundedCornerShape(TopBarChipCorner),
-        focusedContainerColor = colors.onSurface,
+        focusedContainerColor = Color.Transparent,
         unfocusedContainerColor = Color.Transparent,
-        selectedContainerColor = colors.surfaceContainerHigh.copy(alpha = 0.72f),
+        selectedContainerColor = Color.Transparent,
+        showFocusBorder = false,
         contentAlignment = Alignment.Center,
     ) { focused ->
+        TopBarFocusChrome(focused = focused, selected = selected)
         OwnTVIcon(
             icon = OwnTVIcon.SEARCH,
-            tint = if (focused) colors.surface else colors.onSurface,
+            tint = if (focused) Color.White else if (selected) colors.tertiary else colors.onSurface,
             modifier = Modifier.size(21.dp),
         )
     }
@@ -337,16 +371,18 @@ private fun RefreshNavButton(
             .semantics { contentDescription = label }
             .testTag("topbar_refresh_content"),
         shape = RoundedCornerShape(TopBarChipCorner),
-        focusedContainerColor = colors.onSurface,
+        focusedContainerColor = Color.Transparent,
         unfocusedContainerColor = Color.Transparent,
-        selectedContainerColor = colors.primaryContainer.copy(alpha = 0.72f),
+        selectedContainerColor = Color.Transparent,
+        showFocusBorder = false,
         contentAlignment = Alignment.Center,
     ) { focused ->
+        TopBarFocusChrome(focused = focused, selected = refreshing)
         OwnTVIcon(
             icon = OwnTVIcon.REFRESH,
             tint = when {
-                focused -> colors.surface
-                refreshing -> colors.onPrimaryContainer
+                focused -> Color.White
+                refreshing -> colors.tertiary
                 else -> colors.onSurface
             },
             modifier = Modifier.size(21.dp),
@@ -373,12 +409,14 @@ private fun TopDestination(
         selected = selected,
         modifier = modifier,
         shape = RoundedCornerShape(TopBarChipCorner),
-        focusedContainerColor = colors.onSurface,
+        focusedContainerColor = Color.Transparent,
         unfocusedContainerColor = Color.Transparent,
-        selectedContainerColor = colors.surfaceContainerHigh.copy(alpha = 0.76f),
+        selectedContainerColor = Color.Transparent,
+        showFocusBorder = false,
         contentAlignment = Alignment.Center,
     ) { focused ->
-        val foreground = if (focused) colors.surface else colors.onSurface
+        TopBarFocusChrome(focused = focused, selected = selected)
+        val foreground = if (focused) Color.White else colors.onSurface
         Text(
             text = label,
             style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
@@ -389,6 +427,32 @@ private fun TopDestination(
             modifier = Modifier.padding(horizontal = if (compact) 10.dp else 16.dp, vertical = 9.dp),
         )
     }
+}
+
+/**
+ * Lightweight brand state shared by every D-pad destination in the TV header. It is deliberately
+ * drawn inside the already-frosted top bar: one gradient plate and one rim, never another glass or
+ * blur pass. The selected destination stays quietly tinted while the active focus is unmistakable
+ * from sofa distance.
+ */
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.TopBarFocusChrome(
+    focused: Boolean,
+    selected: Boolean,
+) {
+    if (!focused && !selected) return
+    val shape = RoundedCornerShape(TopBarChipCorner)
+    Box(
+        modifier = Modifier
+            .matchParentSize()
+            .clip(shape)
+            .background(if (focused) ZenPlayNavFocusedFill else ZenPlayNavSelectedFill)
+            .border(
+                width = if (focused) 1.5.dp else 1.dp,
+                brush = ZenPlayNavRim,
+                shape = shape,
+            ),
+    )
 }
 
 @Composable

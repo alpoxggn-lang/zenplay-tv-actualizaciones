@@ -744,7 +744,7 @@
     <string name="settings_browsing_last_item">Recordar el último elemento</string>
     <string name="settings_browsing_last_item_description">Cada categoría conserva su propia posición de desplazamiento en lugar de empezar desde arriba. La TV en directo también restaura el último canal que tenía el foco.</string>
     <string name="settings_catchup_player">Reproducir el contenido en diferido con</string>
-    <string name="settings_customize_title">Personalizar categories y elementos</string>
+    <string name="settings_customize_title">Personalizar categorías y elementos</string>
     <string name="settings_customize_pin_locked">Esta pantalla está bloqueada con PIN.</string>
     <string name="settings_customize_wrong_pin">PIN incorrecto — vuelve a intentarlo</string>
     <string name="settings_customize_enter_pin">Introduce el PIN</string>
@@ -752,18 +752,18 @@
     <string name="settings_customize_change_pin">🔒 Cambiar PIN</string>
     <string name="settings_customize_remove_lock">Quitar bloqueo</string>
     <string name="settings_customize_description">Oculta y vuelve a mostrar canales, películas y series, y cambia el nombre o el orden de las categorías de este perfil. Los cambios se conservan al volver a sincronizar.</string>
-    <string name="settings_customize_new_category_behavior">Comportamiento de las categories nuevas</string>
+    <string name="settings_customize_new_category_behavior">Comportamiento de las categorías nuevas</string>
     <string name="settings_customize_hide_new">Ocultar — las categorías nuevas añadidas al volver a sincronizar se ocultan de forma predeterminada</string>
     <string name="settings_customize_show_new">Mostrar — las categorías nuevas añadidas al volver a sincronizar se muestran de forma predeterminada</string>
     <string name="settings_customize_hide">Ocultar</string>
     <string name="settings_customize_show">Mostrar</string>
     <string name="settings_customize_behavior_hide">Ocultar</string>
     <string name="settings_customize_behavior_show">Mostrar</string>
-    <string name="settings_customize_hidden_channels">Channels ocultos</string>
+    <string name="settings_customize_hidden_channels">Canales ocultos</string>
     <string name="settings_customize_hidden_movies">Películas ocultas</string>
     <string name="settings_customize_hidden_series">Series ocultas</string>
     <string name="settings_customize_unhide_description">Vuelve a mostrar un elemento para devolverlo a las listas.</string>
-    <string name="settings_customize_categories">Categories</string>
+    <string name="settings_customize_categories">Categorías</string>
     <string name="settings_customize_empty">Aún no hay categorías en esta sección; añade primero una fuente.</string>
     <string name="settings_customize_range_hide_start">Se ha iniciado la selección de un intervalo. Pulsa Mostrar/Ocultar en el elemento final para seleccionar el intervalo.</string>
     <string name="settings_customize_range_rename_start">Se ha iniciado el intervalo de cambio de nombre. Pulsa Cambiar nombre en el elemento final para seleccionar el intervalo.</string>
@@ -793,7 +793,7 @@
     <string name="settings_customize_filter_all">Todos</string>
     <string name="settings_customize_filter_visible">Visibles</string>
     <string name="settings_customize_filter_hidden">Ocultos</string>
-    <string name="settings_customize_new_categories_button">Categories nuevas: <xliff:g id="label">%1$s</xliff:g> ▾</string>
+    <string name="settings_customize_new_categories_button">Categorías nuevas: <xliff:g id="label">%1$s</xliff:g> ▾</string>
     <string name="settings_customize_rename_hint">Solo para este perfil. Déjalo en blanco para restaurar «<xliff:g id="name">%1$s</xliff:g>».</string>
     <string name="settings_customize_remove_pin_title">¿Quitar el bloqueo con PIN?</string>
     <string name="settings_customize_remove_pin_message">La pantalla Personalizar volverá a abrirse sin solicitar un PIN.</string>
@@ -806,7 +806,7 @@
         <item quantity="many"><xliff:g id="count">%1$d</xliff:g> categorías seleccionadas.</item>
         <item quantity="other"><xliff:g id="count">%1$d</xliff:g> categorías seleccionadas.</item>
     </plurals>
-    <string name="settings_customize_hide_show_title">Ocultar o mostrar categories</string>
+    <string name="settings_customize_hide_show_title">Ocultar o mostrar categorías</string>
     <string name="settings_customize_was">antes «<xliff:g id="name">%1$s</xliff:g>»</string>
     <string name="settings_customize_hidden">Oculta</string>
     <string name="settings_customize_unhide">Volver a mostrar</string>

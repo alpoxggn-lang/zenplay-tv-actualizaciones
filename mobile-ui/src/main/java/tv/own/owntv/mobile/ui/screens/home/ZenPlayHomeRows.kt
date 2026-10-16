@@ -24,7 +24,6 @@ import tv.own.owntv.core.database.entity.SeriesEntity
 import tv.own.owntv.core.home.HomeFeed
 import tv.own.owntv.mobile.R
 import tv.own.owntv.mobile.ui.components.PosterCard
-import tv.own.owntv.mobile.ui.components.SectionHeader
 import tv.own.owntv.mobile.ui.theme.MobileCardShape
 import tv.own.owntv.mobile.ui.theme.MobileDimens
 
@@ -62,9 +61,9 @@ internal fun <T> RecentlyAddedRow(
         MobileDimens.PosterWidthLandscape
     } else MobileDimens.PosterWidthPortrait
     Column {
-        SectionHeader(title = title)
+        HomeSectionHeader(title = title)
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(MobileDimens.GapSmall),
+            horizontalArrangement = Arrangement.spacedBy(MobileDimens.GroupGap),
             contentPadding = PaddingValues(horizontal = MobileDimens.ScreenPaddingH),
         ) {
             items(items, key = itemId) { item ->
@@ -87,7 +86,7 @@ internal fun <T> RecentlyAddedRow(
 @Composable
 internal fun HomeSectionEmpty(title: String, message: String) {
     Column {
-        SectionHeader(title = title)
+        HomeSectionHeader(title = title)
         Column(
             modifier = Modifier.fillMaxWidth()
                 .padding(horizontal = MobileDimens.ScreenPaddingH)

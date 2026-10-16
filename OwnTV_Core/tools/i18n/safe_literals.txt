@@ -913,8 +913,10 @@
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/CategoryDao.kt	DELETE FROM categories WHERE sourceId = :sourceId AND mediaType = :type
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/CategoryDao.kt	DELETE FROM categories WHERE sourceId = :sourceId AND mediaType = :type AND remoteId IN (:remoteIds)
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/CategoryDao.kt	JOIN sources ON sources.id = categories.sourceId
+1	sql	core/src/main/java/tv/own/owntv/core/database/dao/CategoryDao.kt	ORDER BY sortOrder ASC, name ASC
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/CategoryDao.kt	ORDER BY sources.createdAt ASC, categories.sortOrder ASC, categories.name ASC
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/CategoryDao.kt	SELECT * FROM categories WHERE id = :id
+1	sql	core/src/main/java/tv/own/owntv/core/database/dao/CategoryDao.kt	SELECT * FROM categories WHERE sourceId = :sourceId AND mediaType = :type
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/CategoryDao.kt	SELECT * FROM categories WHERE sourceId = :sourceId AND mediaType = :type AND remoteId IN (:remoteIds)
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/CategoryDao.kt	SELECT COUNT(*) FROM categories WHERE sourceId IN (:sourceIds) AND mediaType = :type
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/CategoryDao.kt	SELECT categories.* FROM categories
@@ -1202,6 +1204,7 @@
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	ORDER BY (CASE WHEN o.position IS NULL THEN 1 ELSE 0 END), o.position, m.name
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	ORDER BY (CASE WHEN o.position IS NULL THEN 1 ELSE 0 END), o.position, m.sortOrder, m.name
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	ORDER BY (CASE WHEN o.position IS NULL THEN 1 ELSE 0 END), o.position, m.sortOrder, m.name LIMIT :limit
+2	sql	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	ORDER BY addedAt DESC, rating DESC, sortOrder DESC, id DESC LIMIT :limit
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	ORDER BY addedAt DESC, sortOrder DESC, id DESC
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	ORDER BY sortOrder ASC, name ASC, id ASC
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	ORDER BY sortOrder ASC, name ASC, id ASC LIMIT :limit
@@ -1213,6 +1216,8 @@
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	SELECT * FROM movies WHERE categoryId = :categoryId ORDER BY sortOrder ASC, name ASC
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	SELECT * FROM movies WHERE id = :id
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	SELECT * FROM movies WHERE id IN (:ids)
+1	sql	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	SELECT * FROM movies WHERE sourceId = :sourceId
+1	sql	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	SELECT * FROM movies WHERE sourceId = :sourceId AND categoryId IN (:categoryIds)
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	SELECT * FROM movies WHERE sourceId = :sourceId AND name = :name LIMIT 1
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	SELECT * FROM movies WHERE sourceId = :sourceId AND remoteId = :remoteId LIMIT 1
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	SELECT * FROM movies WHERE sourceId = :sourceId AND remoteId IN (:remoteIds)
@@ -1369,6 +1374,7 @@
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	ORDER BY (CASE WHEN o.position IS NULL THEN 1 ELSE 0 END), o.position, s.name
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	ORDER BY (CASE WHEN o.position IS NULL THEN 1 ELSE 0 END), o.position, s.sortOrder, s.name
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	ORDER BY (CASE WHEN o.position IS NULL THEN 1 ELSE 0 END), o.position, s.sortOrder, s.name LIMIT :limit
+2	sql	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	ORDER BY addedAt DESC, rating DESC, sortOrder DESC, id DESC LIMIT :limit
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	ORDER BY addedAt DESC, sortOrder DESC, id DESC
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	ORDER BY sortOrder ASC, name ASC, id ASC
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	ORDER BY sortOrder ASC, name ASC, id ASC LIMIT :limit
@@ -1386,6 +1392,8 @@
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	SELECT * FROM series WHERE categoryId = :categoryId ORDER BY sortOrder ASC, name ASC
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	SELECT * FROM series WHERE id = :id
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	SELECT * FROM series WHERE id IN (:ids)
+1	sql	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	SELECT * FROM series WHERE sourceId = :sourceId
+1	sql	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	SELECT * FROM series WHERE sourceId = :sourceId AND categoryId IN (:categoryIds)
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	SELECT * FROM series WHERE sourceId = :sourceId AND name = :name LIMIT 1
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	SELECT * FROM series WHERE sourceId = :sourceId AND remoteId = :remoteId LIMIT 1
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	SELECT * FROM series WHERE sourceId = :sourceId AND remoteId IN (:remoteIds)
@@ -2092,9 +2100,9 @@
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/MetadataRepository.kt	MetadataRepository
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/MetadataRepository.kt	episode
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/MetadataRepository.kt	movie
-1	log	core/src/main/java/tv/own/owntv/core/metadata/MetadataRepository.kt	negative-match heal failed: ${it.message}
-1	protocol	core/src/main/java/tv/own/owntv/core/metadata/MetadataRepository.kt	resolveMovie search failed: ${it.message}
-1	protocol	core/src/main/java/tv/own/owntv/core/metadata/MetadataRepository.kt	resolveSeries search failed: ${it.message}
+1	log	core/src/main/java/tv/own/owntv/core/metadata/MetadataRepository.kt	negative-match heal failed: ${failure.message}
+1	log	core/src/main/java/tv/own/owntv/core/metadata/MetadataRepository.kt	resolveMovie search failed: ${failure.message}
+1	log	core/src/main/java/tv/own/owntv/core/metadata/MetadataRepository.kt	resolveSeries search failed: ${failure.message}
 1	json	core/src/main/java/tv/own/owntv/core/metadata/MetadataRepository.kt	season_fetched
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/MetadataRepository.kt	tv
 1	technical	core/src/main/java/tv/own/owntv/core/metadata/OriginalLanguageLookup.kt	MOVIE
@@ -2120,30 +2128,33 @@
 1	technical	core/src/main/java/tv/own/owntv/core/metadata/TitleNormalizer.kt	vostfr|vost|vf|subbed|dubbed|dublado|legendado|castellano|truefrench|hdlight|
 3	empty	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	\0
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	$base,en,null
-4	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	&api_key=
+6	uri	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	&api_key=
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	&first_air_date_year=$year
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	&include_adult=
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	&include_image_language=
-2	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	&language=
+3	uri	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	&language=
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	&year=$year
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	.svg
+1	url	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	/3/
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	/3/movie/
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	/3/search/movie
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	/3/search/tv
 1	url	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	/3/trending/
 2	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	/3/tv/
 1	url	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	/day
+1	url	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	/recommendations?page=1
 3	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	?
 1	url	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	?append_to_response=
 2	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	?append_to_response=credits,external_ids,videos,images
 1	url	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	?page=
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	?query=
 1	log	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	OwnTVSpend
+1	log	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	TMDB $label failed: ${failure.message}
 1	log	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	TMDB Trending parse failed type=$type page=$page
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	Teaser
 1	log	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	TmdbProvider
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	Trailer
-3	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	UTF-8
+5	technical	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	UTF-8
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	YouTube
 1	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	adult
 1	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	air_date
@@ -2168,7 +2179,7 @@
 1	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	iso_639_1
 1	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	key
 1	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	logos
-1	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	movie
+2	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	movie
 6	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	name
 16	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	null
 1	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	official
@@ -2178,6 +2189,7 @@
 4	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	overview
 1	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	popularity
 3	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	poster_path
+1	log	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	recommendations type=$type id=$tmdbId
 2	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	release_date
 2	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	results
 1	log	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	season bundle tv=$tvId seasons=${wanted.firstOrNull()}..${wanted.lastOrNull()}
@@ -2188,7 +2200,7 @@
 1	log	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	spend: $label
 1	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	still_path
 2	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	title
-1	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	tv
+2	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	tv
 1	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	type
 1	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	videos
 3	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	vote_average
@@ -2196,6 +2208,7 @@
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	x-owntv-client
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	x-owntv-key
 1	protocol	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	x-owntv-version
+1	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbTrendingParser.kt	adult
 1	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbTrendingParser.kt	backdrop_path
 1	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbTrendingParser.kt	first_air_date
 1	json	core/src/main/java/tv/own/owntv/core/metadata/TmdbTrendingParser.kt	id
@@ -2601,6 +2614,45 @@
 1	protocol	core/src/main/java/tv/own/owntv/core/profile/ProfileCustomizationAccess.kt	customize:$profileId
 1	protocol	core/src/main/java/tv/own/owntv/core/profile/ProfileManager.kt	profile:${profile.id}
 1	protocol	core/src/main/java/tv/own/owntv/core/profile/ProfileManager.kt	profile:${requirement.profile.id}
+1	technical	core/src/main/java/tv/own/owntv/core/recommendation/CatalogRecommendationRepository.kt	$metadataFingerprint:$type:$tmdbId:$includeAdult:$language
+1	technical	core/src/main/java/tv/own/owntv/core/recommendation/CatalogRecommendationRepository.kt	$name|${year ?: normalized.year ?: "?"}
+1	technical	core/src/main/java/tv/own/owntv/core/recommendation/CatalogRecommendationRepository.kt	${row.sourceId}:${row.remoteId ?: row.name}
+1	technical	core/src/main/java/tv/own/owntv/core/recommendation/CatalogRecommendationRepository.kt	?
+1	technical	core/src/main/java/tv/own/owntv/core/recommendation/CatalogRecommendationRepository.kt	id:$fallbackId
+4	empty	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\0
+1	technical	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	$currentStableKey|$tier
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	[^\\p{L}\\p{N}]+
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:action|accion)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:adventure|aventura)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:animation|animated|animacion|animada|animado|anime)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:biography|biographical|biografia|biografica|biografico)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:comedy|comedia)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:crime|criminal|crimen|policiaca|policiaco)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:documentary|documentaries|documental|documentales)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:drama|dramatic|dramatica|dramatico)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:family|familia|familiar)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:fantasy|fantasia)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:history|historical|historia|historica|historico)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:horror|terror)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:kids|children|childrens|infantil|infantiles|nino|ninos)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:music|musical|musicals|musica|musicales)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:mystery|misterio)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:news|noticias)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:reality|realidad)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:romance|romantic|romantica|romantico)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:science fiction|sci fi|scifi|ciencia ficcion|ficcion cientifica)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:soap|soap opera|telenovela|telenovelas)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:sport|sports|deporte|deportes|deportiva|deportivo)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:talk|talk show|interviews|entrevistas)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:thriller|suspense|suspenso)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:tv movie|television movie|pelicula de tv|pelicula para television)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:war|warfare|guerra|belica|belico)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:western|westerns|oeste)\\b
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\p{M}+
+1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\s+
+1	technical	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	__${stableKey.lowercase(Locale.ROOT)}
+1	technical	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	movie:$sourceId:${remoteId?.takeIf { it.isNotBlank() } ?: titleSignature.ifBlank { id.toString() }}
+1	technical	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	series:$sourceId:${remoteId?.takeIf { it.isNotBlank() } ?: titleSignature.ifBlank { id.toString() }}
 2	technical	core/src/main/java/tv/own/owntv/core/recording/DashManifest.kt	\0
 1	technical	core/src/main/java/tv/own/owntv/core/recording/DashManifest.kt	$it/$ref
 1	technical	core/src/main/java/tv/own/owntv/core/recording/DashManifest.kt	%$format

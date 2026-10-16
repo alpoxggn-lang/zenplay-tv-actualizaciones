@@ -684,34 +684,32 @@ private fun TrendingHeroSection(
     val heroHeight = tvTrendingHeroHeightDp(screenHeightDp).dp
     val compactHero = screenHeightDp < 650
 
+    val heroShape = RoundedCornerShape(24.dp)
     Column(modifier = modifier) {
-        Row(
+        HomeSectionHeader(
+            title = sectionLabel,
+            prominent = true,
             modifier = Modifier.padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                Modifier.width(6.dp).height(34.dp).clip(CircleShape).background(
-                    androidx.compose.ui.graphics.Brush.verticalGradient(
-                        listOf(ZenPlayHeroBlue, ZenPlayHeroPurple),
-                    ),
-                ),
-            )
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = sectionLabel,
-                style = MaterialTheme.typography.headlineSmall,
-                color = ZenPlayHeroSilver,
-                fontWeight = FontWeight.ExtraBold,
-            )
-        }
+        )
         Spacer(Modifier.height(if (compactHero) 10.dp else 14.dp))
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(heroHeight)
-                .clip(RoundedCornerShape(18.dp))
+                .clip(heroShape)
                 .background(colors.surfaceContainerLowest)
+                .border(
+                    width = 1.dp,
+                    brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                        listOf(
+                            ZenPlayHeroBlue.copy(alpha = 0.48f),
+                            Color.White.copy(alpha = 0.10f),
+                            ZenPlayHeroPurple.copy(alpha = 0.42f),
+                        ),
+                    ),
+                    shape = heroShape,
+                )
                 .onFocusChanged {
                     onSectionFocusChanged(it.hasFocus)
                     if (it.hasFocus) onFocus()
@@ -727,6 +725,16 @@ private fun TrendingHeroSection(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
+                // A restrained brand wash ties unrelated provider artwork into ZenPlay's palette.
+                // It is one cached gradient draw, not a blur or a second decoded image.
+                Box(
+                    modifier = Modifier.fillMaxSize().gradientWash(
+                        vertical = false,
+                        0f to ZenPlayHeroBlue.copy(alpha = 0.10f),
+                        0.60f to Color.Transparent,
+                        1f to ZenPlayHeroPurple.copy(alpha = 0.12f),
+                    ),
+                )
                 Box(
                     modifier = Modifier.fillMaxSize().gradientWash(
                         vertical = false,
@@ -1101,12 +1109,9 @@ private fun HeroRowSection(
     val endPadding = (rowWidthDp - Dimens.HeroBaseWidth - Dimens.HomeRowPaddingH).coerceAtLeast(Dimens.HomeRowPaddingH)
 
     Column(modifier = modifier) {
-        Text(
-            text = stringResource(R.string.home_keep_watching).uppercase(),
-            style = MaterialTheme.typography.titleSmall,
-            color = colors.primary,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(start = Dimens.HomeRowPaddingH),
+        HomeSectionHeader(
+            title = stringResource(R.string.home_keep_watching),
+            modifier = Modifier.padding(horizontal = Dimens.HomeRowPaddingH),
         )
         Spacer(Modifier.height(10.dp))
 
@@ -1654,12 +1659,9 @@ private fun ContinueWatchingRow(
     Column(
         modifier = modifier.fillMaxWidth(),
     ) {
-        Text(
-            text = title.uppercase(),
-            style = MaterialTheme.typography.titleSmall,
-            color = OwnTVTheme.colors.primary,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(start = Dimens.HomeRowPaddingH),
+        HomeSectionHeader(
+            title = title,
+            modifier = Modifier.padding(horizontal = Dimens.HomeRowPaddingH),
         )
         Spacer(Modifier.height(10.dp))
         LazyRow(
@@ -1718,12 +1720,9 @@ private fun TrendingPosterRow(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = title.uppercase(),
-            style = MaterialTheme.typography.titleSmall,
-            color = OwnTVTheme.colors.primary,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(start = Dimens.HomeRowPaddingH),
+        HomeSectionHeader(
+            title = title,
+            modifier = Modifier.padding(horizontal = Dimens.HomeRowPaddingH),
         )
         Spacer(Modifier.height(10.dp))
         LazyRow(

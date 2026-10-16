@@ -31,6 +31,13 @@ interface CategoryDao {
     )
     fun observe(sourceIds: List<Long>, type: MediaType): Flow<List<CategoryEntity>>
 
+    /** One-shot counterpart used by bounded detail-page recommendation reads. */
+    @Query(
+        "SELECT * FROM categories WHERE sourceId = :sourceId AND mediaType = :type " +
+            "ORDER BY sortOrder ASC, name ASC",
+    )
+    suspend fun listForSource(sourceId: Long, type: MediaType): List<CategoryEntity>
+
     @Query("SELECT * FROM categories WHERE id = :id")
     suspend fun getById(id: Long): CategoryEntity?
 

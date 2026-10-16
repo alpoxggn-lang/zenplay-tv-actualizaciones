@@ -51,6 +51,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import tv.own.owntv.core.database.entity.EpisodeEntity
@@ -149,12 +150,18 @@ fun DetailScreen(
     LaunchedEffect(movie?.id, show?.id) {
         val m = movie
         val s = show
-        if (m != null) {
-            info = runCatching { zenRepo.movieInfo(m) }.getOrNull()
-            recommended = runCatching { zenRepo.recommendations(m) }.getOrDefault(emptyList())
-        } else if (s != null) {
-            info = runCatching { zenRepo.seriesInfo(s) }.getOrNull()
-            recommended = runCatching { zenRepo.recommendations(s) }.getOrDefault(emptyList())
+        try {
+            if (m != null) {
+                info = zenRepo.movieInfo(m)
+                recommended = zenRepo.recommendations(m, info?.genres.orEmpty())
+            } else if (s != null) {
+                info = zenRepo.seriesInfo(s)
+                recommended = zenRepo.recommendations(s, info?.genres.orEmpty())
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            recommended = emptyList()
         }
     }
     val zenRating = rating?.takeIf { it > 0 } ?: info?.rating?.takeIf { it > 0 }

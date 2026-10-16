@@ -2,10 +2,15 @@ package tv.own.owntv.core.metadata
 
 import org.json.JSONObject
 
-/** Pure parser/merger for TMDB's media-specific `/trending/{type}/day` pages. */
+/** Pure parser/merger for TMDB's media-specific result pages (Trending and Recommendations). */
 internal object TmdbTrendingParser {
 
-    fun parsePage(type: MetadataType, requestedPage: Int, body: String): TrendingFeedPage? = runCatching {
+    fun parsePage(
+        type: MetadataType,
+        requestedPage: Int,
+        body: String,
+        includeAdult: Boolean = true,
+    ): TrendingFeedPage? = runCatching {
         require(type == MetadataType.MOVIE || type == MetadataType.TV)
         require(requestedPage > 0)
         val root = JSONObject(body)
@@ -17,6 +22,7 @@ internal object TmdbTrendingParser {
 
         for (index in 0 until results.length()) {
             val item = results.optJSONObject(index) ?: continue
+            if (!includeAdult && item.optBoolean("adult", false)) continue
             val tmdbId = item.optInt("id", 0)
             if (tmdbId <= 0) continue
 

@@ -167,9 +167,7 @@
 1	core/src/main/java/tv/own/owntv/core/metadata/MetadataRepository.kt	$TYPE_TV:$lang:$tvId:s${season}e$episode
 1	core/src/main/java/tv/own/owntv/core/metadata/OwnTVClientId.kt	\0
 1	core/src/main/java/tv/own/owntv/core/metadata/OwnTVClientId.kt	%02x
-1	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	&api_key=
 1	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	,
-1	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	TMDB $label failed: ${it.message}
 1	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	Trending type=$type page=$page
 1	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	metadata allowance spent, skipping $label
 1	core/src/main/java/tv/own/owntv/core/metadata/TmdbProvider.kt	movie details id=$tmdbId

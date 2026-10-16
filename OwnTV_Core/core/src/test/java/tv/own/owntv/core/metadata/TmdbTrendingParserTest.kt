@@ -124,6 +124,53 @@ class TmdbTrendingParserTest {
         )
     }
 
+    @Test
+    fun recommendations_filterAdultRowsAndPreserveResultOrder() {
+        val body = page(
+            page = 1,
+            totalPages = 1,
+            items = listOf(
+                JSONObject().put("id", 10).put("title", "Safe").put("adult", false),
+                JSONObject().put("id", 11).put("title", "Adult").put("adult", true),
+                JSONObject().put("id", 12).put("title", "Safe two").put("adult", false),
+            ),
+        )
+
+        val parsed = TmdbTrendingParser.parsePage(
+            MetadataType.MOVIE,
+            requestedPage = 1,
+            body = body,
+            includeAdult = false,
+        )
+
+        assertEquals(listOf(10, 12), parsed!!.candidates.map { it.tmdbId })
+        assertEquals(listOf(1, 3), parsed.candidates.map { it.trendingRank })
+    }
+
+    @Test
+    fun recommendationsUrl_supportsMovieTvWorkerAndOwnKey() {
+        assertEquals(
+            "https://worker.example/3/movie/101/recommendations?page=1&language=es-MX",
+            TmdbProvider.buildRecommendationsUrl(
+                baseUrl = "https://worker.example/",
+                apiKey = null,
+                language = "es-MX",
+                type = MetadataType.MOVIE,
+                tmdbId = 101,
+            ),
+        )
+        assertEquals(
+            "https://api.themoviedb.org/3/tv/202/recommendations?page=1&language=pt-BR&api_key=a%2Bb",
+            TmdbProvider.buildRecommendationsUrl(
+                baseUrl = TmdbProvider.TMDB_DIRECT_BASE,
+                apiKey = "a+b",
+                language = "pt-BR",
+                type = MetadataType.TV,
+                tmdbId = 202,
+            ),
+        )
+    }
+
     private fun rankedPage(page: Int, ids: List<Int>): String = page(
         page = page,
         totalPages = 2,

@@ -173,6 +173,23 @@ interface SeriesDao {
     @Query("SELECT * FROM series WHERE categoryId = :categoryId ORDER BY addedAt DESC, sortOrder DESC, id DESC")
     fun pagingByCategoryDateAdded(categoryId: Long): PagingSource<Int, SeriesEntity>
 
+    /** Bounded candidates for a detail page; never materialises the customer's full series catalog. */
+    @Query(
+        "SELECT * FROM series WHERE sourceId = :sourceId AND categoryId IN (:categoryIds) " +
+            "ORDER BY addedAt DESC, rating DESC, sortOrder DESC, id DESC LIMIT :limit",
+    )
+    suspend fun recommendationCandidatesInCategories(
+        sourceId: Long,
+        categoryIds: List<Long>,
+        limit: Int,
+    ): List<SeriesEntity>
+
+    @Query(
+        "SELECT * FROM series WHERE sourceId = :sourceId " +
+            "ORDER BY addedAt DESC, rating DESC, sortOrder DESC, id DESC LIMIT :limit",
+    )
+    suspend fun recommendationCandidatesForSource(sourceId: Long, limit: Int): List<SeriesEntity>
+
     @Query("SELECT * FROM series WHERE sourceId IN (:sourceIds) AND name LIKE '%' || :query || '%' ORDER BY addedAt DESC, sortOrder DESC, id DESC")
     fun searchAllDateAdded(query: String, sourceIds: List<Long>): PagingSource<Int, SeriesEntity>
 

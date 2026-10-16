@@ -41,12 +41,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -58,6 +60,7 @@ import tv.own.owntv.core.home.wrappedTrendingIndex
 import tv.own.owntv.mobile.R
 import tv.own.owntv.mobile.ui.components.MobileIcons
 import tv.own.owntv.mobile.ui.theme.MobileDimens
+import tv.own.owntv.mobile.ui.theme.MobileGroupShape
 
 /** The newest provider additions, with swipe navigation and unobtrusive ten-second rotation. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -105,11 +108,16 @@ fun TrendingHero(
 
     val backdrop = item.backdropUrl?.takeIf { it.isNotBlank() } ?: item.posterUrl
     val surface = MaterialTheme.colorScheme.surfaceContainerLowest
+    val ratingColor = if (surface.luminance() < 0.5f) RatingColor else RatingColorLightSurface
     val configuration = LocalConfiguration.current
-    val wideTablet = configuration.smallestScreenWidthDp >= 600 &&
-        configuration.screenWidthDp > configuration.screenHeightDp
-    val artworkAspect = if (wideTablet) 21f / 9f else 16f / 9f
-    val posterWidth = if (configuration.smallestScreenWidthDp >= 600) 116.dp else PosterWidth
+    val tablet = configuration.smallestScreenWidthDp >= 600
+    val artworkAspect = trendingArtworkAspectRatio(
+        screenWidthDp = configuration.screenWidthDp,
+        screenHeightDp = configuration.screenHeightDp,
+        smallestScreenWidthDp = configuration.smallestScreenWidthDp,
+    )
+    val posterWidth = if (tablet) 124.dp else PosterWidth
+    val contentPadding = if (tablet) MobileDimens.GapLarge else MobileDimens.GapMedium
     val positionLabel = stringResource(
         R.string.zenplay_home_carousel_position,
         activeIndex + 1,
@@ -120,8 +128,16 @@ fun TrendingHero(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = MobileDimens.ScreenPaddingH)
-            .clip(RoundedCornerShape(MobileDimens.GroupCorner))
-            .background(surface)
+            .clip(MobileGroupShape)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        surface,
+                        MaterialTheme.colorScheme.surfaceContainerLow,
+                    ),
+                ),
+            )
+            .border(1.dp, HeroFrameBrush, MobileGroupShape)
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
@@ -159,7 +175,7 @@ fun TrendingHero(
                 Modifier.fillMaxSize().background(
                     Brush.horizontalGradient(
                         0f to surface.copy(alpha = 0.82f),
-                        0.58f to surface.copy(alpha = 0.30f),
+                        0.56f to surface.copy(alpha = 0.24f),
                         1f to Color.Transparent,
                     ),
                 ),
@@ -172,7 +188,7 @@ fun TrendingHero(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(MobileDimens.GapMedium)
+                    .padding(contentPadding)
                     .width(posterWidth)
                     .aspectRatio(2f / 3f)
                     .clip(RoundedCornerShape(MobileDimens.PosterArtCorner))
@@ -199,7 +215,7 @@ fun TrendingHero(
             }
         }
 
-        Column(modifier = Modifier.padding(MobileDimens.GapMedium)) {
+        Column(modifier = Modifier.padding(contentPadding)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier.width(5.dp).height(27.dp).clip(CircleShape).background(
@@ -209,8 +225,8 @@ fun TrendingHero(
                 Spacer(Modifier.width(MobileDimens.GapSmall))
                 Text(
                     text = stringResource(R.string.zenplay_home_trending),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = ZenPlaySilver,
+                    style = if (tablet) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.ExtraBold,
                 )
             }
@@ -229,7 +245,7 @@ fun TrendingHero(
                     Text(
                         text = stringResource(R.string.content_rating, it),
                         style = MaterialTheme.typography.titleSmall,
-                        color = RatingColor,
+                        color = ratingColor,
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
@@ -237,7 +253,7 @@ fun TrendingHero(
             Spacer(Modifier.height(MobileDimens.GapSmall))
             Text(
                 text = item.name,
-                style = MaterialTheme.typography.headlineSmall,
+                style = if (tablet) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,
@@ -319,7 +335,7 @@ fun TrendingHero(
             ) {
                 Box(
                     modifier = Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(ProgressHeight)
-                        .background(MaterialTheme.colorScheme.primary),
+                        .background(HeroAccentBrush),
                 )
             }
         }
@@ -333,16 +349,30 @@ private fun TrendingActionButton(
     onClick: () -> Unit,
     primary: Boolean = false,
 ) {
-    val container =
-        if (primary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
-    val content =
-        if (primary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    val container = if (primary) {
+        HeroAccentBrush
+    } else {
+        Brush.horizontalGradient(
+            listOf(
+                MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.92f),
+                MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.82f),
+            ),
+        )
+    }
+    val content = if (primary) HeroActionInk else MaterialTheme.colorScheme.onSurface
+    val outline = if (primary) {
+        Color.White.copy(alpha = 0.22f)
+    } else {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
+    }
+    val shape = RoundedCornerShape(11.dp)
     Row(
         modifier = Modifier
             .defaultMinSize(minHeight = MobileDimens.TouchTarget)
-            .clip(RoundedCornerShape(9.dp))
+            .clip(shape)
             .background(container)
-            .clickable(onClick = onClick)
+            .border(1.dp, outline, shape)
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = MobileDimens.GapMedium),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MobileDimens.GapSmall),
@@ -358,6 +388,27 @@ private const val SWIPE_SLOP_PX = 60f
 private val PosterWidth = 96.dp
 private val ProgressHeight = 3.dp
 private val RatingColor = Color(0xFFFFE071)
+private val RatingColorLightSurface = Color(0xFF725600)
 private val ZenPlaySilver = Color(0xFFE8EDF7)
 private val ZenPlayBlue = Color(0xFF62AAFF)
 private val ZenPlayPurple = Color(0xFFB77CFF)
+private val HeroActionInk = Color(0xFF071326)
+private val HeroAccentBrush = Brush.horizontalGradient(listOf(ZenPlayBlue, ZenPlayPurple))
+private val HeroFrameBrush = Brush.linearGradient(
+    listOf(
+        ZenPlaySilver.copy(alpha = 0.22f),
+        ZenPlayBlue.copy(alpha = 0.12f),
+        ZenPlayPurple.copy(alpha = 0.18f),
+    ),
+)
+
+/** Pure layout rule kept testable across phone rotation, split-screen and tablet windows. */
+internal fun trendingArtworkAspectRatio(
+    screenWidthDp: Int,
+    screenHeightDp: Int,
+    smallestScreenWidthDp: Int,
+): Float = when {
+    smallestScreenWidthDp >= 600 && screenWidthDp > screenHeightDp -> 21f / 9f
+    screenWidthDp > screenHeightDp -> 18f / 8f
+    else -> 16f / 10f
+}

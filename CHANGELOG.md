@@ -7,6 +7,18 @@
 > Issue numbers that are part of a title are fine; explanatory parentheticals are not. The detail —
 > what, why, files and verification — belongs in the commit message, never here.
 
+## v2.2.9 — 2026-10-15
+
+### ✨ Funciones nuevas
+- **Recomendaciones por género y categoría en películas y series**
+- **Inicio cinematográfico ZenPlay adaptado a TV, celular y tableta**
+- **Navegación glass renovada con la identidad visual de ZenPlay**
+
+### 🐛 Correcciones
+- **Te puede gustar deja de repetir la misma selección en todos los títulos**
+- **Las recomendaciones respetan contenido oculto, perfiles infantiles y fuentes asignadas**
+- **El selector móvil muestra los nombres personalizados de las categorías**
+
 ## v2.2.8 — 2026-10-15
 
 ### ✨ Funciones nuevas

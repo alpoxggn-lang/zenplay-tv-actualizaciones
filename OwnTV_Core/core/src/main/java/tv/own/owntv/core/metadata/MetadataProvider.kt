@@ -210,6 +210,17 @@ interface MetadataProvider {
     suspend fun trendingPage(type: MetadataType, page: Int): TrendingFeedPage?
 
     /**
+     * Titles TMDB considers related to one resolved movie/show. The result is deliberately the same
+     * slim shape as Trending so it can be matched back to this customer's *local, playable* catalog.
+     * Null means transport/auth/parsing failure; an empty list is a successful response with no rows.
+     */
+    suspend fun recommendations(
+        type: MetadataType,
+        tmdbId: Int,
+        includeAdult: Boolean = false,
+    ): List<TrendingCandidate>? = null
+
+    /**
      * Search movies by cleaned [title] (+ optional [year]). Best matches first.
      * **Empty list = TMDB answered "no results"** (callers may negative-cache);
      * **null = transport failure** (network down, rate-limited, proxy error) — callers must NOT

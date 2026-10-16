@@ -105,12 +105,9 @@ private fun ChannelCardsRow(
     Column(
         modifier = modifier.fillMaxWidth(),
     ) {
-        Text(
-            text = title.uppercase(),
-            style = MaterialTheme.typography.titleSmall,
-            color = OwnTVTheme.colors.primary,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(start = Dimens.HomeRowPaddingH),
+        HomeSectionHeader(
+            title = title,
+            modifier = Modifier.padding(horizontal = Dimens.HomeRowPaddingH),
         )
         Spacer(Modifier.height(10.dp))
         LazyRow(
@@ -261,31 +258,23 @@ private fun OnNowRow(
                 )
                 .padding(10.dp),
         ) {
-            Row(
+            HomeSectionHeader(
+                title = stringResource(R.string.home_on_now_title, title),
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.home_on_now_title, title.uppercase()),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = colors.primary,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = when {
-                        focused && activeRowIndex >= 0 -> stringResource(R.string.home_ok_to_watch)
-                        focused -> stringResource(R.string.home_ok_to_browse)
-                        else -> pluralStringResource(R.plurals.home_channel_count, rows.size, rows.size)
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = colors.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+                trailing = {
+                    Text(
+                        text = when {
+                            focused && activeRowIndex >= 0 -> stringResource(R.string.home_ok_to_watch)
+                            focused -> stringResource(R.string.home_ok_to_browse)
+                            else -> pluralStringResource(R.plurals.home_channel_count, rows.size, rows.size)
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+            )
             Spacer(Modifier.height(10.dp))
             Column(
                 modifier = Modifier.fillMaxWidth(),

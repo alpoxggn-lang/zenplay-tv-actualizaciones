@@ -734,7 +734,7 @@ class LiveTuner(
         return categories
             .filter { CustomizeKeys.category(it) !in cust.hiddenCategories }
             .filterNot { kids && AdultCategoryClassifier.isAdult(it.name) }
-            .map { cat -> cat.id to (cust.itemNames[CustomizeKeys.category(cat)] ?: cat.name) }
+            .map { cat -> cat.id to (cust.categoryNames[CustomizeKeys.category(cat)] ?: cat.name) }
     }
 
     /** One category's channels, with the same hide/rename treatment the rest of the app applies. */

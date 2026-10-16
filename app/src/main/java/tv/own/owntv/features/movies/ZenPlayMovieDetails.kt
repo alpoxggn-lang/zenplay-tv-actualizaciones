@@ -51,12 +51,12 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.koin.compose.koinInject
 import tv.own.owntv.R
-import tv.own.owntv.core.database.dao.MovieDao
 import tv.own.owntv.core.database.dao.SourceDao
 import tv.own.owntv.core.database.entity.MetadataCacheEntity
 import tv.own.owntv.core.database.entity.MovieEntity
@@ -68,6 +68,7 @@ import tv.own.owntv.ui.components.FocusableSurface
 import tv.own.owntv.ui.components.OwnTVIcon
 import tv.own.owntv.ui.components.trapAllFocusExit
 import tv.own.owntv.ui.theme.OwnTVTheme
+import tv.own.owntv.zenplay.ZenPlayDetailsRepo
 import java.net.URLEncoder
 
 /**
@@ -91,17 +92,17 @@ data class ZenPlayVodInfo(
 /** Fetch `get_vod_info` for [movie] from its own Xtream panel; null for other source types or on error. */
 private suspend fun loadVodInfo(movie: MovieEntity, sourceDao: SourceDao, http: HttpClient): ZenPlayVodInfo? =
     withContext(Dispatchers.IO) {
-        runCatching {
-            val remoteId = movie.remoteId?.takeIf { it.isNotBlank() } ?: return@runCatching null
-            val source = sourceDao.getById(movie.sourceId) ?: return@runCatching null
-            if (source.type != SourceType.XTREAM) return@runCatching null
+        try {
+            val remoteId = movie.remoteId?.takeIf { it.isNotBlank() } ?: return@withContext null
+            val source = sourceDao.getById(movie.sourceId) ?: return@withContext null
+            if (source.type != SourceType.XTREAM) return@withContext null
             val u = URLEncoder.encode(source.username.orEmpty(), "UTF-8")
             val p = URLEncoder.encode(source.password.orEmpty(), "UTF-8")
             val url = source.url.trimEnd('/') +
                 "/player_api.php?username=$u&password=$p&action=get_vod_info&vod_id=" +
                 URLEncoder.encode(remoteId, "UTF-8")
             val info = JSONObject(http.getText(url, source.userAgent)).optJSONObject("info")
-                ?: return@runCatching null
+                ?: return@withContext null
             fun str(vararg keys: String): String? = keys.firstNotNullOfOrNull { k ->
                 info.optString(k, "").trim().takeIf { it.isNotEmpty() && it != "null" }
             }
@@ -122,7 +123,11 @@ private suspend fun loadVodInfo(movie: MovieEntity, sourceDao: SourceDao, http: 
                 backdrop = backdrop,
                 poster = str("movie_image", "cover_big")?.takeIf { it.startsWith("http") },
             )
-        }.getOrNull()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
     }
 
 /**
@@ -150,10 +155,19 @@ fun ZenPlayMovieDetails(
     val sourceDao = koinInject<SourceDao>()
     val http = koinInject<HttpClient>()
     var info by remember(movie.id) { mutableStateOf<ZenPlayVodInfo?>(null) }
-    LaunchedEffect(movie.id) { info = loadVodInfo(movie, sourceDao, http) }
-    val movieDao = koinInject<MovieDao>()
+    val detailsRepo = remember { ZenPlayDetailsRepo.shared }
     var similar by remember(movie.id) { mutableStateOf<List<MovieEntity>>(emptyList()) }
-    LaunchedEffect(movie.id) { similar = similarMovies(movie, movieDao) }
+    LaunchedEffect(movie.id, meta?.genresJson) {
+        info = loadVodInfo(movie, sourceDao, http)
+        val recommendationGenres = info?.genres?.takeIf { it.isNotEmpty() } ?: jsonNames(meta?.genresJson)
+        similar = try {
+            detailsRepo.recommendationMovies(movie, recommendationGenres)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
     BackHandler { onBack() }
 
     val playFocus = remember { FocusRequester() }
@@ -522,38 +536,6 @@ internal fun qualityTag(name: String): String? {
         else -> null
     }
 }
-
-/** ZenPlay: five films like [movie] from its own category — best rated first, then closest in year. */
-private suspend fun similarMovies(movie: MovieEntity, dao: MovieDao): List<MovieEntity> =
-    withContext(Dispatchers.IO) {
-        val category = movie.categoryId ?: return@withContext emptyList()
-        val source = dao.pagingByCategoryDateAdded(category)
-        val page = try {
-            when (val r = source.load(androidx.paging.PagingSource.LoadParams.Refresh(null, 60, false))) {
-                is androidx.paging.PagingSource.LoadResult.Page -> r.data
-                else -> emptyList()
-            }
-        } catch (c: kotlinx.coroutines.CancellationException) {
-            throw c
-        } catch (_: Exception) {
-            emptyList()
-        } finally {
-            source.invalidate()
-        }
-        fun key(n: String) = n.lowercase().replace(Regex("\\(.*?\\)|\\[.*?]"), "")
-            .replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
-        val ownYear = movie.year ?: movie.parsedYear
-        val seen = hashSetOf(key(movie.name))
-        page.asSequence()
-            .filter { it.id != movie.id }
-            .sortedWith(
-                compareByDescending<MovieEntity> { it.rating ?: 0.0 }
-                    .thenBy { m -> val y = m.year ?: m.parsedYear; if (ownYear != null && y != null) kotlin.math.abs(ownYear - y) else 99 },
-            )
-            .filter { seen.add(key(it.name)) }
-            .take(5)
-            .toList()
-    }
 
 @Composable
 internal fun ZenSimilarPoster(movie: MovieEntity, onClick: () -> Unit) {

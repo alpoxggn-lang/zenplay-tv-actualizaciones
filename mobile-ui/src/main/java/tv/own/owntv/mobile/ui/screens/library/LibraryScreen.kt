@@ -355,7 +355,15 @@ fun LibraryScreen(
             list = listPane,
             detail = {
                 openItem?.let { id ->
-                    DetailScreen(tab = tab, itemId = id, onPlay = onPlay)
+                    DetailScreen(
+                        tab = tab,
+                        itemId = id,
+                        onPlay = onPlay,
+                        onOpenItem = { recommendedTab, recommendedId ->
+                            if (recommendedTab == tab) tappedItem = recommendedId
+                            else onOpenItem(recommendedTab, recommendedId)
+                        },
+                    )
                 }
             },
             modifier = modifier,

@@ -1,20 +1,18 @@
 package tv.own.owntv.mobile.zenplay
 
 import androidx.compose.runtime.Immutable
-import androidx.paging.PagingSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import tv.own.owntv.core.database.dao.MovieDao
-import tv.own.owntv.core.database.dao.SeriesDao
 import tv.own.owntv.core.database.dao.SourceDao
 import tv.own.owntv.core.database.entity.MovieEntity
 import tv.own.owntv.core.database.entity.SeriesEntity
 import tv.own.owntv.core.database.entity.SourceEntity
 import tv.own.owntv.core.model.SourceType
 import tv.own.owntv.core.network.HttpClient
+import tv.own.owntv.core.recommendation.CatalogRecommendationRepository
 import java.net.URLEncoder
 
 /** What the provider's panel knows about a film or a show. Every field is optional. */
@@ -52,9 +50,8 @@ data class ZenPlayRecommendation(
  */
 class ZenPlayDetailsRepo(
     private val sourceDao: SourceDao,
-    private val movieDao: MovieDao,
-    private val seriesDao: SeriesDao,
     private val http: HttpClient,
+    private val catalogRecommendations: CatalogRecommendationRepository,
 ) {
     suspend fun movieInfo(movie: MovieEntity): ZenPlayProviderInfo? =
         providerInfo(movie.sourceId, movie.remoteId, "get_vod_info", "vod_id")
@@ -64,13 +61,17 @@ class ZenPlayDetailsRepo(
 
     private suspend fun providerInfo(sourceId: Long, remoteId: String?, action: String, idParam: String): ZenPlayProviderInfo? =
         withContext(Dispatchers.IO) {
-            runCatching {
-                val id = remoteId?.takeIf { it.isNotBlank() } ?: return@runCatching null
-                val source = sourceDao.getById(sourceId) ?: return@runCatching null
-                if (source.type != SourceType.XTREAM) return@runCatching null
+            try {
+                val id = remoteId?.takeIf { it.isNotBlank() } ?: return@withContext null
+                val source = sourceDao.getById(sourceId) ?: return@withContext null
+                if (source.type != SourceType.XTREAM) return@withContext null
                 val root = JSONObject(http.getText(apiUrl(source, action, idParam, id), source.userAgent))
                 parse(root)
-            }.getOrNull()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
         }
 
     private fun apiUrl(source: SourceEntity, action: String, idParam: String, id: String): String {
@@ -119,61 +120,17 @@ class ZenPlayDetailsRepo(
         )
     }
 
-    suspend fun recommendations(movie: MovieEntity): List<ZenPlayRecommendation> = withContext(Dispatchers.IO) {
-        val category = movie.categoryId ?: return@withContext emptyList()
-        val candidates = readPage { movieDao.pagingByCategoryDateAdded(category) }
-        pick(candidates.filter { it.id != movie.id }, movie.name, movie.year ?: movie.parsedYear, { it.name }, { it.year ?: it.parsedYear }, { it.rating })
+    suspend fun recommendations(
+        movie: MovieEntity,
+        genres: Collection<String> = emptyList(),
+    ): List<ZenPlayRecommendation> =
+        catalogRecommendations.movies(movie, genres)
             .map { ZenPlayRecommendation(it.id, false, it.name, it.posterUrl, it.rating) }
-    }
 
-    suspend fun recommendations(show: SeriesEntity): List<ZenPlayRecommendation> = withContext(Dispatchers.IO) {
-        val category = show.categoryId ?: return@withContext emptyList()
-        val candidates = readPage { seriesDao.pagingByCategoryDateAdded(category) }
-        pick(candidates.filter { it.id != show.id }, show.name, show.year ?: show.parsedYear, { it.name }, { it.year ?: it.parsedYear }, { it.rating })
+    suspend fun recommendations(
+        show: SeriesEntity,
+        genres: Collection<String> = emptyList(),
+    ): List<ZenPlayRecommendation> =
+        catalogRecommendations.series(show, genres)
             .map { ZenPlayRecommendation(it.id, true, it.name, it.posterUrl, it.rating) }
-    }
-
-    /** Best rated first, then closest in year; one entry per title and never the title itself. */
-    private fun <T> pick(
-        items: List<T>,
-        ownName: String,
-        ownYear: Int?,
-        name: (T) -> String,
-        year: (T) -> Int?,
-        rating: (T) -> Double?,
-    ): List<T> {
-        val own = titleKey(ownName)
-        val seen = HashSet<String>().apply { add(own) }
-        return items
-            .sortedWith(
-                compareByDescending<T> { rating(it) ?: 0.0 }
-                    .thenBy { if (ownYear != null && year(it) != null) kotlin.math.abs(ownYear - year(it)!!) else 99 },
-            )
-            .filter { seen.add(titleKey(name(it))) }
-            .take(LIMIT)
-    }
-
-    private fun titleKey(name: String): String =
-        name.lowercase().replace(Regex("\\(.*?\\)|\\[.*?]"), "").replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
-
-    private suspend fun <T : Any> readPage(factory: () -> PagingSource<Int, T>): List<T> {
-        val source = factory()
-        return try {
-            when (val page = source.load(PagingSource.LoadParams.Refresh(null, SCAN, false))) {
-                is PagingSource.LoadResult.Page -> page.data
-                else -> emptyList()
-            }
-        } catch (c: CancellationException) {
-            throw c
-        } catch (_: Exception) {
-            emptyList()
-        } finally {
-            source.invalidate()
-        }
-    }
-
-    private companion object {
-        const val LIMIT = 5
-        const val SCAN = 60
-    }
 }

@@ -1,6 +1,7 @@
 package tv.own.owntv.core.metadata
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import org.json.JSONObject
 import tv.own.owntv.core.CoreBuildInfo
 import tv.own.owntv.core.network.HttpClient
@@ -63,11 +64,18 @@ class TmdbProvider(
     private suspend fun defaultWorkerHeaders(): Map<String, String> {
         val key = CoreBuildInfo.edgeKey
         if (key.isBlank()) return emptyMap()
+        val installId = try {
+            clientId.get()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            ""
+        }
         return mapOf(
             "x-owntv-key" to key,
             // The default Worker validates the key per app version, so it needs the version alongside it.
             "x-owntv-version" to CoreBuildInfo.versionName,
-            "x-owntv-client" to runCatching { clientId.get() }.getOrDefault(""),
+            "x-owntv-client" to installId,
         )
     }
 
@@ -89,9 +97,14 @@ class TmdbProvider(
         // is the single choke point every metered call passes through, so one line here answers "what
         // actually consumed my allowance". Compiled out of shipping builds.
         if (CoreBuildInfo.devTools && ep.metered) Log.i(SPEND_TAG, "spend: $label")
-        return runCatching { http.getText(url, headers = ep.headers) }
-            .onFailure { Log.w(TAG, "TMDB $label failed: ${it.message}") }
-            .getOrNull()
+        return try {
+            http.getText(url, headers = ep.headers)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            Log.w(TAG, "TMDB $label failed: ${failure.message}")
+            null
+        }
     }
 
     /** `&language=<code>`, or "" when no language is configured (TMDB falls back to en-US). */
@@ -117,6 +130,25 @@ class TmdbProvider(
         return TmdbTrendingParser.parsePage(type, page, body).also {
             if (it == null) Log.w(TAG, "TMDB Trending parse failed type=$type page=$page")
         }
+    }
+
+    override suspend fun recommendations(
+        type: MetadataType,
+        tmdbId: Int,
+        includeAdult: Boolean,
+    ): List<TrendingCandidate>? {
+        require(type == MetadataType.MOVIE || type == MetadataType.TV)
+        if (tmdbId <= 0) return emptyList()
+        val endpoint = resolveEndpoint()
+        val url = buildRecommendationsUrl(
+            baseUrl = endpoint.baseUrl,
+            apiKey = endpoint.apiKey,
+            language = endpoint.language,
+            type = type,
+            tmdbId = tmdbId,
+        )
+        val body = fetch(endpoint, url, "recommendations type=$type id=$tmdbId") ?: return null
+        return TmdbTrendingParser.parsePage(type, requestedPage = 1, body, includeAdult)?.candidates
     }
 
     override suspend fun searchMovie(title: String, year: Int?, includeAdult: Boolean): List<MetadataSearchResult>? =
@@ -419,6 +451,25 @@ class TmdbProvider(
             return buildString {
                 append(baseUrl.trimEnd('/')).append("/3/trending/").append(mediaPath).append("/day")
                 append("?page=").append(page)
+                if (language.isNotBlank()) append("&language=").append(URLEncoder.encode(language, "UTF-8"))
+                apiKey?.takeIf { it.isNotBlank() }
+                    ?.let { append("&api_key=").append(URLEncoder.encode(it, "UTF-8")) }
+            }
+        }
+
+        internal fun buildRecommendationsUrl(
+            baseUrl: String,
+            apiKey: String?,
+            language: String,
+            type: MetadataType,
+            tmdbId: Int,
+        ): String {
+            require(type == MetadataType.MOVIE || type == MetadataType.TV)
+            require(tmdbId > 0)
+            val mediaPath = if (type == MetadataType.TV) "tv" else "movie"
+            return buildString {
+                append(baseUrl.trimEnd('/')).append("/3/").append(mediaPath).append('/').append(tmdbId)
+                append("/recommendations?page=1")
                 if (language.isNotBlank()) append("&language=").append(URLEncoder.encode(language, "UTF-8"))
                 apiKey?.takeIf { it.isNotBlank() }
                     ?.let { append("&api_key=").append(URLEncoder.encode(it, "UTF-8")) }

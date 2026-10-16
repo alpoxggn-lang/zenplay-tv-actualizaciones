@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import tv.own.owntv.R
 import tv.own.owntv.core.database.entity.EpisodeEntity
@@ -104,8 +105,14 @@ internal fun ZenPlaySeriesDetails(
     var info by remember(series.id) { mutableStateOf<ZenPlayProviderInfo?>(null) }
     var similar by remember(series.id) { mutableStateOf<List<ZenPlayRecommendation>>(emptyList()) }
     LaunchedEffect(series.id) {
-        info = runCatching { repo.seriesInfo(series) }.getOrNull()
-        similar = runCatching { repo.recommendations(series) }.getOrDefault(emptyList())
+        try {
+            info = repo.seriesInfo(series)
+            similar = repo.recommendations(series, info?.genres.orEmpty())
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            similar = emptyList()
+        }
     }
 
     BackHandler { vm.closeSeries() }

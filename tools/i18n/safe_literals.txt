@@ -1193,8 +1193,11 @@
 1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	vod_id
 1	json	app/src/main/java/tv/own/owntv/zenplay/ZenPlayDetailsRepo.kt	year
 1	preference-key	app/src/main/java/tv/own/owntv/zenplay/ZenPlayEpg.kt	zenplay_epg
+1	empty	app/src/main/java/tv/own/owntv/zenplay/ZenPlayExpiryMonitor.kt	\0
 1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenPlayExpiryMonitor.kt	$expiryMs:$days
-1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenPlayExpiryMonitor.kt	${key.profileId}:${key.activeSourceId}:${key.sources.map { it.first }.sorted()}
+1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenPlayExpiryMonitor.kt	${key.profileId}:${key.activeSourceId}:$activeBindings
+1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenPlayExpiryMonitor.kt	%02x
+1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenPlayExpiryMonitor.kt	SHA-256
 1	preference-key	app/src/main/java/tv/own/owntv/zenplay/ZenPlayExpiryMonitor.kt	in_app_token
 1	preference-key	app/src/main/java/tv/own/owntv/zenplay/ZenPlayExpiryMonitor.kt	system_token
 1	protocol	app/src/main/java/tv/own/owntv/zenplay/ZenPlayExpiryMonitor.kt	zenplay-subscription-expiry-now

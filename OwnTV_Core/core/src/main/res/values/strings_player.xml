@@ -257,6 +257,13 @@
     <string name="player_reason_audio">Audio output error \u2014 the device couldn\'t play this audio format</string>
     <!-- Translators: Fallback label for an audio track when it has no name or language. "number" is the track index. -->
     <string name="player_audio_track_number">Audio <xliff:g id="number">%1$d</xliff:g></string>
+    <string name="player_track_role_commentary">Commentary</string>
+    <string name="player_track_role_audio_description">Audio description</string>
+    <string name="player_track_role_closed_captions">Closed captions</string>
+    <string name="player_track_role_dubbed">Dubbed</string>
+    <string name="player_track_role_sign_language">Sign language</string>
+    <string name="player_track_role_forced">Forced</string>
+    <string name="player_track_channels"><xliff:g id="number">%1$d</xliff:g> channels</string>
     <!-- Translators: Fallback label for a subtitle track when it has no name or language. "number" is the track index. -->
     <string name="player_subtitle_track_number">Subtitle <xliff:g id="number">%1$d</xliff:g></string>
     <!-- Translators: Visible middle-dot separator between inline metadata segments in the player HUD, stream info overlay, launcher metadata, and subtitle track labels. -->

@@ -63,7 +63,7 @@ private val SPEEDS = listOf(0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0)
  *  reproduced there exactly. */
 private const val AV_SYNC_STEP_MS = 25
 
-/** One compact D-pad menu replaces the separate audio/subtitle/speed/aspect/quality HUD glyphs. */
+/** Compact D-pad menu for choices that do not have their own always-visible HUD action. */
 @Composable
 internal fun PlaybackSettingsDialog(
     hasQuality: Boolean,
@@ -89,8 +89,6 @@ internal fun PlaybackSettingsDialog(
             }
             add("${stringResource(R.string.player_tool_quality)} · $value" to HudDialog.QUALITY)
         }
-        add(stringResource(R.string.player_audio_track) to HudDialog.AUDIO)
-        add(stringResource(R.string.player_subtitles) to HudDialog.SUBS)
         add(stringResource(R.string.player_tool_speed) to HudDialog.SPEED)
         add(stringResource(R.string.player_tool_aspect) to HudDialog.ZOOM)
     }

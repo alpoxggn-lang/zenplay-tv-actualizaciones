@@ -60,8 +60,18 @@ data class TrackOption(
     val image: Boolean = false,
     val codec: String? = null,
     val lang: String? = null,
+    /** Declared input channels for audio (not the device's output/downmix). */
+    val channelCount: Int? = null,
+    /** Media3 semantic role flags, also populated from mpv accessibility metadata when available. */
+    val roleFlags: Int = 0,
+    /** Media3 default/forced flags, mirrored from mpv for the direct path. */
+    val selectionFlags: Int = 0,
     val typeIndex: Int = -1,
     val labelKind: TrackLabelKind = TrackLabelKind.AUDIO,
+    /** Added after the complete sibling list is known; asks the presenter to include codec/layout. */
+    val showTechnicalDetails: Boolean = false,
+    /** True only when language/label/role/codec/layout still cannot distinguish sibling tracks. */
+    val showOrdinal: Boolean = false,
 )
 
 /** Image-based subtitle codecs. They carry no text, so the app-drawn (direct render) overlay can't show
@@ -4469,7 +4479,14 @@ class OwnTVPlayer(
             val title = m.getPropertyString("track-list/$i/title")
             val lang = m.getPropertyString("track-list/$i/lang")
             val codec = m.getPropertyString("track-list/$i/codec")
+            val channelCount = m.getPropertyInt("track-list/$i/demux-channel-count")
             val selected = m.getPropertyBoolean("track-list/$i/selected") ?: false
+            val roleFlags =
+                (if (m.getPropertyBoolean("track-list/$i/visual-impaired") == true) androidx.media3.common.C.ROLE_FLAG_DESCRIBES_VIDEO else 0) or
+                    (if (m.getPropertyBoolean("track-list/$i/hearing-impaired") == true) androidx.media3.common.C.ROLE_FLAG_TRANSCRIBES_DIALOG else 0)
+            val selectionFlags =
+                (if (m.getPropertyBoolean("track-list/$i/default") == true) androidx.media3.common.C.SELECTION_FLAG_DEFAULT else 0) or
+                    (if (m.getPropertyBoolean("track-list/$i/forced") == true) androidx.media3.common.C.SELECTION_FLAG_FORCED else 0)
             // Image-based subtitle (PGS/VOBSUB/DVB): mpv's direct path can't draw it — on VOD, selecting
             // it hands playback to ExoPlayer. typeIndex lines the pick up with ExoPlayer's track order.
             val image = type == "sub" && codec?.lowercase() in BITMAP_SUB_CODECS
@@ -4481,13 +4498,16 @@ class OwnTVPlayer(
                     image = image,
                     codec = codec,
                     lang = lang,
+                    channelCount = channelCount,
+                    roleFlags = roleFlags,
+                    selectionFlags = selectionFlags,
                     typeIndex = typeIndex,
                     labelKind = if (type == "sub") TrackLabelKind.SUBTITLE else TrackLabelKind.AUDIO,
                 ),
             )
             typeIndex++
         }
-        return out
+        return out.withTrackDisambiguation()
     }
 
     /** The user picked an audio track in the HUD — applied, and remembered by language (v44). */

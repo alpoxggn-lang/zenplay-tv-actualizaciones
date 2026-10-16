@@ -20,10 +20,26 @@ class ZenPlayTouchPlayerContractTest {
         assertTrue(toolbar.contains("MobileIcons.PictureInPictureAlt"))
         assertTrue(toolbar.contains("player_enter_picture_in_picture"))
         assertTrue(toolbar.contains("MobileIcons.Audiotrack"))
-        assertTrue(toolbar.contains("MobileIcons.FormatListBulleted"))
+        assertTrue(toolbar.contains("MobileIcons.Subtitles"))
+        assertTrue(controls.contains("onOpenSheet(PlayerSheet.SUBTITLES)"))
+        assertFalse(toolbar.contains("MobileIcons.FormatListBulleted"))
+        assertFalse(toolbar.contains("content_episodes"))
         listOf("RECORD", "SLEEP_TIMER", "INFO", "BRIGHTNESS", "MINI_PLAYER").forEach {
             assertFalse("unexpected touch toolbar action $it", toolbar.contains(it))
         }
+    }
+
+    @Test
+    fun `toolbar keeps even spacing when controls fit and scrolls when they do not`() {
+        val controls = source("PlayerControls.kt")
+        val toolbar = controls.substringAfter("private fun ToolBar(").substringBefore("private fun CtrlButton(")
+
+        assertTrue(toolbar.contains("BoxWithConstraints(Modifier.fillMaxWidth())"))
+        assertTrue(toolbar.contains("val controlCount = 4 +"))
+        assertTrue(toolbar.contains("val needsScroll = maxWidth < 48.dp * controlCount"))
+        assertTrue(toolbar.contains("Modifier.horizontalScroll(scrollState)"))
+        assertTrue(toolbar.contains("Arrangement.SpaceEvenly"))
+        assertTrue(toolbar.contains("Arrangement.spacedBy(MobileDimens.GapTiny)"))
     }
 
     @Test
@@ -40,6 +56,11 @@ class ZenPlayTouchPlayerContractTest {
         assertTrue(screen.contains("film != null && canToggleVodEngine"))
         assertTrue(screen.contains("player_switch_exo"))
         assertTrue(screen.contains("player_switch_mpv"))
+
+        val settings = sheets.substringAfter("private fun PlaybackSettingsSheet(")
+            .substringBefore("private fun qualityLabel(")
+        assertFalse(settings.contains("PlayerSheet.AUDIO"))
+        assertFalse(settings.contains("PlayerSheet.SUBTITLES"))
     }
 
     @Test
@@ -101,7 +122,7 @@ class ZenPlayTouchPlayerContractTest {
     }
 
     @Test
-    fun `player rotates both ways episode list stays in app and portrait multiview stacks`() {
+    fun `player rotates both ways episode shortcut is absent and portrait multiview stacks`() {
         val screen = source("PlayerScreen.kt")
         val controls = source("PlayerControls.kt")
         val nav = File("src/main/java/tv/own/owntv/mobile/ui/nav/MobileNavHost.kt").readText()
@@ -112,9 +133,9 @@ class ZenPlayTouchPlayerContractTest {
         assertTrue(screen.contains("SCREEN_ORIENTATION_FULL_SENSOR"))
         assertFalse(screen.contains("SCREEN_ORIENTATION_SENSOR_LANDSCAPE"))
         assertTrue(screen.contains("it.mediaType == MediaType.EPISODE"))
-        assertTrue(controls.contains("onEpisodes"))
+        assertFalse(controls.contains("onEpisodes"))
+        assertFalse(screen.contains("onOpenEpisodes"))
         assertTrue(nav.contains("navController.leavePlayerStillPlaying()"))
-        assertTrue(nav.contains("detailRoute(MobileDestination.SERIES.route, LibraryTab.SERIES, seriesId)"))
         assertTrue(multiview.contains("if (landscape) state.tiles.indices.chunked(2)"))
         assertTrue(multiview.contains("else state.tiles.indices.map { listOf(it) }"))
     }

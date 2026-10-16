@@ -1125,7 +1125,6 @@
 1	performance	app/src/main/java/tv/own/owntv/ui/components/StateViews.kt	spinner
 1	performance	app/src/main/java/tv/own/owntv/ui/components/StateViews.kt	spinnerAngle
 1	empty	app/src/main/java/tv/own/owntv/ui/components/StorageBrowser.kt	\0
-1	locale	app/src/main/java/tv/own/owntv/ui/components/TrackOptionText.kt	und
 1	uri	app/src/main/java/tv/own/owntv/ui/components/TrailerPlayerScreen.kt	https://www.youtube.com/watch?v=$videoKey
 1	uri	app/src/main/java/tv/own/owntv/ui/components/TrailerPlayerScreen.kt	vnd.youtube:$videoKey
 1	log	app/src/main/java/tv/own/owntv/ui/components/TvImeMetrics.kt	frame=$rect imeBottom=$imeBottom

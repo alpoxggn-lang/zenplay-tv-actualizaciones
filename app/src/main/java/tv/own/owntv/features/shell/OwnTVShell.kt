@@ -1548,17 +1548,6 @@ fun OwnTVShell(
                     // its hide/error focus grabs can't yank D-pad focus off the overlay.
                     inert = showChannelList || showHistoryList || showCategoryBrowser || showSubtitleSearch || showLocalSubPicker,
                     onNextChannel = zap?.let { z -> { z(1) } },
-                    onOpenEpisodeList = playingSeries
-                        ?.takeIf { zapSource == MainSection.SERIES }
-                        ?.let { series ->
-                            {
-                                // Keep the episode playing while its show page opens. The docked player
-                                // can be expanded again without resolving or restarting the stream.
-                                dockPlayer()
-                                seriesVm.openSeries(series)
-                                onSelectSection(MainSection.SERIES)
-                            }
-                        },
                     // The list/categories browser remains useful for a one-channel category. Only
                     // Siguiente canal is gated by liveCanZap (>1 channel).
                     onOpenChannelList = if (isTunedLive && previewChannel != null) {

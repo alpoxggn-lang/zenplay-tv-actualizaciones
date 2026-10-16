@@ -144,6 +144,13 @@
     <string name="player_reason_network">Problema de red al intentar conectar con el proveedor</string>
     <string name="player_reason_audio">Error de salida de audio: el dispositivo no ha podido reproducir este formato de audio</string>
     <string name="player_audio_track_number">Audio <xliff:g id="number">%1$d</xliff:g></string>
+    <string name="player_track_role_commentary">Comentarios</string>
+    <string name="player_track_role_audio_description">Audiodescripción</string>
+    <string name="player_track_role_closed_captions">Subtítulos ocultos</string>
+    <string name="player_track_role_dubbed">Doblado</string>
+    <string name="player_track_role_sign_language">Lengua de señas</string>
+    <string name="player_track_role_forced">Forzados</string>
+    <string name="player_track_channels"><xliff:g id="number">%1$d</xliff:g> canales</string>
     <string name="player_subtitle_track_number">Subtítulo <xliff:g id="number">%1$d</xliff:g></string>
     <string name="player_metadata_separator"> · </string>
     <string name="player_stream_info">Información de la transmisión</string>

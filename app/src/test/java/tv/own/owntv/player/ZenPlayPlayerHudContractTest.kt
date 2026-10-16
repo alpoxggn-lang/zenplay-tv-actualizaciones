@@ -10,13 +10,15 @@ class ZenPlayPlayerHudContractTest {
     private fun source(path: String) = File("src/main/java/$path").readText()
 
     @Test
-    fun `series transport has no permanent intro or next episode actions`() {
+    fun `series player has no permanent intro next episode or episode list actions`() {
         val chrome = source("tv/own/owntv/player/PlayerHudChrome.kt")
         val transport = chrome.substringAfter("internal fun CenterControls(")
             .substringBefore("// ---------------- Bottom bar")
 
         assertFalse(transport.contains("zenplay_skip_intro"))
         assertFalse(transport.contains("player.next()"))
+        assertFalse(chrome.contains("zenplay_player_episode_list"))
+        assertFalse(chrome.contains("onOpenEpisodeList"))
         assertTrue(chrome.contains("internal fun NextEpisodeCard("))
     }
 
@@ -48,7 +50,8 @@ class ZenPlayPlayerHudContractTest {
         assertTrue(chrome.contains("OwnTVIcon.BACK"))
         assertTrue(chrome.contains("OwnTVIcon.CHEVRON"))
         assertTrue(chrome.contains("onOpenDialog(HudDialog.AUDIO)"))
-        assertTrue(chrome.contains("zenplay_player_episode_list"))
+        assertTrue(chrome.contains("OwnTVIcon.SUBTITLE"))
+        assertTrue(chrome.contains("onOpenDialog(HudDialog.SUBS)"))
         assertTrue(chrome.contains("HudDialog.PLAYBACK_SETTINGS"))
         assertTrue(chrome.contains("HudDialog.RECORD"))
         assertTrue(hud.contains("onToggleEngine = toggleCompat ?: toggleVod"))
@@ -60,7 +63,20 @@ class ZenPlayPlayerHudContractTest {
         assertTrue(hud.contains("RecordActionsDialog("))
         assertTrue(hud.contains("onScheduleRecording"))
         assertTrue(shell.contains("onPreviousChannel = zap?.let { z -> { z(-1) } }"))
-        assertTrue(shell.contains("onOpenEpisodeList = playingSeries"))
-        assertTrue(shell.contains("dockPlayer()"))
+        assertFalse(shell.contains("onOpenEpisodeList = playingSeries"))
+    }
+
+    @Test
+    fun `playback settings do not duplicate dedicated audio and subtitle actions`() {
+        val dialogs = source("tv/own/owntv/player/PlayerHudDialogs.kt")
+        val settings = dialogs.substringAfter("internal fun PlaybackSettingsDialog(")
+            .substringBefore("internal fun RecordActionsDialog(")
+
+        assertFalse(settings.contains("R.string.player_audio_track"))
+        assertFalse(settings.contains("R.string.player_subtitles"))
+        assertFalse(settings.contains("HudDialog.AUDIO"))
+        assertFalse(settings.contains("HudDialog.SUBS"))
+        assertTrue(settings.contains("R.string.player_tool_speed"))
+        assertTrue(settings.contains("R.string.player_tool_aspect"))
     }
 }

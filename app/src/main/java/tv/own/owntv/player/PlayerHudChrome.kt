@@ -326,7 +326,6 @@ internal fun BottomBar(
     onOpenDialog: (HudDialog) -> Unit, onPip: (() -> Unit)?, onAudioMode: (() -> Unit)?,
     onMultiview: (() -> Unit)? = null, onRecordThis: (() -> Unit)? = null, recordingThis: Boolean = false,
     onOpenChannelList: (() -> Unit)? = null, onNextChannel: (() -> Unit)? = null,
-    onOpenEpisodeList: (() -> Unit)? = null,
     /** Given to whichever timeline is drawn, so Left/Right with the controls hidden can land on it (N6). */
     seekFocus: FocusRequester? = null,
     onBack: () -> Unit, modifier: Modifier = Modifier,
@@ -406,8 +405,8 @@ internal fun BottomBar(
                 Spacer(Modifier.height(10.dp))
             }
         }
-        // Band B — a deliberately small set. Track, speed, quality and aspect choices live behind
-        // one Playback settings button so the D-pad does not have to cross a dozen glyphs.
+        // Band B — a deliberately small set. Audio and subtitles stay one press away; speed, quality
+        // and aspect choices live behind Playback settings so the D-pad does not cross a dozen glyphs.
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().focusGroup()) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (onGoToLive != null && onScrubLive != null) {
@@ -419,16 +418,12 @@ internal fun BottomBar(
                 CtrlButton(OwnTVIcon.GEAR, label = stringResource(R.string.zenplay_player_playback_settings)) {
                     onOpenDialog(HudDialog.PLAYBACK_SETTINGS)
                 }
-                // Language must be reachable in one press on Live TV, films and episodes. Keep the
-                // same dialog inside Playback settings too, so remotes with a saved shortcut and users
-                // accustomed to that route continue to work.
+                // Language and subtitles must be reachable in one press on Live TV, films and episodes.
                 CtrlButton(OwnTVIcon.AUDIO, label = stringResource(R.string.player_audio_track)) {
                     onOpenDialog(HudDialog.AUDIO)
                 }
-                if (onOpenEpisodeList != null) {
-                    CtrlButton(OwnTVIcon.PLAYLIST, label = stringResource(R.string.zenplay_player_episode_list)) {
-                        onOpenEpisodeList()
-                    }
+                CtrlButton(OwnTVIcon.SUBTITLE, label = stringResource(R.string.player_subtitles)) {
+                    onOpenDialog(HudDialog.SUBS)
                 }
                 if (onToggleFavorite != null) {
                     CtrlButton(

@@ -11,6 +11,19 @@ import java.util.Locale
  */
 object TrackLanguages {
 
+    /**
+     * ISO 639-2/B (bibliographic) tags still occur in MPEG-TS and older Matroska files. Java/Android
+     * canonicalise the terminology form, but do not consistently recognise the bibliographic one
+     * (for example `ger` could be rendered literally instead of as German). Keep the conversion in
+     * this shared layer so every player engine and every shell gives the same language a real name.
+     */
+    private val BIBLIOGRAPHIC_TO_TERMINOLOGY = mapOf(
+        "alb" to "sqi", "arm" to "hye", "baq" to "eus", "bur" to "mya", "chi" to "zho",
+        "cze" to "ces", "dut" to "nld", "fre" to "fra", "geo" to "kat", "ger" to "deu",
+        "gre" to "ell", "ice" to "isl", "mac" to "mkd", "mao" to "mri", "may" to "msa",
+        "per" to "fas", "rum" to "ron", "slo" to "slk", "tib" to "bod", "wel" to "cym",
+    )
+
     /** "Original language" — the film's or show's own language (TMDB), else the stream's main track. */
     const val ORIGINAL = "original"
 
@@ -27,15 +40,37 @@ object TrackLanguages {
     fun sortedFor(display: Locale): List<String> = CODES.sortedBy { displayName(it, display).lowercase(display) }
 
     /** The language's name in [display] ("Deutsch", "German" …); the code itself if the platform has none. */
-    fun displayName(code: String, display: Locale): String =
-        Locale.forLanguageTag(twoLetter(code) ?: code).getDisplayLanguage(display)
-            .takeIf { it.isNotBlank() && !it.equals(code, ignoreCase = true) }
+    fun displayName(code: String, display: Locale): String {
+        val canonical = canonicalTag(code)
+        return Locale.forLanguageTag(twoLetter(canonical) ?: canonical).getDisplayLanguage(display)
+            .takeIf {
+                it.isNotBlank() &&
+                    !it.equals(code, ignoreCase = true) &&
+                    !it.equals(canonical, ignoreCase = true)
+            }
             ?.replaceFirstChar { it.titlecase(display) }
             ?: code
+    }
+
+    /** Normalised tag used for equality/display only; the engine still receives the provider's tag. */
+    fun canonicalTag(code: String): String {
+        val raw = code.trim().replace('_', '-').lowercase(Locale.ROOT)
+        if (raw.isBlank()) return raw
+        val base = raw.substringBefore('-')
+        return BIBLIOGRAPHIC_TO_TERMINOLOGY[base]
+            ?.let { terminology -> terminology + raw.removePrefix(base) }
+            ?: raw
+    }
+
+    /** Bibliographic alias understood by older containers/mpv (`deu` → `ger`), when one exists. */
+    fun bibliographicAlias(code: String): String? {
+        val canonical = canonicalTag(code).substringBefore('-')
+        return BIBLIOGRAPHIC_TO_TERMINOLOGY.entries.firstOrNull { it.value == canonical }?.key
+    }
 
     /** The ISO 639-1 form of a 639-2/T code ("deu" → "de"); null when the language has none. */
     fun twoLetter(code: String): String? {
-        val t = code.trim().lowercase(Locale.ROOT)
+        val t = canonicalTag(code).substringBefore('-')
         return Locale.getISOLanguages().firstOrNull {
             runCatching { Locale.forLanguageTag(it).isO3Language }.getOrNull() == t
         }

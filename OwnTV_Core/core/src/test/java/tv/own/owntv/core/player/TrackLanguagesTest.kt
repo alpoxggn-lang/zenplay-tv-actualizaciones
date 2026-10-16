@@ -28,6 +28,8 @@ class TrackLanguagesTest {
     fun `names come in the display language`() {
         assertEquals("German", TrackLanguages.displayName("deu", Locale.ENGLISH))
         assertEquals("Deutsch", TrackLanguages.displayName("deu", Locale.GERMAN))
+        assertEquals("German", TrackLanguages.displayName("ger", Locale.ENGLISH))
+        assertEquals("deu", TrackLanguages.canonicalTag("GER"))
     }
 
     @Test

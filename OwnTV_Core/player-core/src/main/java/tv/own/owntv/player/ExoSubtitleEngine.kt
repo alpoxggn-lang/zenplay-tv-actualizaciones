@@ -944,7 +944,11 @@ class ExoSubtitleEngine(
                         label = format.label.orEmpty(),
                         mpvId = id,
                         selected = group.isTrackSelected(i),
+                        codec = format.sampleMimeType,
                         lang = format.language,
+                        channelCount = format.channelCount.takeIf { it > 0 },
+                        roleFlags = format.roleFlags,
+                        selectionFlags = format.selectionFlags,
                         typeIndex = id,
                         labelKind = TrackLabelKind.AUDIO,
                     ),
@@ -954,7 +958,7 @@ class ExoSubtitleEngine(
             }
         }
         audioSelections = sels
-        callbacks.onAudioTracks(out)
+        callbacks.onAudioTracks(out.withTrackDisambiguation())
     }
 
     /** Enumerate the file's text/image subtitle tracks for the HUD menu. [TrackOption.mpvId] and
@@ -979,7 +983,10 @@ class ExoSubtitleEngine(
                         mpvId = id,
                         selected = group.isTrackSelected(i),
                         image = image,
+                        codec = mime,
                         lang = format.language,
+                        roleFlags = format.roleFlags,
+                        selectionFlags = format.selectionFlags,
                         typeIndex = id,
                         labelKind = TrackLabelKind.SUBTITLE,
                     ),
@@ -987,7 +994,7 @@ class ExoSubtitleEngine(
                 id++
             }
         }
-        callbacks.onTextTracks(out)
+        callbacks.onTextTracks(out.withTrackDisambiguation())
     }
 
     /** Force-select the image subtitle track that matches the one the user picked in mpv's list:

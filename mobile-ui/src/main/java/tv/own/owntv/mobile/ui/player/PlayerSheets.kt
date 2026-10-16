@@ -35,6 +35,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tv.own.owntv.core.database.entity.ChannelEntity
 import tv.own.owntv.mobile.ui.screens.live.DirectTune
@@ -48,9 +49,55 @@ import tv.own.owntv.mobile.ui.components.sheetListHeight
 import tv.own.owntv.mobile.ui.theme.MobileDimens
 import tv.own.owntv.player.PlaybackEngine
 import tv.own.owntv.player.StreamInfoRow
+import tv.own.owntv.player.TrackOption
 import tv.own.owntv.player.ZoomMode
 import tv.own.owntv.player.displayText
 import tv.own.owntv.player.titleRes
+
+internal const val TRACK_DISCOVERY_ATTEMPTS = 12
+internal const val TRACK_DISCOVERY_INTERVAL_MS = 500L
+
+/**
+ * Media3 and mpv can publish their tracks shortly after the first video frame. A sheet opened in
+ * that window must not permanently cache an empty list, but an already discovered list must remain
+ * stable while the user is choosing from it.
+ */
+internal suspend fun <T> discoverTracksWhileEmpty(
+    initial: List<T>,
+    load: () -> List<T>,
+    attempts: Int = TRACK_DISCOVERY_ATTEMPTS,
+    intervalMs: Long = TRACK_DISCOVERY_INTERVAL_MS,
+    waitForRetry: suspend (Long) -> Unit = { delay(it) },
+): List<T> {
+    if (initial.isNotEmpty()) return initial
+    repeat(attempts.coerceAtLeast(0)) {
+        waitForRetry(intervalMs)
+        val discovered = load()
+        if (discovered.isNotEmpty()) return discovered
+    }
+    return initial
+}
+
+private enum class TrackPicker { AUDIO, SUBTITLE }
+
+private fun PlaybackEngine.tracksFor(picker: TrackPicker): List<TrackOption> = when (picker) {
+    TrackPicker.AUDIO -> audioTracks()
+    TrackPicker.SUBTITLE -> textTracks()
+}
+
+@Composable
+private fun rememberDiscoveredTracks(player: PlaybackEngine, picker: TrackPicker): List<TrackOption> {
+    var tracks by remember(player, picker) { mutableStateOf(player.tracksFor(picker)) }
+    LaunchedEffect(player, picker) {
+        val discovered = discoverTracksWhileEmpty(
+            initial = tracks,
+            load = { player.tracksFor(picker) },
+        )
+        // Never replace a list the sheet already found (or that a future reactive source supplied).
+        if (tracks.isEmpty() && discovered.isNotEmpty()) tracks = discovered
+    }
+    return tracks
+}
 
 /** Every picker the player's tool bar can open, chosen by [sheet]. */
 @Composable
@@ -202,14 +249,6 @@ private fun PlaybackSettingsSheet(
                 subtitle = availableQuality,
                 onClick = { onOpenSheet(PlayerSheet.QUALITY) },
             )
-            MobileListRow(
-                title = stringResource(R.string.player_tool_audio),
-                onClick = { onOpenSheet(PlayerSheet.AUDIO) },
-            )
-            MobileListRow(
-                title = stringResource(R.string.player_tool_subtitles),
-                onClick = { onOpenSheet(PlayerSheet.SUBTITLES) },
-            )
             if (!isLive) {
                 MobileListRow(
                     title = stringResource(R.string.player_tool_speed),
@@ -262,7 +301,7 @@ private fun SubtitleSheet(
     onPickLocalSubtitle: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val tracks = remember { player.textTracks() }
+    val tracks = rememberDiscoveredTracks(player, TrackPicker.SUBTITLE)
     val timing = remember { player.subtitleTimingAvailable() }
     MobileBottomSheet(onDismissRequest = onDismiss, title = stringResource(R.string.player_subtitles)) {
         SheetScroll {
@@ -354,7 +393,7 @@ private const val AV_SYNC_LIMIT_MS = 5_000
 
 @Composable
 private fun AudioSheet(player: PlaybackEngine, onDismiss: () -> Unit) {
-    val tracks = remember { player.audioTracks() }
+    val tracks = rememberDiscoveredTracks(player, TrackPicker.AUDIO)
     val delay by player.audioDelayMs.collectAsStateWithLifecycle()
     val remembered by player.audioDelayRemembered.collectAsStateWithLifecycle()
     MobileBottomSheet(onDismissRequest = onDismiss, title = stringResource(R.string.player_audio_track)) {

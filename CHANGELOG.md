@@ -7,6 +7,16 @@
 > Issue numbers that are part of a title are fine; explanatory parentheticals are not. The detail —
 > what, why, files and verification — belongs in the commit message, never here.
 
+## v2.2.11 — 2026-10-16
+
+### ✨ Funciones nuevas
+- **Selector directo de subtítulos en TV en vivo, películas y series**
+- **Nombres claros de idioma y pista en los selectores de audio y subtítulos**
+
+### 🐛 Correcciones
+- **Ajustes de reproducción deja de repetir audio y subtítulos**
+- **El reproductor de series ya no muestra el acceso directo a episodios**
+
 ## v2.2.10 — 2026-10-16
 
 ### ✨ Funciones nuevas

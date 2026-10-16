@@ -5,8 +5,11 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -110,8 +113,6 @@ fun PlayerControls(
     onPreviousChannel: (() -> Unit)? = null,
     /** Live-only +1 zap within the category currently playing. */
     onNextChannel: (() -> Unit)? = null,
-    /** Episode-only route back to this series' season and episode list. */
-    onEpisodes: (() -> Unit)? = null,
     /** The screen-wide scrub gesture's running total, in media milliseconds, while it is happening. */
     gestureScrubMs: Long?,
     modifier: Modifier = Modifier,
@@ -201,7 +202,7 @@ fun PlayerControls(
                         } else {
                             null
                         },
-                        onEpisodes = onEpisodes,
+                        onSubtitles = { onOpenSheet(PlayerSheet.SUBTITLES) },
                     )
                 }
             }
@@ -470,56 +471,68 @@ private fun ToolBar(
     onMultiview: (() -> Unit)? = null,
     onPictureInPicture: (() -> Unit)? = null,
     onAudio: (() -> Unit)? = null,
-    onEpisodes: (() -> Unit)? = null,
+    onSubtitles: () -> Unit,
 ) {
-    // Only direct watching actions live here. Brightness remains a gesture and all track/display
-    // choices live under one Settings sheet; recording, sleep, sound-only, engine switching and
+    // Only direct watching actions live here. Audio and subtitles stay one press away; the remaining
+    // display choices live under Settings. Recording, sleep, sound-only, engine switching and
     // diagnostics do not belong on the touch player's primary bar. System PiP is kept distinct from
     // the old in-app mini-player: this button really leaves ZenPlay in Android's floating window.
-    Row(
-        Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceEvenly,
-    ) {
-        CtrlButton(
-            MobileIcons.VolumeUp,
-            stringResource(R.string.player_tool_volume),
-            { onOpenSheet(PlayerSheet.VOLUME) },
-        )
-        CtrlButton(
-            MobileIcons.Tune,
-            stringResource(R.string.zenplay_player_playback_settings),
-            { onOpenSheet(PlayerSheet.PLAYBACK_SETTINGS) },
-        )
-        if (onAudio != null) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val controlCount = 4 +
+            (if (onAudio != null) 1 else 0) +
+            (if (onPictureInPicture != null) 1 else 0) +
+            (if (isLive && onMultiview != null) 1 else 0)
+        val needsScroll = maxWidth < 48.dp * controlCount
+        val scrollState = rememberScrollState()
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .then(if (needsScroll) Modifier.horizontalScroll(scrollState) else Modifier),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = if (needsScroll) {
+                Arrangement.spacedBy(MobileDimens.GapTiny)
+            } else {
+                Arrangement.SpaceEvenly
+            },
+        ) {
             CtrlButton(
-                MobileIcons.Audiotrack,
-                stringResource(R.string.player_tool_audio),
-                onAudio,
+                MobileIcons.VolumeUp,
+                stringResource(R.string.player_tool_volume),
+                { onOpenSheet(PlayerSheet.VOLUME) },
             )
-        }
-        if (onEpisodes != null) {
             CtrlButton(
-                MobileIcons.FormatListBulleted,
-                stringResource(R.string.content_episodes),
-                onEpisodes,
+                MobileIcons.Tune,
+                stringResource(R.string.zenplay_player_playback_settings),
+                { onOpenSheet(PlayerSheet.PLAYBACK_SETTINGS) },
             )
-        }
-        if (onPictureInPicture != null) {
+            if (onAudio != null) {
+                CtrlButton(
+                    MobileIcons.Audiotrack,
+                    stringResource(R.string.player_tool_audio),
+                    onAudio,
+                )
+            }
             CtrlButton(
-                MobileIcons.PictureInPictureAlt,
-                stringResource(R.string.player_enter_picture_in_picture),
-                onPictureInPicture,
+                MobileIcons.Subtitles,
+                stringResource(R.string.player_tool_subtitles),
+                onSubtitles,
             )
-        }
-        CtrlButton(
-            icon = if (favorite) MobileIcons.Favorite else MobileIcons.FavoriteBorder,
-            label = stringResource(if (favorite) R.string.content_favorited else R.string.content_favorite),
-            onClick = onToggleFavorite,
-            active = favorite,
-        )
-        if (isLive && onMultiview != null) {
-            CtrlButton(MobileIcons.GridView, stringResource(R.string.multiview_button), onMultiview)
+            if (onPictureInPicture != null) {
+                CtrlButton(
+                    MobileIcons.PictureInPictureAlt,
+                    stringResource(R.string.player_enter_picture_in_picture),
+                    onPictureInPicture,
+                )
+            }
+            CtrlButton(
+                icon = if (favorite) MobileIcons.Favorite else MobileIcons.FavoriteBorder,
+                label = stringResource(if (favorite) R.string.content_favorited else R.string.content_favorite),
+                onClick = onToggleFavorite,
+                active = favorite,
+            )
+            if (isLive && onMultiview != null) {
+                CtrlButton(MobileIcons.GridView, stringResource(R.string.multiview_button), onMultiview)
+            }
         }
     }
 }

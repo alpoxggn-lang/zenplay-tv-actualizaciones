@@ -2552,7 +2552,11 @@ class LivePreviewEngine(
                             label = f.label.orEmpty(),
                             mpvId = aId,
                             selected = group.isTrackSelected(i),
+                            codec = f.sampleMimeType,
                             lang = lang,
+                            channelCount = f.channelCount.takeIf { it > 0 },
+                            roleFlags = f.roleFlags,
+                            selectionFlags = f.selectionFlags,
                             typeIndex = aId,
                             labelKind = TrackLabelKind.AUDIO,
                         ),
@@ -2567,7 +2571,10 @@ class LivePreviewEngine(
                             label = f.label.orEmpty(),
                             mpvId = tId,
                             selected = _subtitleOn.value && group.isTrackSelected(i),
+                            codec = f.sampleMimeType,
                             lang = lang,
+                            roleFlags = f.roleFlags,
+                            selectionFlags = f.selectionFlags,
                             typeIndex = tId,
                             labelKind = TrackLabelKind.SUBTITLE,
                         ),
@@ -2584,8 +2591,8 @@ class LivePreviewEngine(
         // Audio Mode excepted, where the app is the one that turned the picture off.
         updateAudioOnlyClassification()
         applyMute()
-        tune.audioTrackList = audio; tune.audioSelections = aSel; _audioCount.value = audio.size
-        tune.textTrackList = text; tune.textSelections = tSel; _subCount.value = text.size
+        tune.audioTrackList = audio.withTrackDisambiguation(); tune.audioSelections = aSel; _audioCount.value = audio.size
+        tune.textTrackList = text.withTrackDisambiguation(); tune.textSelections = tSel; _subCount.value = text.size
         applyRememberedTracks()
         if (tv.own.owntv.core.CoreBuildInfo.debug) {
             LiveDiagnosticsLog.event(

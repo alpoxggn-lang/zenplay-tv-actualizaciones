@@ -103,8 +103,6 @@ private const val NOTCHES = 20
 @Composable
 fun PlayerScreen(
     onExit: () -> Unit,
-    /** Opens the series detail/episode list without stopping the episode currently playing. */
-    onOpenEpisodes: ((seriesId: Long) -> Unit)? = null,
     modifier: Modifier = Modifier,
     tuner: LiveTuner = koinInject(),
     vodTuner: VodTuner = koinInject(),
@@ -688,10 +686,6 @@ fun PlayerScreen(
             onChannels = if (isLive && channel != null) ({ sheet = PlayerSheet.CHANNELS }) else null,
             onPreviousChannel = if (isLive && siblings.size > 1) ({ tuner.step(-1) }) else null,
             onNextChannel = if (isLive && siblings.size > 1) ({ tuner.step(1) }) else null,
-            onEpisodes = film
-                ?.takeIf { it.mediaType == MediaType.EPISODE }
-                ?.seriesId
-                ?.let { seriesId -> onOpenEpisodes?.let { open -> ({ open(seriesId) }) } },
             gestureScrubMs = scrubFraction?.takeIf { duration > 0 }?.let { (it * duration).toLong() },
         )
 

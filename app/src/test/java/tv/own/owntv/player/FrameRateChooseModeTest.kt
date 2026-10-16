@@ -68,4 +68,100 @@ class FrameRateChooseModeTest {
         assertEquals(fhd24, chosen?.mode)
         assertFalse(chosen!!.seamless)
     }
+
+    @Test
+    fun `native 50fps stays on a one to one 50hz mode`() {
+        val current50 = ModeSpec(20, 3840, 2160, 50f)
+        val doubled100 = ModeSpec(21, 3840, 2160, 100f)
+
+        val chosen = choose(
+            fps = 50f,
+            modes = listOf(current50, doubled100),
+            current = current50,
+            base = current50,
+            seamlessRates = listOf(100f),
+        )
+
+        assertEquals(current50, chosen?.mode)
+        assertTrue(chosen!!.seamless)
+    }
+
+    @Test
+    fun `native 60fps does not jump from 60hz to a seamless 120hz mode`() {
+        val doubled120 = ModeSpec(22, 3840, 2160, 120f)
+
+        val chosen = choose(
+            fps = 60f,
+            modes = listOf(uhd60, doubled120),
+            current = uhd60,
+            base = uhd60,
+            seamlessRates = listOf(120f),
+        )
+
+        assertEquals(uhd60, chosen?.mode)
+        assertTrue(chosen!!.seamless)
+    }
+
+    @Test
+    fun `fractional 59 point 94 content prefers a matching display mode`() {
+        val current50 = ModeSpec(23, 3840, 2160, 50f)
+        val fractional = ModeSpec(24, 3840, 2160, 59.94f)
+        val integer = ModeSpec(25, 3840, 2160, 60f)
+
+        val chosen = choose(
+            fps = 59.94f,
+            modes = listOf(current50, integer, fractional),
+            current = current50,
+            base = current50,
+        )
+
+        assertEquals(fractional, chosen?.mode)
+    }
+
+    @Test
+    fun `fractional 59 point 94 switches away from tolerated integer 60hz`() {
+        val fractional = ModeSpec(28, 3840, 2160, 59.94f)
+
+        val chosen = choose(
+            fps = 59.94f,
+            modes = listOf(uhd60, fractional),
+            current = uhd60,
+            base = uhd60,
+        )
+
+        assertEquals(fractional, chosen?.mode)
+        assertFalse(chosen!!.seamless)
+    }
+
+    @Test
+    fun `fractional 23 point 976 switches away from tolerated integer 24hz`() {
+        val current24 = ModeSpec(29, 3840, 2160, 24f)
+        val fractional = ModeSpec(30, 3840, 2160, 23.976f)
+
+        assertEquals(
+            fractional,
+            choose(
+                fps = 23.976f,
+                modes = listOf(current24, fractional),
+                current = current24,
+                base = current24,
+            )?.mode,
+        )
+    }
+
+    @Test
+    fun `29 point 97 content can use a clean 59 point 94 multiple`() {
+        val current50 = ModeSpec(26, 3840, 2160, 50f)
+        val fractional = ModeSpec(27, 3840, 2160, 59.94f)
+
+        assertEquals(
+            fractional,
+            choose(
+                fps = 29.97f,
+                modes = listOf(current50, fractional),
+                current = current50,
+                base = current50,
+            )?.mode,
+        )
+    }
 }

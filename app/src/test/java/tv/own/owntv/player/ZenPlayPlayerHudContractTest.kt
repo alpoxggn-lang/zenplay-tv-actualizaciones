@@ -43,7 +43,12 @@ class ZenPlayPlayerHudContractTest {
         val shell = source("tv/own/owntv/features/shell/OwnTVShell.kt")
 
         assertTrue(chrome.contains("zenplay_player_channel_list"))
+        assertTrue(chrome.contains("zenplay_player_previous_channel"))
         assertTrue(chrome.contains("zenplay_player_next_channel"))
+        assertTrue(chrome.contains("OwnTVIcon.BACK"))
+        assertTrue(chrome.contains("OwnTVIcon.CHEVRON"))
+        assertTrue(chrome.contains("onOpenDialog(HudDialog.AUDIO)"))
+        assertTrue(chrome.contains("zenplay_player_episode_list"))
         assertTrue(chrome.contains("HudDialog.PLAYBACK_SETTINGS"))
         assertTrue(chrome.contains("HudDialog.RECORD"))
         assertTrue(hud.contains("onToggleEngine = toggleCompat ?: toggleVod"))
@@ -54,5 +59,8 @@ class ZenPlayPlayerHudContractTest {
         assertTrue(shell.contains("!isTunedLive && canToggleVodEngine"))
         assertTrue(hud.contains("RecordActionsDialog("))
         assertTrue(hud.contains("onScheduleRecording"))
+        assertTrue(shell.contains("onPreviousChannel = zap?.let { z -> { z(-1) } }"))
+        assertTrue(shell.contains("onOpenEpisodeList = playingSeries"))
+        assertTrue(shell.contains("dockPlayer()"))
     }
 }

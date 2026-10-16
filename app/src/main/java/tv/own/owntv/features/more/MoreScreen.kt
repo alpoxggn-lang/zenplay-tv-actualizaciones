@@ -581,6 +581,9 @@ private fun ZenPlayLogoutDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
  * the app as part of it; the next launch opens on the sign-in screen.
  */
 private fun zenPlayLogout(context: android.content.Context) {
+    runCatching {
+        tv.own.owntv.core.download.secure.ProtectedDownloadStore(context).destroyAll()
+    }
     tv.own.owntv.zenplay.ZenPlayExpiryWork.cancel(context)
     val am = context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
     am.clearApplicationUserData()

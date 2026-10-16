@@ -153,6 +153,8 @@ fun PlayerHud(
     inert: Boolean = false,
     /** Live-only explicit +1 action. It is invoked only after the focused button is confirmed. */
     onNextChannel: (() -> Unit)? = null,
+    /** Episode only: dock playback and return to this show's episode list without stopping the stream. */
+    onOpenEpisodeList: (() -> Unit)? = null,
     // Live: open the channel-list overlay (Left while the controls are hidden). Null = not a live channel.
     onOpenChannelList: (() -> Unit)? = null,
     // Live: open the watch-history list (Right while the controls are hidden) — jump straight back to a
@@ -668,6 +670,7 @@ fun PlayerHud(
                     onMultiview = onMultiview, onRecordThis = onRecordThis, recordingThis = recordingThis, onBack = onBack,
                     onOpenChannelList = onOpenChannelList,
                     onNextChannel = onNextChannel,
+                    onOpenEpisodeList = onOpenEpisodeList,
                     modifier = Modifier.align(Alignment.BottomStart),
                 )
             }

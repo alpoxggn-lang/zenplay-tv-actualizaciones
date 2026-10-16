@@ -1,18 +1,21 @@
 package tv.own.owntv.mobile.ui.screens.library
 
 import android.content.Context
+import android.net.Uri
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tv.own.owntv.core.content.AdultCategoryClassifier
 import tv.own.owntv.core.content.ContentAccessPolicy
 import tv.own.owntv.core.database.dao.CategoryDao
+import tv.own.owntv.core.database.dao.DownloadDao
 import tv.own.owntv.core.database.dao.HistoryDao
 import tv.own.owntv.core.database.dao.MovieDao
 import tv.own.owntv.core.database.dao.ProfileDao
@@ -25,8 +28,12 @@ import tv.own.owntv.core.database.entity.PlaybackProgressEntity
 import tv.own.owntv.core.database.entity.SeriesEntity
 import tv.own.owntv.core.database.entity.SourceEntity
 import tv.own.owntv.core.database.entity.WatchHistoryEntity
+import tv.own.owntv.core.download.secure.ProtectedDownloadStore
+import tv.own.owntv.core.download.secure.SecureDownloadOwner
+import tv.own.owntv.core.download.DownloadItemResolver
 import tv.own.owntv.core.metadata.MetadataRepository
 import tv.own.owntv.core.model.MediaType
+import tv.own.owntv.core.model.DownloadStatus
 import tv.own.owntv.core.player.ExternalPlayerLauncher
 import tv.own.owntv.core.player.enginePinKey
 import tv.own.owntv.core.database.dao.resolveExistingProfileId
@@ -42,6 +49,9 @@ import tv.own.owntv.mobile.cast.CastRequest
 import tv.own.owntv.mobile.playback.DataSaverGate
 import tv.own.owntv.mobile.playback.PlaybackService
 import tv.own.owntv.mobile.ui.screens.live.LiveTuner
+import tv.own.owntv.mobile.zenplay.ZenPlayAccount
+import tv.own.owntv.mobile.zenplay.ZenPlayExpiryState
+import tv.own.owntv.mobile.zenplay.allowsProtectedPlayback
 import tv.own.owntv.player.MediaMeta
 import tv.own.owntv.player.MpvPlaybackEngine
 import tv.own.owntv.player.OwnTVPlayer
@@ -106,6 +116,10 @@ class VodTuner(
     private val dataSaver: DataSaverGate,
     private val cast: CastController,
     private val contentAccess: ContentAccessPolicy,
+    private val downloadDao: DownloadDao,
+    private val downloadItemResolver: DownloadItemResolver,
+    private val protectedDownloads: ProtectedDownloadStore,
+    private val zenPlayAccount: ZenPlayAccount,
     val player: OwnTVPlayer,
     /** Lets core's background catalogue drain know a playlist is in use. */
     private val watchSession: tv.own.owntv.core.live.WatchSession,
@@ -148,6 +162,15 @@ class VodTuner(
      *  resume position into the new profile's list. */
     private var playingProfileId = -1L
 
+    /** True only while the current player URI is the private decrypted-download provider. */
+    private var playingProtectedDownload = false
+
+    /** Entitlement of the exact profile/source that owns the open protected file. */
+    private var protectedDownloadEntitlement: ZenPlayExpiryState? = null
+
+    /** Makes the collector's profile observation and the final player hand-off one atomic decision. */
+    private val protectedPlaybackProfileGate = ProtectedPlaybackProfileGate()
+
     /** The season queue handed to the player, kept so a player-driven advance can be followed. */
     private data class PlayingQueue(
         val show: SeriesEntity,
@@ -159,6 +182,17 @@ class VodTuner(
     private var playingQueue: PlayingQueue? = null
 
     init {
+        // A protected file belongs to the profile that opened it. The provider also revokes open
+        // descriptors when keys/files are destroyed, but an ordinary profile switch intentionally
+        // keeps that profile's downloads. Stop just this local playback before the new profile can
+        // continue consuming the old profile's already-open descriptor.
+        scope.launch {
+            settings.activeProfileId.distinctUntilChanged().collect { activeProfileId ->
+                if (protectedPlaybackProfileGate.activeProfileChanged(activeProfileId)) {
+                    revokeProtectedPlayback()
+                }
+            }
+        }
         scope.launch {
             liveTuner.channel.collect { if (it != null) clearPlaying() }
         }
@@ -188,6 +222,17 @@ class VodTuner(
         scope.launch {
             while (true) {
                 delay(PROGRESS_INTERVAL_MS)
+                // A download opened just before the plan deadline must not remain readable for the
+                // rest of a two-hour film. The cached dated entitlement is evaluated against the
+                // current clock, so this also closes playback shortly after the exact expiry time.
+                val entitlement = protectedDownloadEntitlement
+                if (
+                    playingProtectedDownload &&
+                    (entitlement == null || !allowsProtectedPlayback(entitlement, System.currentTimeMillis()))
+                ) {
+                    revokeProtectedPlayback()
+                    continue
+                }
                 saveProgress()
             }
         }
@@ -336,39 +381,87 @@ class VodTuner(
     /**
      * Play a file that is already on this phone.
      *
-     * Offline is the whole point of a download, so nothing here asks the provider anything: no URL to
-     * resolve, no headers, no reconnect. The resume position is still the film's own, so one started
-     * over the network carries on from where it stopped.
+     * The file is decrypted only through ZenPlay's private provider. The cached subscription expiry
+     * is checked locally first; a network refresh is attempted only when that entitlement does not
+     * currently allow playback. No media URL, headers or reconnect path are exposed.
      */
-    suspend fun playDownload(
-        mediaType: MediaType,
-        itemId: Long,
-        filePath: String,
-        title: String,
-        posterUrl: String?,
-    ): Boolean {
+    suspend fun playDownload(downloadId: Long): Boolean {
         val pid = currentProfileId() ?: return false
-        if (!downloadAllowed(mediaType, itemId, pid)) return false
-        if (settings.externalPlayerFor(mediaType).first()) {
-            externalPlayerLauncher.launch(filePath, title)
-            return false
+        val storedDownload = withContext(Dispatchers.IO) {
+            downloadDao.getByIdForProfile(downloadId, pid)
+        } ?: return false
+        if (storedDownload.status != DownloadStatus.COMPLETED) return false
+        val download = withContext(Dispatchers.IO) {
+            downloadItemResolver.resolve(storedDownload)
+        } ?: return false
+        // The source must still exist and still be linked to the row's owning profile. Never use the
+        // active/default source here: a valid plan on source B must not unlock source A's file.
+        val source = withContext(Dispatchers.IO) {
+            sourceDao.observeForProfile(pid).first().firstOrNull { it.id == download.sourceId }
+        } ?: return false
+        val entitlement = zenPlayAccount.protectedPlaybackEntitlement(pid, source)
+        if (!allowsProtectedPlayback(entitlement, System.currentTimeMillis())) return false
+        if (!downloadAllowed(download.mediaType, download.itemId, pid)) return false
+        val fileId = download.filePath
+            ?.let { runCatching { Uri.parse(it) }.getOrNull() }
+            ?.let(protectedDownloads::fileId)
+            ?: return false
+        val owner = runCatching {
+            SecureDownloadOwner.fromContentKey(pid, download.sourceId, download.contentKey)
+        }.getOrNull() ?: return false
+        // Re-open against the owner immediately before playback. This makes a stale callback from a
+        // previous profile/account harmless even though it still knows the opaque content URI.
+        val valid = withContext(Dispatchers.IO) {
+            runCatching { protectedDownloads.open(fileId, owner).use { it.plaintextLength > 0L } }
+                .getOrDefault(false)
         }
+        if (!valid) return false
+        val filePath = protectedDownloads.contentUri(fileId).toString()
         saveProgress()
         liveTuner.stop()
         // A file on this phone is not reachable from a receiver — it would be asked for a path that
         // exists on the handset and nowhere else — so starting a download ends the cast rather than
         // leaving the television on the previous item.
         cast.release(this)
-        val resume = withContext(Dispatchers.IO) { progressDao.get(pid, mediaType, itemId) }
-        player.play(
-            url = filePath,
-            title = title,
-            isLive = false,
-            startPositionMs = resume?.positionMs ?: 0L,
+        val resume = withContext(Dispatchers.IO) {
+            progressDao.get(pid, download.mediaType, download.itemId)
+        }
+        val seriesId = if (download.mediaType == MediaType.EPISODE) {
+            withContext(Dispatchers.IO) { seriesDao.getEpisodeById(download.itemId)?.seriesId }
+        } else null
+        val playback = VodPlayback(
+            download.mediaType,
+            download.itemId,
+            download.title,
+            posterUrl = download.posterUrl,
+            seriesId = seriesId,
         )
-        began(pid, VodPlayback(mediaType, itemId, title, posterUrl = posterUrl))
-        playingQueue = null
-        setDownloadSubtitleContext(pid, mediaType, itemId, filePath)
+        // This is the last suspension before handing the file to the player. It deliberately runs on the same Main
+        // dispatcher as the active-profile collector. The small synchronized gate then checks both
+        // this fresh DataStore value and the collector's latest value, records protected ownership,
+        // starts the player and exposes its flags without an interleaving window.
+        val started = withContext(Dispatchers.Main.immediate) {
+            val freshlyReadProfileId = settings.activeProfileId.first()
+            protectedPlaybackProfileGate.startIfCurrent(pid, freshlyReadProfileId) {
+                player.play(
+                    url = filePath,
+                    title = download.title,
+                    isLive = false,
+                    startPositionMs = resume?.positionMs ?: 0L,
+                )
+                protectedDownloadEntitlement = entitlement
+                beginPlaybackState(pid, playback, protectedDownload = true)
+                playingQueue = null
+            }
+        }
+        if (!started) return false
+        recordHistory(pid, playback.mediaType, playback.itemId)
+        if (protectedPlaybackProfileGate.owns(pid)) {
+            setDownloadSubtitleContext(pid, download.mediaType, download.itemId, filePath)
+            // A profile switch while subtitle metadata was being resolved must not restore the old
+            // profile's subtitle context after the collector already cleared playback.
+            if (!protectedPlaybackProfileGate.owns(pid)) subtitleController.clear()
+        }
         return true
     }
 
@@ -480,6 +573,18 @@ class VodTuner(
         }
     }
 
+    /** Prevent duplicate expiry/profile collectors from queuing several asynchronous stop jobs. */
+    private fun revokeProtectedPlayback() {
+        if (!playingProtectedDownload) {
+            protectedPlaybackProfileGate.clear()
+            return
+        }
+        protectedPlaybackProfileGate.clear()
+        playingProtectedDownload = false
+        protectedDownloadEntitlement = null
+        stop()
+    }
+
     /** The television is taking the film; the phone keeps only where it had got to. */
     override fun releaseToCast(): Long {
         val position = player.position.value
@@ -546,7 +651,23 @@ class VodTuner(
 
     /** [onCast] = the receiver took it, so none of the local engine's housekeeping applies and the
      *  session is already pointed at the remote one. */
-    private suspend fun began(profileId: Long, what: VodPlayback, onCast: Boolean = false) {
+    private suspend fun began(
+        profileId: Long,
+        what: VodPlayback,
+        onCast: Boolean = false,
+        protectedDownload: Boolean = false,
+    ) {
+        beginPlaybackState(profileId, what, onCast, protectedDownload)
+        recordHistory(profileId, what.mediaType, what.itemId)
+    }
+
+    /** Non-suspending half of [began], also used inside the protected-profile hand-off gate. */
+    private fun beginPlaybackState(
+        profileId: Long,
+        what: VodPlayback,
+        onCast: Boolean = false,
+        protectedDownload: Boolean = false,
+    ) {
         // Invalidates any older stop that is still waiting for its progress write to finish. This is
         // on the main playback path and runs before any suspending work below.
         playbackExitGate.playbackStarted()
@@ -559,8 +680,12 @@ class VodTuner(
         }
         PlaybackService.start(context)
         playingProfileId = profileId
+        playingProtectedDownload = protectedDownload
+        if (!protectedDownload) {
+            protectedDownloadEntitlement = null
+            protectedPlaybackProfileGate.clear()
+        }
         _playing.value = what
-        recordHistory(profileId, what.mediaType, what.itemId)
     }
 
     private suspend fun recordHistory(profileId: Long, mediaType: MediaType, itemId: Long) {
@@ -575,6 +700,9 @@ class VodTuner(
         if (invalidateExitTickets) playbackExitGate.playbackCleared()
         _playing.value = null
         playingProfileId = -1L
+        playingProtectedDownload = false
+        protectedDownloadEntitlement = null
+        protectedPlaybackProfileGate.clear()
         playingQueue = null
         // The player's ADD SUBTITLES entry exists only for a film or an episode. Left set, it would
         // still be offering to search OpenSubtitles for the film while a channel is playing.

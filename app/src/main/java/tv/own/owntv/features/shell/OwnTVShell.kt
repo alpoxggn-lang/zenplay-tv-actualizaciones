@@ -255,7 +255,6 @@ fun OwnTVShell(
     val liveCanZap by liveVm.canZap.collectAsStateWithLifecycle()
     // Full-screen is running on the ExoPlayer engine (a promoted Live preview) rather than mpv.
     val liveOnExo by liveVm.liveOnExo.collectAsStateWithLifecycle()
-    val previousLiveChannel by liveVm.previousChannelTarget.collectAsStateWithLifecycle()
     // A catch-up archive programme is playing (Guide "Watch from start" or the Live TV catch-up picker)
     // rather than the live stream — the HUD swaps live-only controls for the VOD ones.
     val catchupActive by liveVm.catchupActive.collectAsStateWithLifecycle()
@@ -1549,6 +1548,17 @@ fun OwnTVShell(
                     // its hide/error focus grabs can't yank D-pad focus off the overlay.
                     inert = showChannelList || showHistoryList || showCategoryBrowser || showSubtitleSearch || showLocalSubPicker,
                     onNextChannel = zap?.let { z -> { z(1) } },
+                    onOpenEpisodeList = playingSeries
+                        ?.takeIf { zapSource == MainSection.SERIES }
+                        ?.let { series ->
+                            {
+                                // Keep the episode playing while its show page opens. The docked player
+                                // can be expanded again without resolving or restarting the stream.
+                                dockPlayer()
+                                seriesVm.openSeries(series)
+                                onSelectSection(MainSection.SERIES)
+                            }
+                        },
                     // The list/categories browser remains useful for a one-channel category. Only
                     // Siguiente canal is gated by liveCanZap (>1 channel).
                     onOpenChannelList = if (isTunedLive && previewChannel != null) {
@@ -1590,7 +1600,7 @@ fun OwnTVShell(
                     // bar and the buttons, and must not show a catch-up control on a channel without catch-up.
                     jumpBackOptions = if (isTunedLive && previewChannel?.catchup == true) liveVm::currentJumpOptions else null,
                     onJumpBack = if (isTunedLive && previewChannel?.catchup == true) liveVm::jumpBackTo else null,
-                    onPreviousChannel = if (isTunedLive && previousLiveChannel != null) liveVm::previousChannel else null,
+                    onPreviousChannel = zap?.let { z -> { z(-1) } },
                     jumpBackWindowSec = if (isTunedLive && previewChannel?.catchup == true) liveVm::currentCatchupWindowSec else null,
                     // Non-null only while an archive is on screen, so movies, episodes and live TV get
                     // the single real clock and catch-up gets the pair.

@@ -8,14 +8,13 @@ import tv.own.owntv.mobile.ui.screens.recordings.RecordingsViewModel
 
 /**
  * The Downloads and Recordings screens. Both queues are core's and already registered there — these
- * are only the view models. Downloads needs the context for the volume list and the system save
- * dialog; Recordings needs nothing but core and the tuner that plays a file.
+ * are only the view models. Protected film/episode downloads stay in ZenPlay's private storage;
+ * Recordings still needs the context for its own file handling.
  */
 val downloadsModule = module {
     viewModel { RecordingsViewModel(context = androidContext(), settings = get(), recordings = get(), vodTuner = get()) }
     viewModel {
         DownloadsViewModel(
-            context = androidContext(),
             downloadDao = get(),
             movieDao = get(),
             seriesDao = get(),
@@ -23,6 +22,7 @@ val downloadsModule = module {
             settings = get(),
             downloadManager = get(),
             vodTuner = get(),
+            itemResolver = get(),
         )
     }
 }

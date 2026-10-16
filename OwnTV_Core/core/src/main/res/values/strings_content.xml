@@ -395,6 +395,9 @@
     <string name="content_downloads_storage">Storage</string>
     <!-- Translators: Title of the sheet that holds the Downloads screen's own settings: which folder downloads are written to, and whether they wait for Wi-Fi. Also the label of the button that opens it. -->
     <string name="content_downloads_options">Download options</string>
+    <string name="content_downloads_protected_storage">Encrypted storage · Playable only inside ZenPlay</string>
+    <string name="content_downloads_protected_title">Protected downloads</string>
+    <string name="content_downloads_protected_description">Movies and episodes are encrypted in ZenPlay private storage and cannot be exported or opened by another app.</string>
     <!-- Translators: Storage usage display. "free" is the free space, "total" is the total space. Both are formatted numbers with GB unit. -->
     <string name="content_downloads_storage_free"><xliff:g id="free">%1$s</xliff:g> GB free of <xliff:g id="total">%2$s</xliff:g> GB</string>
     <!-- Translators: Storage location label for internal device storage. -->

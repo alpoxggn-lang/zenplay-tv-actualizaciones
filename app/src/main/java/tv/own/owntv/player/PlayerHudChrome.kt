@@ -326,6 +326,7 @@ internal fun BottomBar(
     onOpenDialog: (HudDialog) -> Unit, onPip: (() -> Unit)?, onAudioMode: (() -> Unit)?,
     onMultiview: (() -> Unit)? = null, onRecordThis: (() -> Unit)? = null, recordingThis: Boolean = false,
     onOpenChannelList: (() -> Unit)? = null, onNextChannel: (() -> Unit)? = null,
+    onOpenEpisodeList: (() -> Unit)? = null,
     /** Given to whichever timeline is drawn, so Left/Right with the controls hidden can land on it (N6). */
     seekFocus: FocusRequester? = null,
     onBack: () -> Unit, modifier: Modifier = Modifier,
@@ -339,12 +340,20 @@ internal fun BottomBar(
     Dock(modifier = modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 20.dp)) {
         // The only two ways the D-pad changes a live channel from fullscreen. They are deliberately
         // visible and focusable: directional keys with hidden chrome merely reveal this HUD.
-        if (isLive && (onOpenChannelList != null || onNextChannel != null)) {
+        if (isLive && (onPreviousChannel != null || onOpenChannelList != null || onNextChannel != null)) {
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (onPreviousChannel != null) {
+                    OwnTVButton(
+                        stringResource(R.string.zenplay_player_previous_channel),
+                        onClick = onPreviousChannel,
+                        icon = OwnTVIcon.BACK,
+                        style = OwnTVButtonStyle.SECONDARY,
+                    )
+                }
                 if (onOpenChannelList != null) {
                     OwnTVButton(
                         stringResource(R.string.zenplay_player_channel_list),
@@ -357,7 +366,7 @@ internal fun BottomBar(
                     OwnTVButton(
                         stringResource(R.string.zenplay_player_next_channel),
                         onClick = onNextChannel,
-                        icon = OwnTVIcon.REMOTE_CHANNEL_UP,
+                        icon = OwnTVIcon.CHEVRON,
                         style = OwnTVButtonStyle.SECONDARY,
                     )
                 }
@@ -409,6 +418,17 @@ internal fun BottomBar(
                 }
                 CtrlButton(OwnTVIcon.GEAR, label = stringResource(R.string.zenplay_player_playback_settings)) {
                     onOpenDialog(HudDialog.PLAYBACK_SETTINGS)
+                }
+                // Language must be reachable in one press on Live TV, films and episodes. Keep the
+                // same dialog inside Playback settings too, so remotes with a saved shortcut and users
+                // accustomed to that route continue to work.
+                CtrlButton(OwnTVIcon.AUDIO, label = stringResource(R.string.player_audio_track)) {
+                    onOpenDialog(HudDialog.AUDIO)
+                }
+                if (onOpenEpisodeList != null) {
+                    CtrlButton(OwnTVIcon.PLAYLIST, label = stringResource(R.string.zenplay_player_episode_list)) {
+                        onOpenEpisodeList()
+                    }
                 }
                 if (onToggleFavorite != null) {
                     CtrlButton(

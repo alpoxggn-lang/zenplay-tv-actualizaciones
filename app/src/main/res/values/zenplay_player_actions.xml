@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="zenplay_player_channel_list">Lista de canales</string>
+    <string name="zenplay_player_previous_channel">Canal anterior</string>
     <string name="zenplay_player_next_channel">Siguiente canal</string>
+    <string name="zenplay_player_episode_list">Lista de episodios</string>
     <string name="zenplay_player_back_categories">← Categorías</string>
     <string name="zenplay_player_playback_settings">Ajustes de reproducción</string>
     <string name="zenplay_record_actions_title">Grabación</string>

@@ -1054,7 +1054,7 @@ class SettingsViewModel(
                 syncSeries = syncSeries,
                 preferHls = preferHls,
             )
-            sourceRepository.updateSource(updated)
+            sourceRepository.updateSource(updated, expectedCurrent = existing)
             settings.setPlaylistAutoRefresh(id, autoRefresh)
             // Apply the "Default playlist" toggle: on → this becomes the active playlist; off → if this was
             // the default, clear it back to All. Leaves another playlist's default untouched.

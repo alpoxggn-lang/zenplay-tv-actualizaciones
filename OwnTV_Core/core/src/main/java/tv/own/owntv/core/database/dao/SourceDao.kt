@@ -97,6 +97,10 @@ interface SourceDao {
     @Query("UPDATE sources SET httpReferer = :referer WHERE id = :id")
     suspend fun updateHttpReferer(id: Long, referer: String?)
 
+    /** Adopt a discovered guide without writing a stale full-row snapshot over credentials. */
+    @Query("UPDATE sources SET epgUrl = :epgUrl WHERE id = :id AND (epgUrl IS NULL OR TRIM(epgUrl) = '')")
+    suspend fun adoptEpgUrlIfBlank(id: Long, epgUrl: String)
+
     // --- profile <-> source links (hybrid model) ---
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)

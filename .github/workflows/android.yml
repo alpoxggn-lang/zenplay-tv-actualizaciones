@@ -113,7 +113,16 @@ jobs:
       - name: Unit tests
         run: |
           chmod +x ./gradlew
-          ./gradlew testNormalDebugUnitTest testLegacyDebugUnitTest --stacktrace
+          # App aggregate tasks do not traverse every included-build/library test suite. Name the
+          # security container, shared player and adaptive mobile suites explicitly so a tagged
+          # release cannot publish while one of those regressions is red.
+          ./gradlew \
+            :OwnTV_Core:core:testDebugUnitTest \
+            :OwnTV_Core:player-core:testDebugUnitTest \
+            :mobile-ui:testDebugUnitTest \
+            :app:testNormalDebugUnitTest \
+            :app:testLegacyDebugUnitTest \
+            --stacktrace
 
       # abortOnError = true in app/build.gradle.kts, so this fails the job on a lint error.
       - name: Lint
@@ -187,8 +196,8 @@ jobs:
             fi
           else
             # Non-tag artifacts mirror app/build.gradle.kts and are never published as Releases.
-            NAME="2.2.9"
-            CODE=120209
+            NAME="2.2.10"
+            CODE=120210
           fi
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "code=$CODE" >> "$GITHUB_OUTPUT"

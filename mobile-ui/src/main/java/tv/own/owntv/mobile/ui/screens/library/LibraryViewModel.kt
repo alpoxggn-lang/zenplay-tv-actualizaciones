@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tv.own.owntv.core.content.AdultCategoryClassifier
@@ -55,6 +56,7 @@ import tv.own.owntv.core.database.entity.MovieEntity
 import tv.own.owntv.core.database.entity.PlaybackProgressEntity
 import tv.own.owntv.core.database.entity.SeriesEntity
 import tv.own.owntv.core.download.DownloadIdentity
+import tv.own.owntv.core.download.DownloadItemResolver
 import tv.own.owntv.core.download.DownloadManager
 import tv.own.owntv.core.live.LiveKey
 import tv.own.owntv.core.live.parseLiveKey
@@ -127,6 +129,7 @@ class LibraryViewModel(
     private val metadata: MetadataRepository,
     private val subtitleController: SubtitleController,
     private val contentAccess: ContentAccessPolicy,
+    private val downloadItemResolver: DownloadItemResolver,
 ) : ViewModel() {
 
     private val _tab = MutableStateFlow(LibraryTab.MOVIES)
@@ -659,32 +662,48 @@ class LibraryViewModel(
         }
     }
 
-    /**
-     * The download rows behind one library row's Download action: the film's own row, or every
-     * episode row of the show. A show's episodes are looked up by series id, which is what
-     * `observeForSeries` is for.
-     */
-    fun downloadsOf(itemId: Long): Flow<List<DownloadEntity>> = if (mediaType.value == MediaType.MOVIE) {
-        ctx.flatMapLatest { c ->
-            if (c.profileId < 0) flowOf(emptyList()) else downloadManager.observe(c.profileId)
-        }.map { list -> list.filter { it.mediaType == MediaType.MOVIE && it.itemId == itemId } }
-    } else ctx.flatMapLatest { c ->
-        if (c.profileId < 0) flowOf(emptyList())
-        else downloadManager.observeForSeries(c.profileId, itemId)
-    }
+    /** The download rows behind one library item, resolved to current catalogue ids first. */
+    fun downloadsOf(itemId: Long): Flow<List<DownloadEntity>> =
+        combine(ctx, mediaType) { c, type -> c to type }
+            .flatMapLatest { (c, type) ->
+                if (c.profileId < 0) flowOf(emptyList()) else downloadManager.observe(c.profileId).mapLatest { rows ->
+                    val resolved = rows.mapNotNull { row ->
+                        if (row.profileId != c.profileId) return@mapNotNull null
+                        val current = downloadItemResolver.resolve(row) ?: return@mapNotNull null
+                        val allowed = when (current.mediaType) {
+                            MediaType.MOVIE -> movieDao.getById(current.itemId)
+                                ?.let { contentAccess.allows(c.profileId, it) } == true
+                            MediaType.EPISODE -> seriesDao.getEpisodeById(current.itemId)
+                                ?.let { contentAccess.allows(c.profileId, it) } == true
+                            else -> false
+                        }
+                        current.takeIf { allowed }
+                    }
+                    when (type) {
+                        MediaType.MOVIE -> resolved.filter { it.mediaType == MediaType.MOVIE && it.itemId == itemId }
+                        MediaType.SERIES -> resolved.filter { row ->
+                            row.mediaType == MediaType.EPISODE &&
+                                seriesDao.getEpisodeById(row.itemId)?.seriesId == itemId
+                        }
+                        else -> emptyList()
+                    }
+                }
+            }
 
     /** Start the failed rows over. */
     fun retryDownloads(rows: List<DownloadEntity>) {
         viewModelScope.launch {
             val pid = ctx.value.profileId.takeIf { it >= 0 } ?: return@launch
             rows.filter { it.status == DownloadStatus.FAILED }.forEach { row ->
-                val allowed = when (row.mediaType) {
-                    MediaType.MOVIE -> movieDao.getById(row.itemId)?.let { contentAccess.allows(pid, it) } == true
-                    MediaType.EPISODE -> seriesDao.getEpisodeById(row.itemId)
+                if (row.profileId != pid) return@forEach
+                val resolved = downloadItemResolver.resolve(row) ?: return@forEach
+                val allowed = when (resolved.mediaType) {
+                    MediaType.MOVIE -> movieDao.getById(resolved.itemId)?.let { contentAccess.allows(pid, it) } == true
+                    MediaType.EPISODE -> seriesDao.getEpisodeById(resolved.itemId)
                         ?.let { contentAccess.allows(pid, it) } == true
                     else -> false
                 }
-                if (allowed) downloadManager.retry(row)
+                if (allowed) downloadManager.retry(resolved)
             }
         }
     }

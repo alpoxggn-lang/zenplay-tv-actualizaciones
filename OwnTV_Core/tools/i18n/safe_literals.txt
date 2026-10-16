@@ -1048,9 +1048,11 @@
 3	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/CustomCategoryDao.kt	WHERE s.sourceId IN (:sourceIds)
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/CustomCategoryDao.kt	m.contextKey AS contextKey, m.position AS position,
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/DownloadDao.kt	AND contentKey = :contentKey LIMIT 1
+1	sql	core/src/main/java/tv/own/owntv/core/database/dao/DownloadDao.kt	DELETE FROM downloads
 1	technical	core/src/main/java/tv/own/owntv/core/database/dao/DownloadDao.kt	DELETE FROM downloads WHERE id = :id AND profileId = :profileId
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/DownloadDao.kt	DELETE FROM downloads WHERE profileId = :profileId
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/DownloadDao.kt	DELETE FROM downloads WHERE sourceId = :sourceId
+1	sql	core/src/main/java/tv/own/owntv/core/database/dao/DownloadDao.kt	SELECT * FROM downloads
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/DownloadDao.kt	SELECT * FROM downloads WHERE id = :id
 1	technical	core/src/main/java/tv/own/owntv/core/database/dao/DownloadDao.kt	SELECT * FROM downloads WHERE id = :id AND profileId = :profileId
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/DownloadDao.kt	SELECT * FROM downloads WHERE profileId = :profileId
@@ -1470,6 +1472,7 @@
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SourceDao.kt	SELECT s.* FROM sources s
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SourceDao.kt	SELECT sourceId FROM profile_source WHERE profileId = :profileId
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/SourceDao.kt	UPDATE sources SET catchupTimezone = :mode, catchupOffsetMin = :offsetMin WHERE id = :id
+1	sql	core/src/main/java/tv/own/owntv/core/database/dao/SourceDao.kt	UPDATE sources SET epgUrl = :epgUrl WHERE id = :id AND (epgUrl IS NULL OR TRIM(epgUrl) = '')
 2	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SourceDao.kt	UPDATE sources SET hlsSupported = :hlsSupported WHERE id = :id
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/SourceDao.kt	UPDATE sources SET httpReferer = :referer WHERE id = :id
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SourceDao.kt	UPDATE sources SET lastSyncAt = :timestamp WHERE id = :id
@@ -1667,7 +1670,10 @@
 1	log	core/src/main/java/tv/own/owntv/core/di/DatabaseModule.kt	forced-wal
 1	log	core/src/main/java/tv/own/owntv/core/di/DatabaseModule.kt	repaired
 1	technical	core/src/main/java/tv/own/owntv/core/di/DatabaseModule.kt	wal
+1	protocol	core/src/main/java/tv/own/owntv/core/download/DownloadEngine.kt	Accept-Encoding
+1	protocol	core/src/main/java/tv/own/owntv/core/download/DownloadEngine.kt	Content-Range
 1	log	core/src/main/java/tv/own/owntv/core/download/DownloadEngine.kt	DownloadManager
+1	technical	core/src/main/java/tv/own/owntv/core/download/DownloadEngine.kt	Missing protected download id
 1	log	core/src/main/java/tv/own/owntv/core/download/DownloadEngine.kt	Range
 1	log	core/src/main/java/tv/own/owntv/core/download/DownloadEngine.kt	User-Agent
 1	log	core/src/main/java/tv/own/owntv/core/download/DownloadEngine.kt	bytes=$existing-
@@ -1675,8 +1681,10 @@
 1	technical	core/src/main/java/tv/own/owntv/core/download/DownloadEngine.kt	download authorization failed id=$id
 1	technical	core/src/main/java/tv/own/owntv/core/download/DownloadEngine.kt	download authorization failed id=$id attempt=$attempt
 1	log	core/src/main/java/tv/own/owntv/core/download/DownloadEngine.kt	download authorization revoked while running id=$id
-1	log	core/src/main/java/tv/own/owntv/core/download/DownloadEngine.kt	download target unavailable id=$id path=${d.filePath}
-1	log	core/src/main/java/tv/own/owntv/core/download/DownloadEngine.kt	refusing ambiguous shared download target id=$id path=$storedPath
+1	protocol	core/src/main/java/tv/own/owntv/core/download/DownloadEngine.kt	identity
+1	log	core/src/main/java/tv/own/owntv/core/download/DownloadEngine.kt	protected download target unavailable id=$id
+1	protocol	core/src/main/java/tv/own/owntv/core/download/DownloadHttpRange.kt	*
+1	regex	core/src/main/java/tv/own/owntv/core/download/DownloadHttpRange.kt	bytes\\s+(?:(\\d+)-(\\d+)|\\*)/(\\*|\\d+)
 1	empty	core/src/main/java/tv/own/owntv/core/download/DownloadIdentity.kt	\0
 1	technical	core/src/main/java/tv/own/owntv/core/download/DownloadIdentity.kt	$VERSION:
 1	technical	core/src/main/java/tv/own/owntv/core/download/DownloadIdentity.kt	$stem--${sha256(contentKey).take(16)}$extension
@@ -1696,9 +1704,13 @@
 1	technical	core/src/main/java/tv/own/owntv/core/download/DownloadIdentity.kt	p$profileId
 1	technical	core/src/main/java/tv/own/owntv/core/download/DownloadIdentity.kt	r.
 1	technical	core/src/main/java/tv/own/owntv/core/download/DownloadIdentity.kt	s$sourceId
-1	file-path	core/src/main/java/tv/own/owntv/core/download/DownloadManager.kt	${StorageAccess.sanitize(download.title)}.${StorageAccess.extOf(download.streamUrl)}
 1	log	core/src/main/java/tv/own/owntv/core/download/DownloadManager.kt	DownloadManager
-1	log	core/src/main/java/tv/own/owntv/core/download/DownloadManager.kt	cannot create download target in ${root.stored} for $fileName
+1	technical	core/src/main/java/tv/own/owntv/core/download/DownloadManager.kt	Protected migration length mismatch
+1	technical	core/src/main/java/tv/own/owntv/core/download/DownloadManager.kt	Protected migration verification failed
+1	log	core/src/main/java/tv/own/owntv/core/download/DownloadManager.kt	cannot create protected download target for $fileName
+1	log	core/src/main/java/tv/own/owntv/core/download/DownloadManager.kt	cannot create protected target for legacy download id=${download.id}
+1	log	core/src/main/java/tv/own/owntv/core/download/DownloadManager.kt	cannot detach legacy partial download id=${download.id}
+1	log	core/src/main/java/tv/own/owntv/core/download/DownloadManager.kt	cannot migrate legacy download id=${download.id}
 1	technical	core/src/main/java/tv/own/owntv/core/download/DownloadNotifications.kt	$effectiveLocale:${localized.getString(R.string.common_nav_downloads)}
 1	technical	core/src/main/java/tv/own/owntv/core/download/DownloadNotifications.kt	owntv_downloads
 1	log	core/src/main/java/tv/own/owntv/core/download/DownloadWorker.kt	owntv-downloads
@@ -5307,3 +5319,70 @@
 1	technical	player-core/src/main/java/tv/own/owntv/player/VideoQuality.kt	video/
 1	log	player-core/src/main/java/tv/own/owntv/player/VolumeBoost.kt	volume boost failed: ${it.javaClass.simpleName}
 1	log	player-core/src/main/java/tv/own/owntv/player/VolumeBoost.kt	volume boost unavailable: ${it.javaClass.simpleName}
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/AndroidKeystoreDownloadKeyCipher.kt	AES/GCM/NoPadding
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/AndroidKeystoreDownloadKeyCipher.kt	AndroidKeyStore
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/AndroidKeystoreDownloadKeyCipher.kt	Protected download key is unavailable
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/AndroidKeystoreDownloadKeyCipher.kt	zenplay_protected_download_v1_
+1	file-path	core/src/main/java/tv/own/owntv/core/download/secure/ProtectedDownloadProvider.kt	$id.zpd
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/ProtectedDownloadProvider.kt	Protected download access was revoked
+1	mime	core/src/main/java/tv/own/owntv/core/download/secure/ProtectedDownloadProvider.kt	application/octet-stream
+1	log	core/src/main/java/tv/own/owntv/core/download/secure/ProtectedDownloadProvider.kt	protected-download-read
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/ProtectedDownloadProvider.kt	protected-download-reader
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/ProtectedDownloadProvider.kt	r
+1	empty	core/src/main/java/tv/own/owntv/core/download/secure/ProtectedDownloadStore.kt	\0
+1	file-path	core/src/main/java/tv/own/owntv/core/download/secure/ProtectedDownloadStore.kt	$fileId.$EXTENSION
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/ProtectedDownloadStore.kt	${owner.profileId}:${owner.sourceId}
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/ProtectedDownloadStore.kt	%02x
+1	uri	core/src/main/java/tv/own/owntv/core/download/secure/ProtectedDownloadStore.kt	.protected-downloads
+2	technical	core/src/main/java/tv/own/owntv/core/download/secure/ProtectedDownloadStore.kt	Protected download file identity mismatch
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/ProtectedDownloadStore.kt	Protected download is unavailable
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/ProtectedDownloadStore.kt	SHA-256
+2	uri	core/src/main/java/tv/own/owntv/core/download/secure/ProtectedDownloadStore.kt	content
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/ProtectedDownloadStore.kt	k1-
+1	file-path	core/src/main/java/tv/own/owntv/core/download/secure/ProtectedDownloadStore.kt	protected-downloads
+1	file-path	core/src/main/java/tv/own/owntv/core/download/secure/ProtectedDownloadStore.kt	zpd
+2	empty	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	\0
+2	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	%02x
+4	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	AES
+4	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	AES/GCM/NoPadding
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Invalid final protected chunk length
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Invalid protected data key
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Invalid protected chunk ciphertext
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Invalid protected chunk length
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Invalid protected chunk magic
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Invalid protected chunk size
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Invalid protected download header size
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Invalid protected download magic
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Invalid protected download owner
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Invalid protected download record
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Invalid protected footer lengths
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Invalid protected footer size
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Invalid protected footer tag
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Invalid protected key id
+2	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Invalid wrapped content key
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Invalid wrapped-key nonce
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Protected chunk cache is empty
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Protected chunk ended early
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Protected chunk index or length mismatch
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Protected chunk is outside the file
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Protected download directory is unavailable
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Protected download has no commit footer
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Protected download header is incomplete
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Protected download header overflow
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Protected download is already complete
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Protected download is incomplete
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Protected download owner mismatch
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Protected download physical length mismatch
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Protected download reader is closed
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Protected download writer is closed
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Protected footer chunk count mismatch
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	SHA-256
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Unsupported protected download flags
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Unsupported protected download version
+1	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	Unsupported protected footer version
+1	protocol	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	ZPEND001
+1	protocol	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	ZPSEC001
+1	protocol	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	chunk
+1	protocol	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	footer
+2	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	r
+2	technical	core/src/main/java/tv/own/owntv/core/download/secure/SecureDownloadContainer.kt	rw

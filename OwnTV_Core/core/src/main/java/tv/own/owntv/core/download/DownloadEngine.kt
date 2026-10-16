@@ -1,6 +1,6 @@
 package tv.own.owntv.core.download
 
-import android.content.Context
+import android.net.Uri
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -22,14 +22,58 @@ import tv.own.owntv.core.database.dao.MovieDao
 import tv.own.owntv.core.database.dao.SeriesDao
 import tv.own.owntv.core.database.dao.SourceDao
 import tv.own.owntv.core.database.entity.DownloadEntity
+import tv.own.owntv.core.download.secure.ProtectedDownloadStore
+import tv.own.owntv.core.download.secure.SecureDownloadOwner
+import tv.own.owntv.core.download.secure.SecureDownloadWriter
 import tv.own.owntv.core.model.DownloadStatus
 import tv.own.owntv.core.model.MediaType
 import tv.own.owntv.core.network.HttpClient
 import tv.own.owntv.core.stalker.StalkerClient
 import tv.own.owntv.core.stalker.StreamUrlResolver
-import tv.own.owntv.core.storage.MediaTarget
 import java.util.Collections
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+
+/**
+ * Separates permanent source deletion from the temporary gates used for credential rotation and
+ * provider entitlement.
+ *
+ * A single tombstone set cannot safely support both operations: removing that tombstone after an
+ * edit or subscription renewal can accidentally undo a concurrent real deletion. Rotation holds
+ * are reference-counted so two overlapping edits cannot re-enable enqueueing until both finish;
+ * entitlement is independently reversible after a provider-confirmed renewal.
+ */
+internal class DownloadSourceRevocations {
+    private val permanent = Collections.newSetFromMap(ConcurrentHashMap<Long, Boolean>())
+    private val entitlementRevoked = Collections.newSetFromMap(ConcurrentHashMap<Long, Boolean>())
+    private val rotationHolds = ConcurrentHashMap<Long, Int>()
+
+    fun accepts(sourceId: Long): Boolean =
+        sourceId !in permanent && sourceId !in entitlementRevoked && !rotationHolds.containsKey(sourceId)
+
+    fun revokePermanently(sourceId: Long) {
+        permanent += sourceId
+    }
+
+    fun holdForRotation(sourceId: Long) {
+        rotationHolds.compute(sourceId) { _, count -> (count ?: 0) + 1 }
+    }
+
+    fun releaseRotation(sourceId: Long) {
+        rotationHolds.computeIfPresent(sourceId) { _, count ->
+            (count - 1).takeIf { it > 0 }
+        }
+    }
+
+    fun revokeEntitlement(sourceId: Long) {
+        entitlementRevoked += sourceId
+    }
+
+    /** A confirmed renewal removes only the reversible entitlement gate. */
+    fun restoreEntitlement(sourceId: Long) {
+        entitlementRevoked -= sourceId
+    }
+}
 
 /** What the foreground notification shows about the transfer currently running. */
 data class DownloadProgress(val title: String, val downloadedBytes: Long, val totalBytes: Long)
@@ -43,8 +87,6 @@ data class DownloadProgress(val title: String, val downloadedBytes: Long, val to
  * drains whatever rows are QUEUED/RUNNING, one at a time, until none are left.
  */
 class DownloadEngine(
-    /** Only to resolve a stored `filePath` into something writable — a document needs a resolver. */
-    private val context: Context,
     private val downloadDao: DownloadDao,
     private val client: OkHttpClient,
     private val sourceDao: SourceDao,
@@ -53,7 +95,9 @@ class DownloadEngine(
     private val streamUrlResolver: StreamUrlResolver,
     private val activityTracker: DownloadActivityTracker,
     private val contentAccess: ContentAccessPolicy,
+    private val protectedStore: ProtectedDownloadStore,
 ) {
+    private val itemResolver = DownloadItemResolver(downloadDao, movieDao, seriesDao)
     /** Jobs of transfers currently running, so pause/delete/retry can stop one precisely. */
     private val active = ConcurrentHashMap<Long, Job>()
 
@@ -68,7 +112,7 @@ class DownloadEngine(
 
     /** Permanent process-local tombstones close the enqueue/delete race during owner removal. */
     private val revokedProfiles = Collections.newSetFromMap(ConcurrentHashMap<Long, Boolean>())
-    private val revokedSources = Collections.newSetFromMap(ConcurrentHashMap<Long, Boolean>())
+    private val sourceRevocations = DownloadSourceRevocations()
 
     /** Set whenever a row is queued, so a drain that is about to finish takes one more look. */
     @Volatile
@@ -118,14 +162,32 @@ class DownloadEngine(
     }
 
     fun accepts(profileId: Long, sourceId: Long): Boolean =
-        profileId !in revokedProfiles && sourceId !in revokedSources
+        profileId !in revokedProfiles && sourceRevocations.accepts(sourceId)
 
     fun revokeProfile(profileId: Long) {
         revokedProfiles += profileId
     }
 
     fun revokeSource(sourceId: Long) {
-        revokedSources += sourceId
+        sourceRevocations.revokePermanently(sourceId)
+    }
+
+    fun revokeSourceEntitlement(sourceId: Long) {
+        sourceRevocations.revokeEntitlement(sourceId)
+    }
+
+    fun restoreSourceEntitlement(sourceId: Long) {
+        sourceRevocations.restoreEntitlement(sourceId)
+    }
+
+    /** Temporarily refuse new work while an existing source receives a new account identity. */
+    fun holdSourceForRotation(sourceId: Long) {
+        sourceRevocations.holdForRotation(sourceId)
+    }
+
+    /** Release only a rotation hold; a permanent deletion tombstone always wins and remains set. */
+    fun releaseSource(sourceId: Long) {
+        sourceRevocations.releaseRotation(sourceId)
     }
 
     /**
@@ -150,28 +212,19 @@ class DownloadEngine(
             markFailed(id, queued.downloadedBytes, queued.totalBytes)
             return
         }
-        // Defence in depth for databases created by older/beta builds: one physical path may have
-        // multiple logical owners. The engine must never be the writer that chooses whose bytes win.
-        // Manager retry/resume moves the selected row to its stable private path first.
-        val storedPath = d.filePath
-        if (storedPath != null && downloadDao.countForFilePath(storedPath) > 1) {
-            android.util.Log.w(TAG, "refusing ambiguous shared download target id=$id path=$storedPath")
-            markFailed(id, d.downloadedBytes, d.totalBytes)
-            return
-        }
-        val target = MediaTarget.of(context, d.filePath)
-        // A download folder on removable storage can simply be gone (card pulled, USB unplugged),
-        // and a folder the user picked through the system picker can have its grant revoked.
-        // Fail loudly rather than silently re-homing gigabytes onto internal storage.
-        if (target == null || !target.ensureWritable()) {
-            android.util.Log.w(TAG, "download target unavailable id=$id path=${d.filePath}")
+        val owner = ownerOf(d)
+        val fileId = protectedFileId(d.filePath)
+        if (fileId == null || !protectedStore.exists(fileId)) {
+            android.util.Log.w(TAG, "protected download target unavailable id=$id")
             markFailed(id, 0, d.totalBytes)
             return
         }
-        // Resume whenever a partial file is on disk — including a RUNNING row left behind by a
-        // process death — instead of only after an explicit pause. retry() deletes the file first,
-        // so a deliberate restart still starts from zero.
-        if (target.exists() && target.length() == 0L) target.truncate()
+        // A process can die after writing the authenticated footer but before Room records
+        // COMPLETED. Recognise that committed container instead of trying to resume it.
+        completedLength(fileId, owner)?.let { size ->
+            downloadDao.updateProgress(id, DownloadStatus.COMPLETED, size, size, System.currentTimeMillis())
+            return
+        }
         // Attempt loop (plan D-3): a Stalker `create_link` URL dies after ~2-4 h, so a long download
         // can fail mid-stream. Each attempt re-resolves a FRESH URL from the stored cmd and resumes
         // with an HTTP Range from the bytes already written; a server that ignores Range restarts the
@@ -187,11 +240,11 @@ class DownloadEngine(
             d = authorized(current)
             if (d == null) {
                 android.util.Log.w(TAG, "download authorization failed id=$id attempt=$attempt")
-                markFailed(id, target.length(), current.totalBytes)
+                markFailed(id, committedBytes(current), current.totalBytes)
                 return
             }
             val done = try {
-                attemptDownload(id, d, target, onProgress)
+                attemptDownload(id, d, onProgress)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -200,7 +253,7 @@ class DownloadEngine(
             }
             if (done) return
             if (!currentCoroutineContext().isActive) return // paused/deleted — status already set by caller
-            if (attempt >= MAX_ATTEMPTS) { markFailed(id, target.length(), d.totalBytes); return }
+            if (attempt >= MAX_ATTEMPTS) { markFailed(id, committedBytes(d), d.totalBytes); return }
             delay(RETRY_DELAY_MS * attempt)
         }
     }
@@ -209,15 +262,22 @@ class DownloadEngine(
     private suspend fun attemptDownload(
         id: Long,
         d: DownloadEntity,
-        target: MediaTarget,
         onProgress: (DownloadProgress) -> Unit,
     ): Boolean {
         // Resolve at download-start time, fresh every attempt — the row keeps the stored cmd as the
         // item's identity; only this attempt's HTTP request sees the minted URL. A resolve failure
         // (portal down / bad auth) is a retryable attempt like any HTTP failure.
         val (url, userAgent) = resolveTarget(d)
-        val existing = DownloadResume.resumeOffset(target)
-        val rb = Request.Builder().url(url).header("User-Agent", userAgent)
+        val owner = ownerOf(d)
+        var fileId = protectedFileId(d.filePath)
+            ?: throw java.io.IOException("Missing protected download id")
+        val existing = resumeHandle(fileId, owner).useWriter { it.committedPlaintextBytes }
+        val rb = Request.Builder()
+            .url(url)
+            .header("User-Agent", userAgent)
+            // Resume offsets count the bytes encrypted in our container. Transparent HTTP gzip
+            // would make those offsets describe decoded bytes while Range addresses wire bytes.
+            .header("Accept-Encoding", "identity")
         if (existing > 0) rb.header("Range", "bytes=$existing-")
         val call = client.newCall(rb.build())
         // OkHttp's synchronous read is blocking; coroutine cancellation alone does not wake it.
@@ -226,31 +286,74 @@ class DownloadEngine(
         val cancelCall = watchDownloadCancellation(call::cancel)
         try {
             call.execute().use { resp ->
-            // 416 on a resume = our Range starts at/after the end of the resource — the file already
-            // holds every byte the server has (a completed download whose COMPLETED write was lost to
-            // a crash/disconnect). Without this, the retry loop would mark a finished file FAILED.
-            if (resp.code == 416 && existing > 0) {
-                downloadDao.updateProgress(id, DownloadStatus.COMPLETED, existing, existing, System.currentTimeMillis())
+            val body = resp.body
+            val plan = planDownloadResponse(
+                existingBytes = existing,
+                responseCode = resp.code,
+                contentRangeHeader = resp.header("Content-Range"),
+                contentLength = body.contentLength(),
+            ) ?: return false
+            // A 416 is completion only when `Content-Range: bytes */N` says N is exactly the number
+            // of locally authenticated bytes. A generic/mismatched 416 is never enough evidence.
+            if (plan.mode == DownloadWriteMode.ALREADY_COMPLETE) {
+                val size = resumeHandle(fileId, owner).useWriter { it.finish() }
+                downloadDao.updateProgress(id, DownloadStatus.COMPLETED, size, size, System.currentTimeMillis())
                 return true
             }
-            val body = resp.body
-            if (!resp.isSuccessful) return false
-            val append = resp.code == 206 && existing > 0 // server honoured the Range
-            val total = DownloadResume.expectedTotal(append, existing, body.contentLength())
+            val append = plan.mode == DownloadWriteMode.APPEND
+            val total = plan.expectedTotalBytes ?: if (append) existing else 0L
             var done = if (append) existing else 0L
+            val handle = if (plan.mode == DownloadWriteMode.APPEND || existing == 0L) {
+                resumeHandle(fileId, owner)
+            } else {
+                // The server ignored Range. A protected container cannot be truncated in place
+                // without risking nonce/key reuse, so replace it atomically with a fresh file/key.
+                val replacement = protectedStore.create(owner)
+                if (!protectedStore.revoke(fileId)) {
+                    replacement.writer.close()
+                    if (!protectedStore.delete(replacement.fileId)) {
+                        android.util.Log.w(TAG, "replacement cleanup pending id=$id fileId=${replacement.fileId}")
+                    }
+                    android.util.Log.w(TAG, "cannot persist old protected download revocation id=$id")
+                    return false
+                }
+                val moved = downloadDao.updateFilePathForProfile(
+                    id,
+                    d.profileId,
+                    replacement.contentUri.toString(),
+                    System.currentTimeMillis(),
+                )
+                if (moved == 0) {
+                    replacement.writer.close()
+                    if (!protectedStore.delete(replacement.fileId)) {
+                        android.util.Log.w(TAG, "replacement cleanup pending id=$id fileId=${replacement.fileId}")
+                    }
+                    return true
+                }
+                if (!protectedStore.delete(fileId)) {
+                    // The old URI is already durably revoked; startup retries physical deletion.
+                    android.util.Log.w(TAG, "old protected download cleanup pending id=$id fileId=$fileId")
+                }
+                fileId = replacement.fileId
+                done = 0L
+                replacement
+            }
             downloadDao.updateProgress(id, DownloadStatus.RUNNING, done, total, System.currentTimeMillis())
             onProgress(DownloadProgress(d.title, done, total))
             body.byteStream().use { input ->
-                target.openOutput(append).use { out ->
+                handle.writer.use { out ->
                     val buf = ByteArray(128 * 1024)
+                    var responseBytes = 0L
                     var lastTick = 0L
                     var lastAuthorizationCheck = System.currentTimeMillis()
                     while (true) {
                         if (!currentCoroutineContext().isActive) return false
                         val n = input.read(buf)
                         if (n < 0) break
+                        if (!acceptsDownloadResponseBlock(plan, responseBytes, n)) return false
                         out.write(buf, 0, n)
-                        done += n
+                        responseBytes = Math.addExact(responseBytes, n.toLong())
+                        done = out.committedPlaintextBytes
                         val t = System.currentTimeMillis()
                         if (t - lastAuthorizationCheck >= AUTHORIZATION_RECHECK_MS) {
                             val current = downloadDao.getById(id)
@@ -267,10 +370,15 @@ class DownloadEngine(
                             lastTick = t
                         }
                     }
+                    // A CDN may return a valid-looking but deliberately shortened 206 slice. Do not
+                    // authenticate a footer until EOF also reaches the declared whole-object size.
+                    if (!completesDownloadResponse(plan, existing, responseBytes)) {
+                        return false
+                    }
+                    done = out.finish()
                 }
             }
-            val size = target.length()
-            downloadDao.updateProgress(id, DownloadStatus.COMPLETED, size, size, System.currentTimeMillis())
+            downloadDao.updateProgress(id, DownloadStatus.COMPLETED, done, done, System.currentTimeMillis())
                 return true
             }
         } finally {
@@ -286,67 +394,14 @@ class DownloadEngine(
         if (!accepts(d.profileId, d.sourceId) ||
             d.profileId < 0L || d.sourceId < 0L || sourceDao.getById(d.sourceId) == null
         ) return null
-        val resolved = when (d.mediaType) {
-            MediaType.MOVIE -> {
-                val byId = movieDao.getById(d.itemId)?.takeIf { movie ->
-                    movie.sourceId == d.sourceId &&
-                        (DownloadIdentity.isLegacy(d.contentKey) || DownloadIdentity.movie(movie) == d.contentKey)
-                }
-                val movie = byId
-                    ?: DownloadIdentity.movieRemoteId(d.contentKey)
-                        ?.let { movieDao.findByRemote(d.sourceId, it) }
-                    // M3U rows often have no provider id. Their stable key deliberately keeps only
-                    // a one-way hash of the URL (credentials must not leak into an identity), while
-                    // the download row already stores the original URL. Re-link through that URL
-                    // only when it is unique inside this source and recreates the exact same key.
-                    ?: movieDao.findByStreamUrl(d.sourceId, d.streamUrl)
-                        .singleOrNull()
-                        ?.takeIf { DownloadIdentity.movie(it) == d.contentKey }
-                    ?: return null
-                if (!contentAccess.allows(d.profileId, movie)) return null
-                d.copy(itemId = movie.id, streamUrl = movie.streamUrl)
-            }
-            MediaType.EPISODE -> {
-                val byId = seriesDao.getEpisodeById(d.itemId)?.let { episode ->
-                    val show = seriesDao.getSeriesById(episode.seriesId)
-                    if (show?.sourceId == d.sourceId &&
-                        (DownloadIdentity.isLegacy(d.contentKey) || DownloadIdentity.episode(show, episode) == d.contentKey)
-                    ) show to episode else null
-                }
-                val pair = byId
-                    ?: DownloadIdentity.episodeRemoteIds(d.contentKey)?.let { (showRemote, episodeRemote) ->
-                        seriesDao.findSeriesByRemote(d.sourceId, showRemote)?.let { show ->
-                            seriesDao.findEpisodeByRemote(show.id, episodeRemote)?.let { show to it }
-                        }
-                    }
-                    ?: seriesDao.findEpisodesByStreamUrl(d.sourceId, d.streamUrl)
-                        .singleOrNull()
-                        ?.let { episode ->
-                            seriesDao.getSeriesById(episode.seriesId)?.let { show ->
-                                (show to episode).takeIf {
-                                    DownloadIdentity.episode(show, episode) == d.contentKey
-                                }
-                            }
-                        }
-                    ?: return null
-                if (!contentAccess.allows(d.profileId, pair.second)) return null
-                d.copy(itemId = pair.second.id, streamUrl = pair.second.streamUrl)
-            }
-            else -> return null
+        val resolved = itemResolver.resolve(d) ?: return null
+        val allowed = when (resolved.mediaType) {
+            MediaType.MOVIE -> movieDao.getById(resolved.itemId)?.let { contentAccess.allows(d.profileId, it) } == true
+            MediaType.EPISODE -> seriesDao.getEpisodeById(resolved.itemId)
+                ?.let { contentAccess.allows(d.profileId, it) } == true
+            else -> false
         }
-        if (resolved.itemId != d.itemId || resolved.streamUrl != d.streamUrl) {
-            val updated = downloadDao.relink(
-                id = d.id,
-                profileId = d.profileId,
-                sourceId = d.sourceId,
-                contentKey = d.contentKey,
-                itemId = resolved.itemId,
-                streamUrl = resolved.streamUrl,
-                timestamp = System.currentTimeMillis(),
-            )
-            if (updated == 0) return null
-        }
-        return resolved
+        return resolved.takeIf { allowed }
     }
 
     /**
@@ -373,6 +428,38 @@ class DownloadEngine(
         val ua = source.userAgent?.takeIf { it.isNotBlank() } ?: StalkerClient.DEFAULT_MAG_USER_AGENT
         return streamUrlResolver.resolve(source, d.streamUrl, vod = true, episode = episode) to ua
     }
+
+    private fun ownerOf(download: DownloadEntity): SecureDownloadOwner =
+        SecureDownloadOwner.fromContentKey(
+            profileId = download.profileId,
+            sourceId = download.sourceId,
+            contentKey = download.contentKey,
+        )
+
+    private fun protectedFileId(stored: String?): UUID? = stored
+        ?.let { runCatching { Uri.parse(it) }.getOrNull() }
+        ?.let(protectedStore::fileId)
+
+    private fun resumeHandle(
+        fileId: UUID,
+        owner: SecureDownloadOwner,
+    ): ProtectedDownloadStore.WriteHandle = protectedStore.resume(fileId, owner)
+
+    private fun completedLength(fileId: UUID, owner: SecureDownloadOwner): Long? =
+        runCatching { protectedStore.open(fileId, owner).use { it.plaintextLength } }.getOrNull()
+
+    private fun committedBytes(download: DownloadEntity): Long {
+        val fileId = protectedFileId(download.filePath) ?: return 0L
+        val owner = runCatching { ownerOf(download) }.getOrNull() ?: return 0L
+        return completedLength(fileId, owner)
+            ?: runCatching {
+                resumeHandle(fileId, owner).writer.use { it.committedPlaintextBytes }
+            }.getOrDefault(0L)
+    }
+
+    private inline fun <T> ProtectedDownloadStore.WriteHandle.useWriter(
+        block: (SecureDownloadWriter) -> T,
+    ): T = writer.use(block)
 
     /** Keep the real partial byte count — a 90%-then-failed download showing 0 bytes is misleading,
      *  and the partial file IS still on disk (resume/retry can use it). */

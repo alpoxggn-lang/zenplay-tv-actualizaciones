@@ -52,4 +52,23 @@ class ContentAccessGateContractTest {
         assertTrue(downloads.contains("if (canAccess(download, pid)) downloadManager.retry(download)"))
         assertTrue(downloads.contains("if (canAccess(download, pid)) downloadManager.resume(download)"))
     }
+
+    @Test
+    fun `library and detail download state resolve identities before grouping or retry`() {
+        val detail = source("tv/own/owntv/mobile/ui/screens/library/DetailViewModel.kt")
+        val library = source("tv/own/owntv/mobile/ui/screens/library/LibraryViewModel.kt")
+
+        assertTrue(detail.contains("downloadItemResolver.resolve(row)"))
+        assertTrue(detail.contains("associateBy { it.itemId }"))
+        assertTrue(detail.contains("seriesDao.getEpisodeById(row.itemId)?.seriesId == t.id"))
+        assertTrue(detail.contains("resolvedDownloads.value.firstOrNull"))
+        assertTrue(!detail.contains("downloadManager.observeForSeries"))
+
+        assertTrue(library.contains("fun downloadsOf(itemId: Long)"))
+        assertTrue(library.contains("downloadItemResolver.resolve(row)"))
+        assertTrue(library.contains("seriesDao.getEpisodeById(row.itemId)?.seriesId == itemId"))
+        assertTrue(library.contains("val resolved = downloadItemResolver.resolve(row) ?: return@forEach"))
+        assertTrue(library.contains("downloadManager.retry(resolved)"))
+        assertTrue(!library.contains("downloadManager.observeForSeries"))
+    }
 }

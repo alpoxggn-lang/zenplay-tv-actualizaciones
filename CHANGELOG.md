@@ -7,6 +7,26 @@
 > Issue numbers that are part of a title are fine; explanatory parentheticals are not. The detail —
 > what, why, files and verification — belongs in the commit message, never here.
 
+## v2.2.10 — 2026-10-16
+
+### ✨ Funciones nuevas
+- **Reproducción nativa de contenido de hasta 60 FPS en dispositivos compatibles**
+- **Canal anterior, canal siguiente y lista de canales dentro del reproductor**
+- **Selector directo de idioma y pista de audio en TV en vivo, películas y series**
+- **Lista de episodios accesible desde el reproductor de series**
+- **Reproductor móvil vertical y horizontal con multipantalla adaptativa**
+- **Descargas cifradas y privadas de películas y series en celular y tableta**
+
+### 🐛 Correcciones
+- **Las descargas protegidas respetan perfil, proveedor, cuenta y fecha de vencimiento**
+- **La migración cifra y verifica descargas anteriores antes de sustituirlas**
+- **Las reanudaciones de descarga rechazan respuestas HTTP incompatibles**
+- **Las reanudaciones autentican cada bloque cifrado antes de conservarlo**
+- **Las descargas terminadas se revinculan después de actualizar el catálogo**
+- **La eliminación segura de descargas se conserva incluso tras reiniciar la app**
+- **El cambio de perfil detiene la reproducción privada del perfil anterior**
+- **El modo de pantalla conserva 50 y 60 Hz nativos cuando ya coinciden con el contenido**
+
 ## v2.2.9 — 2026-10-15
 
 ### ✨ Funciones nuevas

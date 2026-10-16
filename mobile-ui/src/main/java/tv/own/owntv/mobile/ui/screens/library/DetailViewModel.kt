@@ -34,6 +34,7 @@ import tv.own.owntv.core.database.entity.MovieEntity
 import tv.own.owntv.core.database.entity.PlaybackProgressEntity
 import tv.own.owntv.core.database.entity.SeriesEntity
 import tv.own.owntv.core.download.DownloadIdentity
+import tv.own.owntv.core.download.DownloadItemResolver
 import tv.own.owntv.core.download.DownloadManager
 import tv.own.owntv.core.metadata.MetadataMode
 import tv.own.owntv.core.metadata.MetadataRepository
@@ -70,6 +71,7 @@ class DetailViewModel(
     private val metadata: MetadataRepository,
     private val subtitleController: SubtitleController,
     private val contentAccess: ContentAccessPolicy,
+    private val downloadItemResolver: DownloadItemResolver,
 ) : ViewModel() {
 
     private data class Target(val tab: LibraryTab, val id: Long)
@@ -132,24 +134,44 @@ class DetailViewModel(
     // The screen only ever asked the manager to start a transfer and then never watched it, which is
     // why the icon never changed. Shaped exactly like the television's MovieViewModel/SeriesViewModel.
 
-    /** Every download row of this profile, keyed by film id — the film's own button reads one entry. */
-    val downloadStates: StateFlow<Map<Long, DownloadEntity>> = profileId
-        .flatMapLatest { pid -> if (pid < 0) flowOf(emptyList()) else downloadManager.observe(pid) }
+    /** Resolve stale catalogue ids once for every detail download surface, then apply visibility. */
+    private val resolvedDownloads: StateFlow<List<DownloadEntity>> = profileId
+        .flatMapLatest { pid ->
+            if (pid < 0) flowOf(emptyList()) else downloadManager.observe(pid).mapLatest { rows ->
+                rows.mapNotNull { row ->
+                    val resolved = downloadItemResolver.resolve(row) ?: return@mapNotNull null
+                    val allowed = when (resolved.mediaType) {
+                        MediaType.MOVIE -> movieDao.getById(resolved.itemId)
+                            ?.let { contentAccess.allows(pid, it) } == true
+                        MediaType.EPISODE -> seriesDao.getEpisodeById(resolved.itemId)
+                            ?.let { contentAccess.allows(pid, it) } == true
+                        else -> false
+                    }
+                    resolved.takeIf { allowed }
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Every download row of this profile, keyed by current film id — the film button reads one entry. */
+    val downloadStates: StateFlow<Map<Long, DownloadEntity>> = resolvedDownloads
         .map { list -> list.filter { it.mediaType == MediaType.MOVIE }.associateBy { it.itemId } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
-    /** Episode download rows keyed by episode id — one per episode row and episode sheet. */
-    val episodeDownloadStates: StateFlow<Map<Long, DownloadEntity>> = profileId
-        .flatMapLatest { pid -> if (pid < 0) flowOf(emptyList()) else downloadManager.observe(pid) }
+    /** Episode download rows keyed by current episode id — one per episode row and episode sheet. */
+    val episodeDownloadStates: StateFlow<Map<Long, DownloadEntity>> = resolvedDownloads
         .map { list -> list.filter { it.mediaType == MediaType.EPISODE }.associateBy { it.itemId } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
-    /** Every episode download of the open show — the show-level button's aggregate. */
-    val seriesDownloads: StateFlow<List<DownloadEntity>> = combine(target, profileId) { t, pid -> t to pid }
-        .flatMapLatest { (t, pid) ->
-            if (t?.tab != LibraryTab.SERIES || pid < 0) flowOf(emptyList())
-            else downloadManager.observeForSeries(pid, t.id)
+    /** Episode downloads of the open show, grouped by each resolved episode's current parent id. */
+    val seriesDownloads: StateFlow<List<DownloadEntity>> = combine(target, profileId, resolvedDownloads) { t, pid, rows ->
+        Triple(t, pid, rows)
+    }.mapLatest { (t, pid, rows) ->
+        if (t?.tab != LibraryTab.SERIES || pid < 0) emptyList() else rows.filter { row ->
+            row.mediaType == MediaType.EPISODE &&
+                seriesDao.getEpisodeById(row.itemId)?.seriesId == t.id
         }
+    }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** The rows behind the header button: one film, or every episode of the show. */
@@ -273,7 +295,7 @@ class DetailViewModel(
         val t = target.value ?: return
         viewModelScope.launch {
             val started = when (t.tab) {
-                LibraryTab.MOVIES -> playOffline(MediaType.MOVIE, t.id, movie.value?.name, movie.value?.posterUrl)
+                LibraryTab.MOVIES -> playOffline(MediaType.MOVIE, t.id)
                     ?: tuner.playMovie(t.id, positionMs)
                 LibraryTab.SERIES -> firstEpisodeToPlay()?.let { playEpisodeAnyhow(it, positionMs) } == true
             }
@@ -287,9 +309,7 @@ class DetailViewModel(
 
     /** ZenPlay: an episode already downloaded plays from the phone, with no connection needed. */
     private suspend fun playEpisodeAnyhow(episodeId: Long, positionMs: Long): Boolean {
-        val episode = episodes.value.firstOrNull { it.id == episodeId }
-        val title = episode?.name?.takeIf { it.isNotBlank() } ?: show.value?.name
-        return playOffline(MediaType.EPISODE, episodeId, title, show.value?.posterUrl)
+        return playOffline(MediaType.EPISODE, episodeId)
             ?: tuner.playEpisode(episodeId, positionMs)
     }
 
@@ -297,14 +317,12 @@ class DetailViewModel(
      * ZenPlay: when this film or episode has finished downloading, play the saved file (offline).
      * Null when there is no finished download, so the caller streams it as usual.
      */
-    private suspend fun playOffline(type: MediaType, itemId: Long, title: String?, poster: String?): Boolean? {
-        val rows = if (type == MediaType.EPISODE) listOfNotNull(episodeDownloadStates.value[itemId])
-        else itemDownloads.value
-        val done = rows.firstOrNull {
-            it.itemId == itemId && it.status == DownloadStatus.COMPLETED &&
+    private suspend fun playOffline(type: MediaType, itemId: Long): Boolean? {
+        val done = resolvedDownloads.value.firstOrNull {
+            it.mediaType == type && it.itemId == itemId && it.status == DownloadStatus.COMPLETED &&
                 !it.filePath.isNullOrBlank()
         } ?: return null
-        return tuner.playDownload(type, itemId, done.filePath!!, title ?: done.title, poster ?: done.posterUrl)
+        return tuner.playDownload(done.id)
     }
 
     fun playExternal(episode: EpisodeEntity, onDone: () -> Unit) {

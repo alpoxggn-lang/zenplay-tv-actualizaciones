@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.compose.koinInject
 import tv.own.owntv.core.settings.SettingsRepository
+import tv.own.owntv.core.download.secure.ProtectedDownloadStore
 import tv.own.owntv.mobile.R
 import java.text.DateFormat
 import java.util.Date
@@ -110,6 +111,9 @@ fun ZenPlayLogoutDialog(onDismiss: () -> Unit) {
  * the app as part of it; the next launch opens on the sign-in screen.
  */
 fun zenPlayLogout(context: Context) {
+    // Revoke the non-exportable keys before clearing files/preferences. If Android interrupts the
+    // remaining cleanup, any ciphertext left behind is already unreadable.
+    runCatching { ProtectedDownloadStore(context).destroyAll() }
     // The universal host owns these workers, while this reusable UI module cannot depend back on
     // the app module. Cancel their stable unique names before Android clears the remaining data.
     runCatching {

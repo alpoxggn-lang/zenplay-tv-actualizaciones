@@ -61,6 +61,8 @@ object FrameRateController {
     private const val TAG = "FrameRate"
     /** Refresh rates within this many Hz of an exact multiple count as a match (panels report 59.94 etc). */
     private const val TOLERANCE_HZ = 0.35f
+    /** Only differences below this threshold are effectively the same advertised native refresh rate. */
+    private const val NATIVE_MATCH_EPSILON_HZ = 0.001f
     private const val MAX_MULTIPLE = 3
     /** Grace period before a release actually lands — see [reset]. */
     private const val RESET_DELAY_MS = 1_500L
@@ -205,14 +207,18 @@ object FrameRateController {
      * The best mode for [fps] (already snapped), or null when nothing matches. Pure, so it is unit-tested.
      *
      * Ordering, highest priority first:
-     *  1. **Seamless** switches (API 31+). A mode listed in the current mode's `alternativeRefreshRates`
+     *  1. Keep the current mode when it is already a **one-to-one** match. In particular, native
+     *     50/59.94/60fps must stay on 50/59.94/60Hz instead of moving to a seamless 100/120Hz
+     *     alternative. Both are cadence-correct, but the latter spends more display/GPU power and a
+     *     few vendor TVs briefly disturb their hardware video plane even for a nominally seamless move.
+     *  2. **Seamless** switches (API 31+). A mode listed in the current mode's `alternativeRefreshRates`
      *     — at the current resolution, since only a refresh-rate change can be seamless — is one the
      *     panel can move to without re-handshaking HDMI, i.e. without the black gap that makes a live
      *     stream look like it paused. Media3's own AFR path is pinned to seamless-only for exactly this
      *     reason; this one only *prefers* it, because on most TVs 60→50 is not seamless and refusing it
      *     outright would silently turn AFR off for the content that needs it most.
-     *  2. The lowest refresh-rate multiple (a true 24Hz beats 72Hz).
-     *  3. The closest rate within that multiple.
+     *  3. The lowest refresh-rate multiple (a true 24Hz beats 72Hz).
+     *  4. The closest rate within that multiple.
      *
      * The resolution is the **base** one — where the display was before this playback moved it — so a
      * 4K output is never switched down to 1080p just to hit a rate. The one exception is [video], passed
@@ -232,20 +238,48 @@ object FrameRateController {
     ): Chosen? {
         fun isSeamless(mode: ModeSpec) = mode.width == current.width && mode.height == current.height &&
             seamlessRates.any { abs(it - mode.hz) <= TOLERANCE_HZ }
-        fun bestAt(width: Int, height: Int): ModeSpec? = modes
-            .filter { it.width == width && it.height == height }
-            .filter { !seamlessOnly || isSeamless(it) }
-            .mapNotNull { mode -> multipleOf(mode.hz, fps)?.let { mode to it } }
-            .minByOrNull { (mode, mult) ->
-                (if (isSeamless(mode)) 0f else 1_000_000f) + mult * 1000f + abs(mode.hz - mult * fps)
+        fun bestAt(width: Int, height: Int): ModeSpec? {
+            val candidates = modes
+                .filter { it.width == width && it.height == height }
+                // Staying on the current mode is always allowed in seamless-only mode because it is
+                // not a display switch. Other candidates must be advertised as seamless.
+                .filter { !seamlessOnly || it.id == current.id || isSeamless(it) }
+                .mapNotNull { mode -> multipleOf(mode.hz, fps)?.let { mode to it } }
+            // Remaining on the current 1× mode is inherently seamless, even though Android does not
+            // list the current rate in alternativeRefreshRates. Without this guard a 60fps stream on
+            // a 60Hz panel could prefer an advertised seamless 120Hz alternative merely because the
+            // current mode was not present in that list. The tolerance used to recognize cadence must
+            // not hide a genuinely closer fractional mode: 59.94Hz beats 60Hz for 59.94fps, and
+            // 23.976Hz beats 24Hz for 23.976fps.
+            val currentCandidate = candidates.firstOrNull { (mode, _) -> mode.id == current.id }
+            if (currentCandidate?.second == 1) {
+                val currentError = abs(current.hz - fps)
+                val bestNativeError = candidates
+                    .asSequence()
+                    .filter { (_, multiple) -> multiple == 1 }
+                    .minOfOrNull { (mode, _) -> abs(mode.hz - fps) }
+                if (bestNativeError == null || currentError <= bestNativeError + NATIVE_MATCH_EPSILON_HZ) {
+                    return current
+                }
             }
-            ?.first
+            // Keep the priorities in separate comparator stages. Packing them into one large Float
+            // score loses sub-0.0625Hz differences around 1,000,000 and can make 24Hz tie 23.976Hz.
+            return candidates
+                .minWithOrNull(
+                    compareBy<Pair<ModeSpec, Int>> { (mode, _) -> if (isSeamless(mode)) 0 else 1 }
+                        .thenBy { (_, multiple) -> multiple }
+                        .thenBy { (mode, multiple) -> abs(mode.hz - multiple * fps) },
+                )
+                ?.first
+        }
         val fitted = video?.takeIf { !seamlessOnly && it.first > 0 && it.second > 0 }?.let { (w, h) ->
             modes.filter { it.width in w..baseWidth && it.height in h..baseHeight }
                 .minByOrNull { it.width.toLong() * it.height }
         }
         val mode = fitted?.let { bestAt(it.width, it.height) } ?: bestAt(baseWidth, baseHeight) ?: return null
-        return Chosen(mode, isSeamless(mode))
+        // Selecting the mode already on screen is also seamless even though Android deliberately omits
+        // the current rate from alternativeRefreshRates (that list contains alternatives only).
+        return Chosen(mode, mode.id == current.id || isSeamless(mode))
     }
 
     /**

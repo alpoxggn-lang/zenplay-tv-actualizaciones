@@ -106,8 +106,12 @@ fun PlayerControls(
     onPictureInPicture: (() -> Unit)? = null,
     /** Live-only glass channel browser. */
     onChannels: (() -> Unit)? = null,
+    /** Live-only -1 zap within the category currently playing. */
+    onPreviousChannel: (() -> Unit)? = null,
     /** Live-only +1 zap within the category currently playing. */
     onNextChannel: (() -> Unit)? = null,
+    /** Episode-only route back to this series' season and episode list. */
+    onEpisodes: (() -> Unit)? = null,
     /** The screen-wide scrub gesture's running total, in media milliseconds, while it is happening. */
     gestureScrubMs: Long?,
     modifier: Modifier = Modifier,
@@ -115,6 +119,7 @@ fun PlayerControls(
     // The app's own effects spring, not Material's default: with animations off it snaps, so the
     // chrome is simply there or not there.
     val fade = LocalMobileMotion.current.fast<Float>()
+    val audioTrackCount by engine.audioCount.collectAsStateWithLifecycle()
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(fade),
@@ -171,6 +176,7 @@ fun PlayerControls(
                     if (isLive) {
                         LiveChannelActions(
                             onChannels = onChannels,
+                            onPreviousChannel = onPreviousChannel,
                             onNextChannel = onNextChannel,
                         )
                         LiveBar(
@@ -190,6 +196,12 @@ fun PlayerControls(
                         onToggleFavorite = onToggleFavorite,
                         onMultiview = onMultiview,
                         onPictureInPicture = onPictureInPicture,
+                        onAudio = if (audioTrackCount > 1) {
+                            { onOpenSheet(PlayerSheet.AUDIO) }
+                        } else {
+                            null
+                        },
+                        onEpisodes = onEpisodes,
                     )
                 }
             }
@@ -391,15 +403,23 @@ private fun LiveBar(
 @Composable
 private fun LiveChannelActions(
     onChannels: (() -> Unit)?,
+    onPreviousChannel: (() -> Unit)?,
     onNextChannel: (() -> Unit)?,
 ) {
-    if (onChannels == null && onNextChannel == null) return
+    if (onChannels == null && onPreviousChannel == null && onNextChannel == null) return
     val tablet = LocalConfiguration.current.smallestScreenWidthDp >= 600
     Row(
         Modifier.fillMaxWidth().padding(bottom = MobileDimens.GapTiny),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        LiveActionButton(
+            icon = MobileIcons.SkipPrevious,
+            text = stringResource(
+                if (tablet) R.string.zenplay_player_previous_channel else R.string.zenplay_player_previous_short,
+            ),
+            onClick = onPreviousChannel,
+        )
         LiveActionButton(
             icon = MobileIcons.FormatListBulleted,
             text = stringResource(
@@ -449,6 +469,8 @@ private fun ToolBar(
     onToggleFavorite: () -> Unit,
     onMultiview: (() -> Unit)? = null,
     onPictureInPicture: (() -> Unit)? = null,
+    onAudio: (() -> Unit)? = null,
+    onEpisodes: (() -> Unit)? = null,
 ) {
     // Only direct watching actions live here. Brightness remains a gesture and all track/display
     // choices live under one Settings sheet; recording, sleep, sound-only, engine switching and
@@ -469,6 +491,20 @@ private fun ToolBar(
             stringResource(R.string.zenplay_player_playback_settings),
             { onOpenSheet(PlayerSheet.PLAYBACK_SETTINGS) },
         )
+        if (onAudio != null) {
+            CtrlButton(
+                MobileIcons.Audiotrack,
+                stringResource(R.string.player_tool_audio),
+                onAudio,
+            )
+        }
+        if (onEpisodes != null) {
+            CtrlButton(
+                MobileIcons.FormatListBulleted,
+                stringResource(R.string.content_episodes),
+                onEpisodes,
+            )
+        }
         if (onPictureInPicture != null) {
             CtrlButton(
                 MobileIcons.PictureInPictureAlt,

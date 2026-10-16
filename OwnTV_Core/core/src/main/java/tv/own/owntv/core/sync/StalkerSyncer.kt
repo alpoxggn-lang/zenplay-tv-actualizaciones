@@ -901,7 +901,7 @@ internal class StalkerSyncer(
             profile[key]?.trim()?.takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) }
         } ?: return
         Log.i(TAG, "adopting portal-advertised XMLTV url for sourceId=${s.id}")
-        sourceDao.update(s.copy(epgUrl = url))
+        sourceDao.adoptEpgUrlIfBlank(s.id, url)
     }
 
     companion object {

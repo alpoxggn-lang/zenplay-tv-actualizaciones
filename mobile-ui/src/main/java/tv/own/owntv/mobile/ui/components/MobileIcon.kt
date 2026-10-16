@@ -165,6 +165,13 @@ object MobileIcons {
             box(7f, 13f, 17f, 20.5f, 1f)
         }
     }
+    val Lock: ImageVector by lazy {
+        glyph() {
+            box(4.5f, 10f, 19.5f, 21f, 2f)
+            arc(12f, 10f, 5f, 180f, 180f)
+            line(12f, 14f, 12f, 17.5f)
+        }
+    }
     val Search: ImageVector by lazy {
         glyph() { ring(10.5f, 10.5f, 6.5f); line(15.5f, 15.5f, 20f, 20f) }
     }

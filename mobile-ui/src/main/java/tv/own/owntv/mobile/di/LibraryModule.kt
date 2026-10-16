@@ -34,6 +34,10 @@ val libraryModule = module {
             dataSaver = get(),
             cast = get(),
             contentAccess = get(),
+            downloadDao = get(),
+            downloadItemResolver = get(),
+            protectedDownloads = get(),
+            zenPlayAccount = get(),
             player = get(),
             watchSession = get(),
         )

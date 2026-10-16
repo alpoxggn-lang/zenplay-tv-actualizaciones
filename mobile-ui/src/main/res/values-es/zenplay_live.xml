@@ -6,6 +6,8 @@
     <string name="zenplay_live_load_failed">No se pudieron cargar los canales. Inténtalo de nuevo.</string>
     <string name="zenplay_player_channels_short">Canales</string>
     <string name="zenplay_player_channel_list">Lista de canales</string>
+    <string name="zenplay_player_previous_short">Anterior</string>
+    <string name="zenplay_player_previous_channel">Canal anterior</string>
     <string name="zenplay_player_next_short">Siguiente</string>
     <string name="zenplay_player_next_channel">Siguiente canal</string>
     <string name="zenplay_player_back_categories">← Categorías</string>

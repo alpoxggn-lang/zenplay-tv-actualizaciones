@@ -22,6 +22,9 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,6 +42,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.context.GlobalContext
 import tv.own.owntv.MainActivity
 import tv.own.owntv.R
+import tv.own.owntv.core.database.dao.ProfileDao
+import tv.own.owntv.core.database.entity.SourceEntity
+import tv.own.owntv.core.download.DownloadManager
 import tv.own.owntv.core.model.SourceType
 import tv.own.owntv.core.parser.XtreamClient
 import tv.own.owntv.core.parser.XtAccountAccess
@@ -48,6 +54,7 @@ import tv.own.owntv.core.settings.SettingsRepository
 import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 sealed interface ZenPlaySubscriptionState {
@@ -66,6 +73,8 @@ class ZenPlayExpiryMonitor(
     private val settings: SettingsRepository,
     private val sources: SourceRepository,
     private val xtream: XtreamClient,
+    private val downloads: DownloadManager,
+    private val profiles: ProfileDao,
 ) {
     private val mutex = Mutex()
     private val _state = MutableStateFlow<ZenPlaySubscriptionState>(ZenPlaySubscriptionState.Loading)
@@ -76,19 +85,38 @@ class ZenPlayExpiryMonitor(
     fun start(scope: CoroutineScope) {
         ZenPlayExpiryWork.schedule(context)
         scope.launch {
-            settings.activeProfileId
-                .flatMapLatest { profileId ->
-                    if (profileId < 0) flowOf(ExpiryRefreshKey(profileId, emptyList()))
-                    else sources.observeSources(profileId).map { list ->
-                        ExpiryRefreshKey(profileId, list.map { source -> source.id to source.lastSyncAt })
+            val everyProfileSource = profiles.observeAll().flatMapLatest { profileList ->
+                val flows = profileList.map { profile ->
+                    sources.observeSources(profile.id).map { list ->
+                        list.filter { it.type == SourceType.XTREAM }.map { source ->
+                            ExpirySourceKey(
+                                profileId = profile.id,
+                                sourceId = source.id,
+                                lastSyncAt = source.lastSyncAt,
+                                binding = zenPlaySubscriptionBinding(profile.id, source),
+                            )
+                        }
                     }
                 }
-                .combine(settings.defaultSourceId) { key, active -> key.copy(activeSourceId = active) }
+                if (flows.isEmpty()) flowOf(emptyList())
+                else combine(flows) { snapshots -> snapshots.flatMap { it } }
+            }
+            combine(
+                everyProfileSource,
+                settings.activeProfileId,
+                settings.defaultSourceId,
+            ) { sourceKeys, profileId, activeSourceId ->
+                ExpiryRefreshKey(profileId, sourceKeys, activeSourceId)
+            }
                 .distinctUntilChanged()
                 .collectLatest { key ->
-                    // IDs are enough to separate accounts and never expose URL/user/password.
-                    // lastSyncAt still triggers a refresh, but does not reset the once-per-day token.
-                    val identity = "${key.profileId}:${key.activeSourceId}:${key.sources.map { it.first }.sorted()}"
+                    // Bind notification tokens only to the active UI account. The hash changes for
+                    // credential replacement without exposing a URL, username or password.
+                    val activeBindings = key.sources
+                        .filter { it.profileId == key.profileId }
+                        .map { it.binding }
+                        .sorted()
+                    val identity = "${key.profileId}:${key.activeSourceId}:$activeBindings"
                     if (lastAccountIdentity != null && lastAccountIdentity != identity) clearNoticeTokens()
                     lastAccountIdentity = identity
                     refresh()
@@ -99,11 +127,30 @@ class ZenPlayExpiryMonitor(
 
     suspend fun refresh(): ZenPlaySubscriptionState = mutex.withLock {
         _state.value = ZenPlaySubscriptionState.Loading
-        val result = withTimeoutOrNull(15_000L) { querySubscription(settings, sources, xtream) }
-            ?: ZenPlaySubscriptionState.Unavailable
-        _state.value = result
+        val query = withTimeoutOrNull(15_000L) {
+            querySubscription(settings, profiles, sources, xtream)
+        }
+            ?: SubscriptionQueryResult(ZenPlaySubscriptionState.Unavailable, emptyList())
+        val result = query.state
+        _state.value = query.state
+        val nowMs = System.currentTimeMillis()
+        enforceProtectedDownloadEntitlements(
+            sources = query.sources,
+            nowMs = nowMs,
+            applyIfBindingCurrent = { expected, action ->
+                sources.withStableSourceIdentity(
+                    sourceId = expected.sourceId,
+                    validate = { current ->
+                        sourceSubscriptionStillCurrent(expected, current, sources)
+                    },
+                    action = action,
+                )
+            },
+            revokeForSource = { sourceId -> downloads.revokeEntitlementForSource(sourceId) },
+            restoreForSource = { sourceId -> downloads.restoreEntitlementForSource(sourceId) },
+        )
         if (result != ZenPlaySubscriptionState.Unavailable &&
-            !shouldKeepExpiryNotification(result, System.currentTimeMillis())
+            !shouldKeepExpiryNotification(result, nowMs)
         ) {
             (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
                 .cancel(NOTIFICATION_ID)
@@ -133,23 +180,135 @@ class ZenPlayExpiryMonitor(
 
 private data class ExpiryRefreshKey(
     val profileId: Long,
-    val sources: List<Pair<Long, Long?>>,
+    val sources: List<ExpirySourceKey>,
     val activeSourceId: Long = -1L,
+)
+
+private data class ExpirySourceKey(
+    val profileId: Long,
+    val sourceId: Long,
+    val lastSyncAt: Long?,
+    val binding: String,
 )
 
 private suspend fun querySubscription(
     settings: SettingsRepository,
+    profiles: ProfileDao,
     sources: SourceRepository,
     xtream: XtreamClient,
-): ZenPlaySubscriptionState {
+): SubscriptionQueryResult {
     val profileId = settings.activeProfileId.first()
-    if (profileId < 0) return ZenPlaySubscriptionState.NoAccount
-    val all = sources.observeSources(profileId).first().filter { it.type == SourceType.XTREAM }
-    if (all.isEmpty()) return ZenPlaySubscriptionState.NoAccount
+    val sourcesByProfile = profiles.getAllOnce().associate { profile ->
+        profile.id to sources.observeSources(profile.id).first()
+    }
+    // Include inactive profiles so expiry/revocation gates do not depend on which avatar happens to
+    // be selected. A shared source is queried only once; each linked profile's exact credential
+    // binding rides with the result for the pre-mutation identity check.
+    val snapshots = zenPlaySubscriptionSnapshots(sourcesByProfile)
+    val responses = coroutineScope {
+        snapshots.map { snapshot ->
+            async { snapshot to runCatching { xtream.fetchAccountStatus(snapshot.source) } }
+        }.awaitAll().toMap()
+    }
     val activeId = settings.defaultSourceId.first()
-    val inUse = all.filter { it.id == activeId }.ifEmpty { all }
-    val responses = inUse.map { source -> runCatching { xtream.fetchAccountStatus(source) } }
-    return classifyZenPlaySubscription(hasAccount = true, responses = responses)
+    val activeSnapshots = snapshots.filter { profileId in it.profileBindings }
+    val inUse = activeSnapshots.filter { it.source.id == activeId }.ifEmpty { activeSnapshots }
+    val uiState = if (profileId < 0L || inUse.isEmpty()) {
+        ZenPlaySubscriptionState.NoAccount
+    } else {
+        classifyZenPlaySubscription(
+            hasAccount = true,
+            responses = inUse.mapNotNull(responses::get),
+        )
+    }
+    return SubscriptionQueryResult(
+        state = uiState,
+        sources = responses.map { (snapshot, response) ->
+            SourceSubscriptionResult(
+                sourceId = snapshot.source.id,
+                profileBindings = snapshot.profileBindings,
+                state = response.fold(
+                    onSuccess = { details ->
+                        classifyZenPlaySubscription(
+                            hasAccount = true,
+                            responses = listOf(Result.success(details)),
+                        )
+                    },
+                    onFailure = { ZenPlaySubscriptionState.Unavailable },
+                ),
+            )
+        },
+    )
+}
+
+private data class SubscriptionQueryResult(
+    val state: ZenPlaySubscriptionState,
+    val sources: List<SourceSubscriptionResult>,
+)
+
+internal data class SourceSubscriptionResult(
+    val sourceId: Long,
+    val profileBindings: Map<Long, String>,
+    val state: ZenPlaySubscriptionState,
+)
+
+internal data class SubscriptionSourceSnapshot(
+    val source: SourceEntity,
+    val profileBindings: Map<Long, String>,
+)
+
+/** One query snapshot per source id, carrying every exact profile/source identity it represented. */
+internal fun zenPlaySubscriptionSnapshots(
+    sourcesByProfile: Map<Long, List<SourceEntity>>,
+): List<SubscriptionSourceSnapshot> {
+    val linked = sourcesByProfile.entries.flatMap { (profileId, sourceList) ->
+        sourceList.filter { it.type == SourceType.XTREAM }.map { source -> profileId to source }
+    }
+    return linked.groupBy { it.second.id }.values.map { owners ->
+        val source = owners.first().second
+        SubscriptionSourceSnapshot(
+            source = source,
+            // Every binding must describe the exact immutable entity sent to Xtream. Profile flows
+            // are collected separately, so a credential rotation could otherwise leave one owner
+            // carrying A and another B for the same source id; accepting either binding would let
+            // A's response authorize/revoke B. Membership comes from every owner, identity from the
+            // single query snapshot only.
+            profileBindings = owners.associate { (profileId, _) ->
+                profileId to zenPlaySubscriptionBinding(profileId, source)
+            },
+        )
+    }.sortedBy { it.source.id }
+}
+
+/** Credential-sensitive hash; raw account data never enters refresh keys or result objects. */
+internal fun zenPlaySubscriptionBinding(profileId: Long, source: SourceEntity): String {
+    val material = buildString {
+        append(profileId)
+        append('|').append(source.id)
+        append('|').append(source.type.name)
+        append('|').append(source.url)
+        append('|').append(source.username.orEmpty())
+        append('|').append(source.password.orEmpty())
+        append('|').append(source.userAgent.orEmpty())
+        append('|').append(source.httpReferer.orEmpty())
+        append('|').append(source.mac.orEmpty())
+        append('|').append(source.stalkerSerialNumber.orEmpty())
+        append('|').append(source.stalkerDeviceId.orEmpty())
+        append('|').append(source.stalkerDeviceId2.orEmpty())
+        append('|').append(source.stalkerSignature.orEmpty())
+    }
+    return MessageDigest.getInstance("SHA-256")
+        .digest(material.toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+}
+
+private suspend fun sourceSubscriptionStillCurrent(
+    expected: SourceSubscriptionResult,
+    current: SourceEntity,
+    sources: SourceRepository,
+): Boolean = expected.profileBindings.any { (profileId, binding) ->
+    sources.observeSources(profileId).first().any { it.id == expected.sourceId } &&
+        zenPlaySubscriptionBinding(profileId, current) == binding
 }
 
 internal fun classifyZenPlaySubscription(
@@ -178,6 +337,47 @@ internal fun shouldKeepExpiryNotification(
 ): Boolean {
     val dated = state as? ZenPlaySubscriptionState.Dated ?: return false
     return daysUntilExpiry(nowMs, dated.expiryMs, zoneId) in 0L..1L
+}
+
+internal fun shouldRemoveProtectedDownloads(
+    state: ZenPlaySubscriptionState,
+    nowMs: Long,
+): Boolean = when (state) {
+    is ZenPlaySubscriptionState.Dated -> state.expiryMs <= nowMs
+    ZenPlaySubscriptionState.ExpiredWithoutDate,
+    ZenPlaySubscriptionState.Revoked,
+    -> true
+    ZenPlaySubscriptionState.Loading,
+    ZenPlaySubscriptionState.Unlimited,
+    ZenPlaySubscriptionState.Unavailable,
+    ZenPlaySubscriptionState.NoAccount,
+    -> false
+}
+
+internal suspend fun enforceProtectedDownloadEntitlements(
+    sources: List<SourceSubscriptionResult>,
+    nowMs: Long,
+    applyIfBindingCurrent: suspend (
+        expected: SourceSubscriptionResult,
+        action: suspend () -> Unit,
+    ) -> Boolean,
+    revokeForSource: suspend (Long) -> Unit,
+    restoreForSource: suspend (Long) -> Unit,
+) {
+    sources.distinctBy { it.sourceId }.forEach { source ->
+        when {
+            shouldRemoveProtectedDownloads(source.state, nowMs) -> {
+                applyIfBindingCurrent(source) { revokeForSource(source.sourceId) }
+            }
+            source.state is ZenPlaySubscriptionState.Dated ||
+                source.state == ZenPlaySubscriptionState.Unlimited -> {
+                applyIfBindingCurrent(source) { restoreForSource(source.sourceId) }
+            }
+            // Loading/network failure/NoAccount is not proof of either expiry or renewal. Keep the
+            // current gate and files exactly as they are until the provider answers conclusively.
+            else -> Unit
+        }
+    }
 }
 
 internal fun daysUntilExpiry(

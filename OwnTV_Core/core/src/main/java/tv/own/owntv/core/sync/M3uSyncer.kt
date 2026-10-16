@@ -496,7 +496,7 @@ internal class M3uSyncer(
         }
         // Persist the playlist's EPG url (url-tvg) for the EPG engine if the source didn't have one.
         if (!header.urlTvg.isNullOrBlank() && s.epgUrl.isNullOrBlank()) {
-            sourceDao.update(s.copy(epgUrl = header.urlTvg))
+            sourceDao.adoptEpgUrlIfBlank(s.id, header.urlTvg)
         }
         progress.update(SyncPhase.LIVE, processed)
         if (moviesProcessed > 0) progress.update(SyncPhase.MOVIES, moviesProcessed)

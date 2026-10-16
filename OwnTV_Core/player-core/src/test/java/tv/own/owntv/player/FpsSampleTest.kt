@@ -61,4 +61,20 @@ class FpsSampleTest {
         s.accept(50f)
         assertFalse("the first window after a reset stands alone", s.confident)
     }
+
+    @Test
+    fun `50fps measurement is retained without a 30fps ceiling`() {
+        val s = FpsSample()
+        assertEquals(50f, s.accept(49.8f))
+        assertEquals(50f, s.accept(50.1f))
+        assertTrue(s.confident)
+    }
+
+    @Test
+    fun `60fps measurement is retained without a 30fps ceiling`() {
+        val s = FpsSample()
+        assertEquals(60f, s.accept(59.8f))
+        assertEquals(60f, s.accept(60.1f))
+        assertTrue(s.confident)
+    }
 }

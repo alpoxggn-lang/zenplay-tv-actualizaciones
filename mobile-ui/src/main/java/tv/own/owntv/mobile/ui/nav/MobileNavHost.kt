@@ -269,6 +269,23 @@ fun MobileNavHost(
                     miniRequested.value = true
                     navController.leavePlayerStillPlaying()
                 },
+                onOpenEpisodes = { seriesId ->
+                    // Episodes are a browsing action, not Stop: leave the fullscreen surface while
+                    // the shared engine keeps playing in the mini player. If playback was launched
+                    // from this same show, simply reveal the detail already under the player rather
+                    // than stacking an identical destination on it.
+                    val underPlayer = navController.previousBackStackEntry?.arguments
+                    val returnsToThisSeries =
+                        underPlayer?.getString(ARG_TAB) == LibraryTab.SERIES.name &&
+                            underPlayer.getLong(ARG_ITEM_ID) == seriesId
+                    miniRequested.value = true
+                    navController.leavePlayerStillPlaying()
+                    if (!returnsToThisSeries) {
+                        navController.navigate(
+                            detailRoute(MobileDestination.SERIES.route, LibraryTab.SERIES, seriesId),
+                        ) { launchSingleTop = true }
+                    }
+                },
             )
         }
         composable(SETUP_ROUTE) {

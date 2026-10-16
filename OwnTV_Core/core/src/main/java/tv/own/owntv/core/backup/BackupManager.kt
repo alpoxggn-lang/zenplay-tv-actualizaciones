@@ -18,6 +18,7 @@ import tv.own.owntv.core.database.entity.ProfileSourceCrossRef
 import tv.own.owntv.core.database.entity.SourceEntity
 import tv.own.owntv.core.database.transaction
 import tv.own.owntv.core.model.SourceType
+import tv.own.owntv.core.repository.SourceRepository
 import tv.own.owntv.core.stalker.StalkerClient
 import tv.own.owntv.core.settings.SettingsRepository
 
@@ -50,6 +51,8 @@ class BackupManager(
     private val subtitlesDir: File,
     /** Writes a restored profile picture into `filesDir/avatars`; the one thing that puts files there. */
     private val avatarStore: tv.own.owntv.core.profile.ProfileAvatarStore,
+    /** The only path allowed to replace an existing source identity (and its protected downloads). */
+    private val sourceRepository: SourceRepository,
 ) {
     /** What a backup can contain; the user multi-selects these for export and restore. Profiles are
      *  NOT a section: every backup is inherently profile-based — the export flow's first step picks
@@ -845,6 +848,10 @@ class BackupManager(
             // carries can be written once the database work is done.
             val restoredAvatars = ArrayList<Pair<Long, JSONObject>>()
             val sourceIdMap = HashMap<Long, Long>()
+            // Updating an existing source may cancel transfers and destroy encrypted files/keys.
+            // Never do that file/network-adjacent work while holding Room's writer transaction.
+            // The restore marker already makes this deliberately multi-step apply recoverable.
+            val pendingSourceUpdates = ArrayList<Pair<SourceEntity, SourceEntity>>()
             var epgIdMap: Map<Long, Long> = emptyMap()
 
             val fileProfiles = root.optJSONArray("profiles") ?: JSONArray()
@@ -863,9 +870,12 @@ class BackupManager(
             )
 
             // MERGE-restore (owner decision): a restore never deletes existing profiles or sources.
-            // One transaction wraps the profile/source/link row writes — the part where a partial
-            // apply would be actively wrong (a source inserted but its profile link missing). The
-            // DataStore-backed sections below (settings, customizations, engine pins, logins) can't
+            // One transaction wraps profile rows, new sources and links — the part where a partial
+            // apply would be actively wrong (a source inserted but its profile link missing).
+            // Existing-source merges are planned here but applied just after commit: changing an
+            // authorization identity must stop transfers and destroy protected files outside Room's
+            // writer transaction. DataStore-backed sections below (settings, customizations, engine
+            // pins, logins) can't
             // join it, and neither can the user-data resolve, which is deliberately chunked (B3) so
             // a large restore doesn't hold one write transaction for its whole duration.
             db.transaction {
@@ -939,41 +949,39 @@ class BackupManager(
                                 // the backup's name, per-section sync scope, Prefer HLS and per-playlist
                                 // Pre-buffer. `has()` rather than a value check, so a backup written by
                                 // an older build (no such key) still leaves the device's value alone.
-                                sourceDao.update(
-                                    existing.copy(
-                                        name = if (srcJson.has("name")) incoming.name else existing.name,
-                                        password = incoming.password ?: existing.password,
-                                        mac = incoming.mac ?: existing.mac,
-                                        stalkerSerialNumber = incoming.stalkerSerialNumber ?: existing.stalkerSerialNumber,
-                                        stalkerDeviceId = incoming.stalkerDeviceId ?: existing.stalkerDeviceId,
-                                        stalkerDeviceId2 = incoming.stalkerDeviceId2 ?: existing.stalkerDeviceId2,
-                                        stalkerSignature = incoming.stalkerSignature ?: existing.stalkerSignature,
-                                        userAgent = incoming.userAgent ?: existing.userAgent,
-                                        epgUrl = incoming.epgUrl ?: existing.epgUrl,
-                                        syncLive = if (srcJson.has("syncLive")) incoming.syncLive else existing.syncLive,
-                                        importPortalEpg = if (srcJson.has("importPortalEpg")) incoming.importPortalEpg else existing.importPortalEpg,
-                                        syncMovies = if (srcJson.has("syncMovies")) incoming.syncMovies else existing.syncMovies,
-                                        syncSeries = if (srcJson.has("syncSeries")) incoming.syncSeries else existing.syncSeries,
-                                        preferHls = if (srcJson.has("preferHls")) incoming.preferHls else existing.preferHls,
-                                        livePrerollSecs = if (srcJson.has("livePrerollSecs")) incoming.livePrerollSecs else existing.livePrerollSecs,
-                                        liveEnginePreference = if (srcJson.has("liveEnginePreference")) incoming.liveEnginePreference else existing.liveEnginePreference,
-                                        liveLatencyMode = if (srcJson.has("liveLatencyMode")) incoming.liveLatencyMode else existing.liveLatencyMode,
-                                        // v44 per-playlist overrides: the file wins only where it says anything.
-                                        catchupTimezone = if (srcJson.has("catchupTimezone")) incoming.catchupTimezone else existing.catchupTimezone,
-                                        catchupOffsetMin = if (srcJson.has("catchupOffsetMin")) incoming.catchupOffsetMin else existing.catchupOffsetMin,
-                                        vodEnginePreference = if (srcJson.has("vodEnginePreference")) incoming.vodEnginePreference else existing.vodEnginePreference,
-                                        liveTuneTimeoutSecs = if (srcJson.has("liveTuneTimeoutSecs")) incoming.liveTuneTimeoutSecs else existing.liveTuneTimeoutSecs,
-                                        httpReferer = if (srcJson.has("httpReferer")) incoming.httpReferer else existing.httpReferer,
-                                        liveLatencyCustomSecs = if (srcJson.has("liveLatencyCustomSecs")) incoming.liveLatencyCustomSecs else existing.liveLatencyCustomSecs,
-                                        // A measurement this device already took beats the file's: it
-                                        // was taken on this network, against this provider, now.
-                                        maxConnections = if (existing.maxConnections > 0) existing.maxConnections else incoming.maxConnections,
-                                        maxConnectionsProbedAt = maxOf(existing.maxConnectionsProbedAt, incoming.maxConnectionsProbedAt),
-                                        // hlsSupported is a sync-time detection hint, not a user choice:
-                                        // the device's own last answer wins, and UNKNOWN adopts the
-                                        // file's so a fresh row is not left blank until the next sync.
-                                        hlsSupported = if (existing.hlsSupported == HlsSupport.UNKNOWN) incoming.hlsSupported else existing.hlsSupported,
-                                    ),
+                                pendingSourceUpdates += existing to existing.copy(
+                                    name = if (srcJson.has("name")) incoming.name else existing.name,
+                                    password = incoming.password ?: existing.password,
+                                    mac = incoming.mac ?: existing.mac,
+                                    stalkerSerialNumber = incoming.stalkerSerialNumber ?: existing.stalkerSerialNumber,
+                                    stalkerDeviceId = incoming.stalkerDeviceId ?: existing.stalkerDeviceId,
+                                    stalkerDeviceId2 = incoming.stalkerDeviceId2 ?: existing.stalkerDeviceId2,
+                                    stalkerSignature = incoming.stalkerSignature ?: existing.stalkerSignature,
+                                    userAgent = incoming.userAgent ?: existing.userAgent,
+                                    epgUrl = incoming.epgUrl ?: existing.epgUrl,
+                                    syncLive = if (srcJson.has("syncLive")) incoming.syncLive else existing.syncLive,
+                                    importPortalEpg = if (srcJson.has("importPortalEpg")) incoming.importPortalEpg else existing.importPortalEpg,
+                                    syncMovies = if (srcJson.has("syncMovies")) incoming.syncMovies else existing.syncMovies,
+                                    syncSeries = if (srcJson.has("syncSeries")) incoming.syncSeries else existing.syncSeries,
+                                    preferHls = if (srcJson.has("preferHls")) incoming.preferHls else existing.preferHls,
+                                    livePrerollSecs = if (srcJson.has("livePrerollSecs")) incoming.livePrerollSecs else existing.livePrerollSecs,
+                                    liveEnginePreference = if (srcJson.has("liveEnginePreference")) incoming.liveEnginePreference else existing.liveEnginePreference,
+                                    liveLatencyMode = if (srcJson.has("liveLatencyMode")) incoming.liveLatencyMode else existing.liveLatencyMode,
+                                    // v44 per-playlist overrides: the file wins only where it says anything.
+                                    catchupTimezone = if (srcJson.has("catchupTimezone")) incoming.catchupTimezone else existing.catchupTimezone,
+                                    catchupOffsetMin = if (srcJson.has("catchupOffsetMin")) incoming.catchupOffsetMin else existing.catchupOffsetMin,
+                                    vodEnginePreference = if (srcJson.has("vodEnginePreference")) incoming.vodEnginePreference else existing.vodEnginePreference,
+                                    liveTuneTimeoutSecs = if (srcJson.has("liveTuneTimeoutSecs")) incoming.liveTuneTimeoutSecs else existing.liveTuneTimeoutSecs,
+                                    httpReferer = if (srcJson.has("httpReferer")) incoming.httpReferer else existing.httpReferer,
+                                    liveLatencyCustomSecs = if (srcJson.has("liveLatencyCustomSecs")) incoming.liveLatencyCustomSecs else existing.liveLatencyCustomSecs,
+                                    // A measurement this device already took beats the file's: it
+                                    // was taken on this network, against this provider, now.
+                                    maxConnections = if (existing.maxConnections > 0) existing.maxConnections else incoming.maxConnections,
+                                    maxConnectionsProbedAt = maxOf(existing.maxConnectionsProbedAt, incoming.maxConnectionsProbedAt),
+                                    // hlsSupported is a sync-time detection hint, not a user choice:
+                                    // the device's own last answer wins, and UNKNOWN adopts the
+                                    // file's so a fresh row is not left blank until the next sync.
+                                    hlsSupported = if (existing.hlsSupported == HlsSupport.UNKNOWN) incoming.hlsSupported else existing.hlsSupported,
                                 )
                             }
                             sourceIdMap[incoming.id] = existing.id
@@ -1000,6 +1008,14 @@ class BackupManager(
                         sourceDao.link(ProfileSourceCrossRef(profileId = pid, sourceId = sid)) // IGNORE on dup
                     }
                 }
+            }
+
+            // SourceRepository compares the complete authorization identity. Sensitive changes go
+            // through DownloadManager.rotateSourceIdentity: its temporary gate closes the enqueue
+            // race, running transfers stop, and protected rows/files/keys disappear before the new
+            // credentials are committed. Cosmetic-only restores retain downloads.
+            pendingSourceUpdates.forEach { (expected, updated) ->
+                sourceRepository.updateSource(updated, expectedCurrent = expected)
             }
 
             if (applySources) {

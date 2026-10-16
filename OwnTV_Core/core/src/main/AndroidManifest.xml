@@ -62,6 +62,15 @@
             android:enabled="false"
             android:exported="true" />
 
+        <!-- Protected movie/episode downloads stay app-private and are exposed only as a seekable,
+             read-only decrypted descriptor to this same application UID. URI grants are disabled so
+             an external player cannot turn the provider into an export path. -->
+        <provider
+            android:name="tv.own.owntv.core.download.secure.ProtectedDownloadProvider"
+            android:authorities="${applicationId}.protected-downloads"
+            android:exported="false"
+            android:grantUriPermissions="false" />
+
         <!-- WorkManager's foreground-service host. Both types, because both workers run in it: the
              download queue is a data sync, a recording is media playback. Each worker picks its own
              via the ForegroundInfo it returns. -->

@@ -37,6 +37,9 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE sourceId = :sourceId")
     suspend fun getAllForSource(sourceId: Long): List<DownloadEntity>
 
+    @Query("SELECT * FROM downloads")
+    suspend fun getAll(): List<DownloadEntity>
+
     @Query("DELETE FROM downloads WHERE id = :id AND profileId = :profileId")
     suspend fun deleteByIdForProfile(id: Long, profileId: Long): Int
 
@@ -45,6 +48,9 @@ interface DownloadDao {
 
     @Query("DELETE FROM downloads WHERE sourceId = :sourceId")
     suspend fun deleteAllForSource(sourceId: Long): Int
+
+    @Query("DELETE FROM downloads")
+    suspend fun deleteAll(): Int
 
     /** Number of live rows that still own this physical path (legacy rows may legitimately share). */
     @Query("SELECT COUNT(*) FROM downloads WHERE filePath = :filePath")
@@ -108,4 +114,23 @@ interface DownloadDao {
             "WHERE id = :id AND profileId = :profileId",
     )
     suspend fun updateFilePathForProfile(id: Long, profileId: Long, filePath: String, timestamp: Long): Int
+
+    /**
+     * Repair v46-era ownership only if the row still has the exact snapshot that was inspected.
+     * The id is embedded in recovered legacy keys, so moving a `sourceId=-1` row cannot collide.
+     */
+    @Query(
+        "UPDATE downloads SET sourceId = :newSourceId, contentKey = :newContentKey, updatedAt = :timestamp " +
+            "WHERE id = :id AND profileId = :profileId AND sourceId = :expectedSourceId " +
+            "AND contentKey = :expectedContentKey",
+    )
+    suspend fun repairLegacyOwner(
+        id: Long,
+        profileId: Long,
+        expectedSourceId: Long,
+        expectedContentKey: String,
+        newSourceId: Long,
+        newContentKey: String,
+        timestamp: Long,
+    ): Int
 }

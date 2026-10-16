@@ -278,7 +278,7 @@ class SettingsViewModel(
                 syncSeries = syncSeries,
                 preferHls = preferHls,
             )
-            sourceRepository.updateSource(updated)
+            sourceRepository.updateSource(updated, expectedCurrent = existing)
             settings.setPlaylistAutoRefresh(id, autoRefresh)
             expiryCache.remove(id)
             if (scopeChanged) catalogSync.cancelSync(id)

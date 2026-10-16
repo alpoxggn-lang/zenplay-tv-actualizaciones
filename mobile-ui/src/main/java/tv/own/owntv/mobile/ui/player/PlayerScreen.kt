@@ -96,13 +96,15 @@ private const val NOTCHES = 20
  * has running — going full screen and coming back out is a change of view, never a restart. Back and
  * the swipe down both leave it playing, which is what puts it into the mini player.
  *
- * The screen owns landscape for its complete lifetime and releases it only when the route leaves.
- * Releasing as soon as the first landscape frame arrived made a portrait-held phone immediately
- * rotate back, remount the surface and repeat that cycle.
+ * The screen owns orientation for its complete lifetime, but deliberately allows every sensor
+ * orientation. A phone may therefore stay upright for a portrait player or turn sideways without
+ * leaving/re-entering playback and remounting the stream.
  */
 @Composable
 fun PlayerScreen(
     onExit: () -> Unit,
+    /** Opens the series detail/episode list without stopping the episode currently playing. */
+    onOpenEpisodes: ((seriesId: Long) -> Unit)? = null,
     modifier: Modifier = Modifier,
     tuner: LiveTuner = koinInject(),
     vodTuner: VodTuner = koinInject(),
@@ -412,7 +414,9 @@ fun PlayerScreen(
                 applied
             }
         }
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        // Full sensor, rather than landscape: the same uninterrupted player is usable upright and
+        // sideways. MobileShell resumes its portrait-first browsing policy after this route leaves.
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
         pip.playerOnScreen.value = true
         onDispose {
             pip.playerOnScreen.value = false
@@ -682,7 +686,12 @@ fun PlayerScreen(
                 null
             },
             onChannels = if (isLive && channel != null) ({ sheet = PlayerSheet.CHANNELS }) else null,
+            onPreviousChannel = if (isLive && siblings.size > 1) ({ tuner.step(-1) }) else null,
             onNextChannel = if (isLive && siblings.size > 1) ({ tuner.step(1) }) else null,
+            onEpisodes = film
+                ?.takeIf { it.mediaType == MediaType.EPISODE }
+                ?.seriesId
+                ?.let { seriesId -> onOpenEpisodes?.let { open -> ({ open(seriesId) }) } },
             gestureScrubMs = scrubFraction?.takeIf { duration > 0 }?.let { (it * duration).toLong() },
         )
 

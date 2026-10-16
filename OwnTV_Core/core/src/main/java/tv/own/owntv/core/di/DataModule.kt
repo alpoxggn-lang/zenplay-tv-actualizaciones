@@ -270,12 +270,14 @@ val dataModule = module {
     // Same idea as the sync trackers: the download engine reports its running transfer here so the
     // shell's status pill can show it in both apps.
     single { tv.own.owntv.core.download.DownloadActivityTracker() }
+    single { tv.own.owntv.core.download.secure.ProtectedDownloadStore(androidContext()) }
     // downloadDao, okHttpClient, sourceDao, movieDao, seriesDao, streamUrlResolver, activityTracker,
     // contentAccessPolicy (execution-time profile/source/content gate)
     // (the middle four are D-3: Stalker downloads resolve the stored cmd at download-start time)
-    single { DownloadEngine(androidContext(), get(), get(), get(), get(), get(), get(), get(), get()) }
-    // context, downloadDao, settings, engine
-    single { DownloadManager(androidContext(), get(), get(), get()) }
+    single { DownloadEngine(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { tv.own.owntv.core.download.DownloadItemResolver(get(), get(), get()) }
+    // context, downloadDao, settings, engine, protectedDownloadStore, movieDao, seriesDao
+    single { DownloadManager(androidContext(), get(), get(), get(), get(), get(), get()) }
     // The recording half of the same idea: several can run at once (D10), so the tracker keeps a
     // line per running recording rather than a single active one.
     single { tv.own.owntv.core.recording.RecordingActivityTracker() }
@@ -311,13 +313,14 @@ val dataModule = module {
     // profileDao, sourceDao, settings, customizationStore, userDataResolver, epgSourceStore,
     // forceMpvStore, vodEngineStore, db, metadataOverrideStore, metadataDao, openSubtitlesAuthStore,
     // backgroundsDir (same folder ingestBackgroundImage writes to — the .own container carries the wallpaper),
-    // subtitlesDir (SubtitleRepository's shared cache — the container carries the subtitle files too)
+    // subtitlesDir (SubtitleRepository's shared cache — the container carries the subtitle files too),
+    // avatarStore, sourceRepository (existing source identities must rotate protected downloads)
     single {
         BackupManager(
             get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(),
             java.io.File(androidContext().filesDir, "backgrounds"),
             java.io.File(androidContext().filesDir, "subtitles"),
-            get(),
+            get(), get(),
         )
     }
     // profileDao, sourceDao, settings, launcherIntegration, openSubtitlesAccounts, avatars,

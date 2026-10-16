@@ -111,7 +111,56 @@ class SourceRepository(
             .forEach { categoryDao.clear(sourceId, it) }
     }
 
-    suspend fun updateSource(source: SourceEntity) = sourceDao.update(source)
+    suspend fun updateSource(source: SourceEntity, expectedCurrent: SourceEntity? = null) {
+        sourceUpdateMutex.withLock {
+            val stored = sourceDao.getById(source.id) ?: return@withLock
+            // A full-row snapshot may have been assembled before another edit rotated credentials.
+            // Keep its cosmetic changes, but never let that stale snapshot restore the old account.
+            val update = if (
+                expectedCurrent != null &&
+                stored.hasProtectedDownloadIdentityChange(expectedCurrent)
+            ) {
+                source.withProtectedDownloadIdentityFrom(stored)
+            } else {
+                source
+            }
+            if (stored.hasProtectedDownloadIdentityChange(update)) {
+                // An entitlement decision belongs to the old credential identity. A replacement
+                // Xtream account starts closed until its own provider response arrives; otherwise
+                // a valid response for A immediately before this rotation could authorize B.
+                if (update.type == SourceType.XTREAM) {
+                    downloadManager.revokeEntitlementForSource(source.id)
+                }
+                downloadManager.rotateSourceIdentity(
+                    sourceId = source.id,
+                    sourceStillExists = { sourceDao.getById(source.id) != null },
+                    updateSource = { sourceDao.update(update) },
+                )
+                // M3U/Stalker have no Xtream entitlement endpoint. Clear a reversible gate left by
+                // a previous Xtream identity only after the new non-Xtream identity is committed.
+                if (update.type != SourceType.XTREAM) {
+                    downloadManager.restoreEntitlementForSource(source.id)
+                }
+            } else {
+                sourceDao.update(update)
+            }
+        }
+    }
+
+    /**
+     * Validate a provider response and apply its entitlement action under the same gate used by
+     * [updateSource]. This makes check + revoke/restore atomic with credential replacement.
+     */
+    suspend fun withStableSourceIdentity(
+        sourceId: Long,
+        validate: suspend (SourceEntity) -> Boolean,
+        action: suspend () -> Unit,
+    ): Boolean = sourceUpdateMutex.withLock {
+        val current = sourceDao.getById(sourceId) ?: return@withLock false
+        if (!validate(current)) return@withLock false
+        action()
+        true
+    }
 
     /**
      * [onProgress] is deliberately **last**: Kotlin binds a trailing lambda to the final parameter,
@@ -190,10 +239,41 @@ class SourceRepository(
 
     private companion object {
         const val TAG = "SourceRepository"
+        /** Serializes full-row source edits so no stale update can race a credential rotation. */
+        val sourceUpdateMutex = Mutex()
         /** Class-wide: SourceRepository is a Koin singleton, but keep the lock global regardless. */
         val relinkMutex = Mutex()
     }
 }
+
+/** Fields that can move a source to a different provider account or cryptographic owner. */
+internal fun SourceEntity.hasProtectedDownloadIdentityChange(updated: SourceEntity): Boolean =
+    type != updated.type ||
+        url != updated.url ||
+        username != updated.username ||
+        password != updated.password ||
+        userAgent != updated.userAgent ||
+        httpReferer != updated.httpReferer ||
+        mac != updated.mac ||
+        stalkerSerialNumber != updated.stalkerSerialNumber ||
+        stalkerDeviceId != updated.stalkerDeviceId ||
+        stalkerDeviceId2 != updated.stalkerDeviceId2 ||
+        stalkerSignature != updated.stalkerSignature
+
+/** Preserve the current provider account while retaining non-identity edits from a stale snapshot. */
+internal fun SourceEntity.withProtectedDownloadIdentityFrom(current: SourceEntity): SourceEntity = copy(
+    type = current.type,
+    url = current.url,
+    username = current.username,
+    password = current.password,
+    userAgent = current.userAgent,
+    httpReferer = current.httpReferer,
+    mac = current.mac,
+    stalkerSerialNumber = current.stalkerSerialNumber,
+    stalkerDeviceId = current.stalkerDeviceId,
+    stalkerDeviceId2 = current.stalkerDeviceId2,
+    stalkerSignature = current.stalkerSignature,
+)
 
 private fun SyncResult.name(): String = when (this) {
     is SyncResult.Success -> "Success"

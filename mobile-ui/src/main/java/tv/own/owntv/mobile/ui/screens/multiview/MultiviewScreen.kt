@@ -7,15 +7,18 @@ import android.view.TextureView
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -30,8 +33,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -115,14 +119,34 @@ fun MultiviewScreen(
         onDispose { view.keepScreenOn = false }
     }
 
-    Box(modifier.fillMaxSize().background(Color.Black)) {
-        // Landscape: two per row. Portrait: one per row, stacked.
-        val rows = if (landscape) state.tiles.indices.chunked(2) else state.tiles.indices.map { listOf(it) }
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(TileGap)) {
+    BoxWithConstraints(
+        modifier = modifier.fillMaxSize().background(Color.Black),
+        contentAlignment = Alignment.Center,
+    ) {
+        val spec = mobileMultiviewGridSpec(state.tiles.size, landscape)
+        val cell = mobileMultiviewCellSize(
+            availableWidth = maxWidth.value,
+            availableHeight = maxHeight.value,
+            spec = spec,
+            gap = TileGap.value,
+        )
+        val cellWidth = cell.width.dp
+        val cellHeight = cell.height.dp
+        val gridWidth = (cell.width * spec.columns + TileGap.value * (spec.columns - 1)).dp
+        val gridHeight = (cell.height * spec.rows + TileGap.value * (spec.rows - 1)).dp
+        val rows = state.tiles.indices.chunked(spec.columns)
+
+        Column(
+            modifier = Modifier.width(gridWidth).height(gridHeight),
+            verticalArrangement = Arrangement.spacedBy(TileGap),
+        ) {
             rows.forEach { row ->
                 Row(
-                    Modifier.fillMaxWidth().weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(TileGap),
+                    modifier = Modifier.fillMaxWidth().height(cellHeight),
+                    horizontalArrangement = Arrangement.spacedBy(
+                        space = TileGap,
+                        alignment = Alignment.CenterHorizontally,
+                    ),
                 ) {
                     row.forEach { index ->
                         Tile(
@@ -131,10 +155,9 @@ fun MultiviewScreen(
                             onPickChannel = { onPickChannel(index) },
                             onFullscreen = { state.tiles[index].channel?.let(onFullscreen) },
                             onMenu = { menuFor = index },
-                            modifier = Modifier.weight(1f).fillMaxSize(),
+                            modifier = Modifier.width(cellWidth).height(cellHeight),
                         )
                     }
-                    if (row.size == 1 && landscape) Box(Modifier.weight(1f))
                 }
             }
         }
@@ -169,22 +192,30 @@ private fun Tile(
 ) {
     val tile = state.tiles[index]
     val audible = state.audible == index
+    var focused by remember(index) { mutableStateOf(false) }
     Box(
         modifier
             .clip(TileShape)
             .background(MaterialTheme.colorScheme.surfaceContainerLowest)
             .border(
-                width = if (audible) 2.dp else 1.dp,
-                color = if (audible) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                width = when {
+                    focused -> 3.dp
+                    audible -> 2.dp
+                    else -> 1.dp
+                },
+                color = if (focused || audible) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.outlineVariant
+                },
                 shape = TileShape,
             )
-            .pointerInput(index, tile.channel?.id) {
-                detectTapGestures(
-                    onTap = { if (tile.channel == null) onPickChannel() else state.giveSoundTo(index) },
-                    onDoubleTap = { if (tile.channel != null) onFullscreen() },
-                    onLongPress = { onMenu() },
-                )
-            },
+            .onFocusChanged { focused = it.isFocused }
+            .combinedClickable(
+                onClick = { if (tile.channel == null) onPickChannel() else state.giveSoundTo(index) },
+                onDoubleClick = { if (tile.channel != null) onFullscreen() },
+                onLongClick = onMenu,
+            ),
     ) {
         val channel = tile.channel
         val refusal = tile.refusal
@@ -293,10 +324,20 @@ private fun Tile(
 @Composable
 private fun TileSurface(engine: LivePreviewEngine, modifier: Modifier = Modifier) {
     val surfaceGeneration by engine.surfaceGeneration.collectAsStateWithLifecycle()
-    Box(modifier.background(Color.Black)) {
+    val videoAspect by engine.videoAspect.collectAsStateWithLifecycle()
+    BoxWithConstraints(
+        modifier = modifier.background(Color.Black).clipToBounds(),
+        contentAlignment = Alignment.Center,
+    ) {
+        val picture = mobileMultiviewVideoSize(
+            containerWidth = maxWidth.value,
+            containerHeight = maxHeight.value,
+            videoAspect = videoAspect,
+        )
+        val surfaceModifier = Modifier.width(picture.width.dp).height(picture.height.dp)
         key(surfaceGeneration) {
             AndroidView(
-                modifier = Modifier.fillMaxSize(),
+                modifier = surfaceModifier,
                 factory = { ctx ->
                     TextureView(ctx).apply {
                         // The Surface is ours to make and ours to release: a TextureView hands out a

@@ -142,11 +142,19 @@ class OwnTVApp : Application(), SingletonImageLoader.Factory, androidx.work.Conf
         // backs the in-app warning and schedules the local day-before/day-of notification checks.
         GlobalContext.get().get<tv.own.owntv.zenplay.ZenPlayExpiryMonitor>().start(appScope)
         Perf.stamp("koin-started")
-        // Offline movie/episode downloads were removed from the TV product. Cancel work persisted by
-        // an older installed release; TvWorkerFactory also makes the upgrade race harmless if Android
-        // restores that job before this cancellation completes. Recording and APK-update work use
-        // different names and are intentionally untouched.
-        appScope.launch { cancelLegacyContentDownloads(this@OwnTVApp) }
+        // Offline movie/episode downloads were removed from the TV product, but remain supported by
+        // the touch shell in this universal APK. Cancel persisted legacy work only on TV/remote-first
+        // devices. Doing this unconditionally used to cancel a phone/tablet transfer immediately
+        // after it was queued, while TvWorkerFactory replaced its worker with a no-op.
+        if (!contentDownloadsEnabled(this)) {
+            appScope.launch { cancelLegacyContentDownloads(this@OwnTVApp) }
+        } else {
+            // Resolve the manager at process start on phones/tablets, not only after the user opens
+            // the Downloads screen. Its initializer re-kicks WorkManager and the engine drains both
+            // QUEUED and stale RUNNING rows, repairing queues left behind by the old TV-only gate as
+            // soon as the fixed app is launched after an update.
+            GlobalContext.get().get<tv.own.owntv.core.download.DownloadManager>()
+        }
         // ZenPlay: films and episodes start on ExoPlayer — the engine Live TV already plays through on
         // every device — with mpv kept as the automatic fallback. On some TVs (Fire OS 7 / MediaTek)
         // an mpv-first start sat on an endless spinner. Applied once, so a later choice in

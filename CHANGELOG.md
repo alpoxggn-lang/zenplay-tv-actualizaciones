@@ -7,6 +7,12 @@
 > Issue numbers that are part of a title are fine; explanatory parentheticals are not. The detail —
 > what, why, files and verification — belongs in the commit message, never here.
 
+## v2.2.12 — 2026-10-16
+
+### 🐛 Correcciones
+- **Las descargas de películas y series salen de la cola y se reanudan en celular y tableta**
+- **Multipantalla conserva la proporción correcta en vertical y horizontal sin estirar la imagen**
+
 ## v2.2.11 — 2026-10-16
 
 ### ✨ Funciones nuevas

@@ -122,7 +122,7 @@ class ZenPlayTouchPlayerContractTest {
     }
 
     @Test
-    fun `player rotates both ways episode shortcut is absent and portrait multiview stacks`() {
+    fun `player rotates both ways episode shortcut is absent and multiview is adaptive`() {
         val screen = source("PlayerScreen.kt")
         val controls = source("PlayerControls.kt")
         val nav = File("src/main/java/tv/own/owntv/mobile/ui/nav/MobileNavHost.kt").readText()
@@ -136,7 +136,12 @@ class ZenPlayTouchPlayerContractTest {
         assertFalse(controls.contains("onEpisodes"))
         assertFalse(screen.contains("onOpenEpisodes"))
         assertTrue(nav.contains("navController.leavePlayerStillPlaying()"))
-        assertTrue(multiview.contains("if (landscape) state.tiles.indices.chunked(2)"))
-        assertTrue(multiview.contains("else state.tiles.indices.map { listOf(it) }"))
+        assertTrue(multiview.contains("mobileMultiviewGridSpec(state.tiles.size, landscape)"))
+        assertTrue(multiview.contains("mobileMultiviewCellSize("))
+        assertTrue(multiview.contains("val videoAspect by engine.videoAspect.collectAsStateWithLifecycle()"))
+        assertTrue(multiview.contains("mobileMultiviewVideoSize("))
+        assertTrue(multiview.contains("contentAlignment = Alignment.Center"))
+        assertTrue(multiview.contains(".combinedClickable("))
+        assertTrue(multiview.contains(".onFocusChanged { focused = it.isFocused }"))
     }
 }

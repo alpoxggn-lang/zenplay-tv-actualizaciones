@@ -22,7 +22,6 @@ import tv.own.owntv.core.database.entity.SeriesEntity
 import tv.own.owntv.core.metadata.MetadataProvider
 import tv.own.owntv.core.metadata.MetadataRepository
 import tv.own.owntv.core.metadata.MetadataType
-import tv.own.owntv.core.metadata.TitleNormalizer
 import tv.own.owntv.core.metadata.TrendingCandidate
 import tv.own.owntv.core.model.MediaType
 import tv.own.owntv.core.settings.SettingsRepository
@@ -84,20 +83,16 @@ class CatalogRecommendationRepository(
             }
         }.orEmpty()
 
-        val currentIdentity = contentIdentity(current.name, current.year ?: current.parsedYear, current.id)
-        val identity: (MovieEntity) -> String = {
-            contentIdentity(it.name, it.year ?: it.parsedYear, it.id)
-        }
+        val currentIdentity = current.recommendationStableKey()
+        val identity: (MovieEntity) -> String = { it.recommendationStableKey() }
         val allowed: (MovieEntity) -> Boolean = {
             scope.allows(it.categoryId, CustomizeKeys.movie(it))
         }
         val usableRelated = mergeAllowed(
             preferred = related,
             fallback = emptyList(),
-            currentId = current.id,
             currentIdentity = currentIdentity,
             limit = limit,
-            id = MovieEntity::id,
             identity = identity,
             allowed = allowed,
         )
@@ -109,10 +104,8 @@ class CatalogRecommendationRepository(
         mergeAllowed(
             preferred = usableRelated,
             fallback = local,
-            currentId = current.id,
             currentIdentity = currentIdentity,
             limit = limit,
-            id = MovieEntity::id,
             identity = identity,
             allowed = allowed,
         )
@@ -156,20 +149,16 @@ class CatalogRecommendationRepository(
             }
         }.orEmpty()
 
-        val currentIdentity = contentIdentity(current.name, current.year ?: current.parsedYear, current.id)
-        val identity: (SeriesEntity) -> String = {
-            contentIdentity(it.name, it.year ?: it.parsedYear, it.id)
-        }
+        val currentIdentity = current.recommendationStableKey()
+        val identity: (SeriesEntity) -> String = { it.recommendationStableKey() }
         val allowed: (SeriesEntity) -> Boolean = {
             scope.allows(it.categoryId, CustomizeKeys.series(it))
         }
         val usableRelated = mergeAllowed(
             preferred = related,
             fallback = emptyList(),
-            currentId = current.id,
             currentIdentity = currentIdentity,
             limit = limit,
-            id = SeriesEntity::id,
             identity = identity,
             allowed = allowed,
         )
@@ -181,10 +170,8 @@ class CatalogRecommendationRepository(
         mergeAllowed(
             preferred = usableRelated,
             fallback = local,
-            currentId = current.id,
             currentIdentity = currentIdentity,
             limit = limit,
-            id = SeriesEntity::id,
             identity = identity,
             allowed = allowed,
         )
@@ -325,34 +312,20 @@ class CatalogRecommendationRepository(
     private fun <T> mergeAllowed(
         preferred: List<T>,
         fallback: List<T>,
-        currentId: Long,
         currentIdentity: String,
         limit: Int,
-        id: (T) -> Long,
         identity: (T) -> String,
         allowed: (T) -> Boolean,
     ): List<T> {
-        val ids = HashSet<Long>()
         val identities = HashSet<String>()
         return (preferred.asSequence() + fallback.asSequence())
             .filter(allowed)
             .filter { item ->
-                val itemId = id(item)
                 val itemIdentity = identity(item)
-                itemId != currentId &&
-                    itemIdentity != currentIdentity &&
-                    ids.add(itemId) &&
-                    identities.add(itemIdentity)
+                itemIdentity != currentIdentity && identities.add(itemIdentity)
             }
             .take(limit)
             .toList()
-    }
-
-    /** Collapses provider duplicates (4K/HD/audio variants) while preserving genuine remakes. */
-    private fun contentIdentity(title: String, year: Int?, fallbackId: Long): String {
-        val normalized = TitleNormalizer.normalize(title)
-        val name = normalized.query.trim().lowercase().ifBlank { "id:$fallbackId" }
-        return "$name|${year ?: normalized.year ?: "?"}"
     }
 
     private suspend fun <T> safe(block: suspend () -> T): T? = try {

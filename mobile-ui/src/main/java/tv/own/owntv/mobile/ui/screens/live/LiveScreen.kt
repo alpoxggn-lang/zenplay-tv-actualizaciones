@@ -46,6 +46,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import tv.own.owntv.core.database.entity.ChannelEntity
+import tv.own.owntv.core.catalog.catalogVariantCandidate
+import tv.own.owntv.core.catalog.catalogVariantDisplayNames
 import tv.own.owntv.core.epg.displayLogoUrl
 import tv.own.owntv.core.live.LiveKey
 import tv.own.owntv.core.live.parseLiveKey
@@ -115,6 +117,12 @@ fun LiveScreen(
     val nowPlaying by vm.nowPlaying.collectAsStateWithLifecycle()
     val favorites by vm.favoriteIds.collectAsStateWithLifecycle()
     val providers by vm.providerNames.collectAsStateWithLifecycle()
+    val loadedChannels = channels.itemSnapshotList.items
+    val channelDisplayNames = remember(loadedChannels, providers) {
+        catalogVariantDisplayNames(
+            loadedChannels.map { it.catalogVariantCandidate(sourceLabel = providers[it.sourceId]) },
+        )
+    }
     val showNumbers by vm.showChannelNumbers.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
 
@@ -233,6 +241,7 @@ fun LiveScreen(
                         if (channel != null) {
                             ChannelRow(
                                 channel = channel,
+                                displayName = channelDisplayNames[channel.id] ?: channel.name,
                                 number = channel.number?.takeIf { showNumbers && it > 0 },
                                 nowPlaying = nowPlaying[channel.id],
                                 providerName = providers[channel.sourceId],
@@ -448,6 +457,7 @@ private fun EmptyChannels() {
 @Composable
 private fun ChannelRow(
     channel: ChannelEntity,
+    displayName: String,
     number: Int?,
     nowPlaying: String?,
     providerName: String?,
@@ -459,7 +469,7 @@ private fun ChannelRow(
     val subtitle = listOfNotNull(nowPlaying, providerName).takeIf { it.isNotEmpty() }?.joinToString(separator)
 
     MobileListRow(
-        title = channel.name,
+        title = displayName,
         subtitle = subtitle,
         leading = { ChannelLogo(channel, number) },
         trailing = {

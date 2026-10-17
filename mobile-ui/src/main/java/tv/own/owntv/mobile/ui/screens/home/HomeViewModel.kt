@@ -196,10 +196,10 @@ class HomeViewModel(
             val found = (movieDao.getByIds(movieIds).map { it.toFeatured() } +
                 seriesDao.getSeriesByIds(seriesIds).map { it.toFeatured() }).associateBy { it.key }
             val kept = saved.mapNotNull { found[it] }
-            if (kept.size >= MIN_FEATURED) return kept
+            if (kept.size >= MIN_FEATURED) return kept.withVariantDisplayNames()
         }
         if (fresh.size >= MIN_FEATURED) featuredCache.save(scope, fresh)
-        return fresh
+        return fresh.withVariantDisplayNames()
     }
 
     private data class MovieDiscoveryRows(

@@ -74,6 +74,8 @@ import tv.own.owntv.core.customize.CustomizeKeys
 import tv.own.owntv.core.database.entity.ContentOrderEntity
 import tv.own.owntv.core.database.entity.EpisodeEntity
 import tv.own.owntv.core.database.entity.SeriesEntity
+import tv.own.owntv.core.catalog.catalogVariantCandidate
+import tv.own.owntv.core.catalog.catalogVariantDisplayNames
 import tv.own.owntv.features.customize.MoveToCategoryDialog
 import tv.own.owntv.ui.components.TextInputDialog
 import tv.own.owntv.features.live.displayLabel
@@ -285,6 +287,12 @@ private fun SeriesGrid(
     val context = androidx.compose.ui.platform.LocalContext.current
     val toast = rememberInAppToast()
     val series = vm.series.collectAsLazyPagingItems()
+    val loadedSeries = series.itemSnapshotList.items
+    val seriesDisplayNames = remember(loadedSeries, providerNames) {
+        catalogVariantDisplayNames(
+            loadedSeries.map { it.catalogVariantCandidate(sourceLabel = providerNames[it.sourceId]) },
+        )
+    }
     val moveState by vm.moveState.collectAsStateWithLifecycle()
     val categoryMoveState by vm.categoryMoveState.collectAsStateWithLifecycle()
     var contextCategory by remember { mutableStateOf<LiveRailItem?>(null) }
@@ -775,6 +783,7 @@ private fun SeriesGrid(
                         if (s != null) {
                             SeriesListRow(
                                 series = s,
+                                displayName = seriesDisplayNames[s.id] ?: s.name,
                                 posterUrl = s.posterUrl?.takeIf { it.isNotBlank() } ?: cachedPosters[s.id],
                                 isFavorite = favoriteIds.contains(s.id),
                                 providerName = providerNames[s.sourceId],
@@ -812,7 +821,7 @@ private fun SeriesGrid(
                         if (s != null) {
                             PosterCard(
                                 posterUrl = s.posterUrl?.takeIf { it.isNotBlank() } ?: cachedPosters[s.id],
-                                title = s.name,
+                                title = seriesDisplayNames[s.id] ?: s.name,
                                 rating = s.rating,
                                 isFavorite = favoriteIds.contains(s.id),
                                 providerName = providerNames[s.sourceId],
@@ -1991,6 +2000,7 @@ private fun EpisodeRow(
 @Composable
 private fun SeriesListRow(
     series: SeriesEntity,
+    displayName: String,
     posterUrl: String?,
     isFavorite: Boolean,
     providerName: String? = null,
@@ -2026,7 +2036,7 @@ private fun SeriesListRow(
             }
             Column(Modifier.weight(1f)) {
                 Text(
-                    series.name,
+                    displayName,
                     style = MaterialTheme.typography.titleSmall,
                     color = if (focused) colors.primary else colors.onSurface,
                     maxLines = 1,

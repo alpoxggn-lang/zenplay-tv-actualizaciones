@@ -63,6 +63,8 @@ import androidx.tv.material3.Text
 import tv.own.owntv.R
 import tv.own.owntv.core.customize.CustomizeKeys
 import tv.own.owntv.core.database.entity.ChannelEntity
+import tv.own.owntv.core.catalog.catalogVariantCandidate
+import tv.own.owntv.core.catalog.catalogVariantDisplayNames
 import tv.own.owntv.core.database.entity.ContentOrderEntity
 import tv.own.owntv.features.customize.MoveToCategoryDialog
 import tv.own.owntv.features.settings.SettingsViewModel
@@ -158,6 +160,12 @@ fun LiveScreen(
     val sortMode by vm.sortMode.collectAsStateWithLifecycle()
     val livePreviewSetting by vm.livePreviewEnabled.collectAsStateWithLifecycle()
     val channels = vm.channels.collectAsLazyPagingItems()
+    val loadedVariantChannels = channels.itemSnapshotList.items
+    val channelDisplayNames = remember(loadedVariantChannels, providerNames) {
+        catalogVariantDisplayNames(
+            loadedVariantChannels.map { it.catalogVariantCandidate(sourceLabel = providerNames[it.sourceId]) },
+        )
+    }
     val moveState by vm.moveState.collectAsStateWithLifecycle()
     val categoryMoveState by vm.categoryMoveState.collectAsStateWithLifecycle()
 
@@ -710,6 +718,7 @@ fun LiveScreen(
                             }
                             ChannelRow(
                                 channel = channel,
+                                displayName = channelDisplayNames[channel.id] ?: channel.name,
                                 isFavorite = favoriteIds.contains(channel.id),
                             // The batch answers from the stored guide plus whatever the preview has
                             // already resolved; the channel under the cursor is answered from the
@@ -959,6 +968,7 @@ fun LiveScreen(
 @Composable
 private fun ChannelRow(
     channel: ChannelEntity,
+    displayName: String,
     isFavorite: Boolean,
     onFocus: () -> Unit,
     onClick: () -> Unit,
@@ -1003,7 +1013,7 @@ private fun ChannelRow(
             // so channels without EPG look exactly as before — single line.
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    channel.name,
+                    displayName,
                     style = MaterialTheme.typography.titleSmall,
                     color = if (focused) colors.primary else colors.onSurface,
                     maxLines = 1,

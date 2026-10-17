@@ -2,6 +2,9 @@ package tv.own.owntv.mobile.ui.screens.home
 
 import androidx.paging.PagingSource
 import tv.own.owntv.core.catalog.ProviderCatalogMetadataParser
+import tv.own.owntv.core.catalog.CatalogVariantCandidate
+import tv.own.owntv.core.catalog.catalogVariantCandidate
+import tv.own.owntv.core.catalog.catalogVariantDisplayNames
 import tv.own.owntv.core.database.entity.MovieEntity
 
 /** ZenPlay: Tendencias follows the calendar — this year's releases, whatever the year is. */
@@ -19,36 +22,55 @@ data class FeaturedItem(
     val backdropUrl: String?,
     val rating: Double?,
     val plot: String?,
+    val sourceId: Long,
+    val remoteId: String?,
+    val variantQualifiers: List<String>,
 )
 
-internal fun MovieEntity.toFeatured() = FeaturedItem(id, false, name, posterUrl, backdropUrl, rating, plot)
-internal fun tv.own.owntv.core.database.entity.SeriesEntity.toFeatured() =
-    FeaturedItem(id, true, name, posterUrl, backdropUrl, rating, plot)
+internal fun MovieEntity.toFeatured(): FeaturedItem {
+    val variant = catalogVariantCandidate()
+    return FeaturedItem(
+        id, false, name, posterUrl, backdropUrl, rating, plot,
+        sourceId = sourceId, remoteId = remoteId, variantQualifiers = variant.qualifiers,
+    )
+}
+
+internal fun tv.own.owntv.core.database.entity.SeriesEntity.toFeatured(): FeaturedItem {
+    val variant = catalogVariantCandidate()
+    return FeaturedItem(
+        id, true, name, posterUrl, backdropUrl, rating, plot,
+        sourceId = sourceId, remoteId = remoteId, variantQualifiers = variant.qualifiers,
+    )
+}
+
+/** Adds a suffix only when two carousel entries share a title; the stored/provider title stays raw. */
+internal fun List<FeaturedItem>.withVariantDisplayNames(): List<FeaturedItem> {
+    val names = catalogVariantDisplayNames(map { item ->
+        CatalogVariantCandidate(
+            key = item.key,
+            title = item.name,
+            sourceId = item.sourceId,
+            remoteId = item.remoteId,
+            qualifiers = item.variantQualifiers,
+        )
+    })
+    return map { item -> item.copy(name = names[item.key] ?: item.name) }
+}
 
 internal fun tv.own.owntv.core.database.entity.SeriesEntity.featuredReleaseYear(): Int? =
     year?.takeIf { it in 1800..2199 }
         ?: parsedYear?.takeIf { it in 1800..2199 }
         ?: ProviderCatalogMetadataParser.parse(name, providerYear = null).parsedYear
 
-/** This year's newest shows, one row per title — the series half of Tendencias. */
+/** This year's newest shows. Same-name provider variants remain separate. */
 internal suspend fun readFeaturedSeries(
     sourceFactory: () -> PagingSource<Int, tv.own.owntv.core.database.entity.SeriesEntity>,
     include: (tv.own.owntv.core.database.entity.SeriesEntity) -> Boolean,
 ): List<tv.own.owntv.core.database.entity.SeriesEntity> {
     val year = FEATURED_MOVIE_YEAR
-    val selectedTitles = mutableSetOf<String>()
     return readRecentlyAdded(
-        sourceFactory = { selectedTitles.clear(); sourceFactory() },
-        include = { show ->
-            if (!include(show) || show.featuredReleaseYear() != year) {
-                false
-            } else {
-                val signature = show.titleSignature.ifBlank {
-                    ProviderCatalogMetadataParser.parse(show.canonicalTitle.ifBlank { show.name }, providerYear = null).titleSignature
-                }
-                selectedTitles.add(signature)
-            }
-        },
+        sourceFactory = sourceFactory,
+        include = { show -> include(show) && show.featuredReleaseYear() == year },
         limit = FEATURED_SERIES_LIMIT,
     )
 }
@@ -68,26 +90,9 @@ internal suspend fun readFeaturedMovies(
     sourceFactory: () -> PagingSource<Int, MovieEntity>,
     include: (MovieEntity) -> Boolean,
 ): List<MovieEntity> {
-    val selectedTitles = mutableSetOf<Pair<String, Int>>()
     return readRecentlyAdded(
-        sourceFactory = {
-            // The reader can retry an invalidated snapshot; never carry its identities into a retry.
-            selectedTitles.clear()
-            sourceFactory()
-        },
-        include = { movie ->
-            if (!include(movie) || movie.featuredReleaseYear() != FEATURED_MOVIE_YEAR) {
-                false
-            } else {
-                val signature = movie.titleSignature.ifBlank {
-                    ProviderCatalogMetadataParser.parse(
-                        movie.canonicalTitle.ifBlank { movie.name }, providerYear = null,
-                    ).titleSignature
-                }
-                // Multiple resolutions/languages of a film occupy one slot; retain the newest row.
-                selectedTitles.add(signature to FEATURED_MOVIE_YEAR)
-            }
-        },
+        sourceFactory = sourceFactory,
+        include = { movie -> include(movie) && movie.featuredReleaseYear() == FEATURED_MOVIE_YEAR },
         limit = FEATURED_MOVIE_LIMIT,
     )
 }

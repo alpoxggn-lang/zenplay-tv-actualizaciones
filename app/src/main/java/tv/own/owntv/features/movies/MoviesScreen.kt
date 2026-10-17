@@ -70,6 +70,8 @@ import tv.own.owntv.R
 import tv.own.owntv.core.customize.CustomizeKeys
 import tv.own.owntv.core.database.entity.ContentOrderEntity
 import tv.own.owntv.core.database.entity.MovieEntity
+import tv.own.owntv.core.catalog.catalogVariantCandidate
+import tv.own.owntv.core.catalog.catalogVariantDisplayNames
 import tv.own.owntv.features.customize.MoveToCategoryDialog
 import tv.own.owntv.ui.components.TextInputDialog
 import tv.own.owntv.features.live.displayLabel
@@ -202,6 +204,12 @@ fun MoviesScreen(
     val selectedProgress by vm.selectedProgress.collectAsStateWithLifecycle()
     val movieProgress by vm.movieProgress.collectAsStateWithLifecycle()
     val movies = vm.movies.collectAsLazyPagingItems()
+    val loadedMovies = movies.itemSnapshotList.items
+    val movieDisplayNames = remember(loadedMovies, providerNames) {
+        catalogVariantDisplayNames(
+            loadedMovies.map { it.catalogVariantCandidate(sourceLabel = providerNames[it.sourceId]) },
+        )
+    }
     val resumeMode by vm.resumeMode.collectAsStateWithLifecycle()
     // Global external-player toggle: never mount the fullscreen in-app player (it spins up mpv)
     // when playback is handed to an external app.
@@ -701,6 +709,7 @@ fun MoviesScreen(
                             val prog = movieProgress[movie.id]
                             MovieListRow(
                                 movie = movie,
+                                displayName = movieDisplayNames[movie.id] ?: movie.name,
                                 posterUrl = movie.posterUrl?.takeIf { it.isNotBlank() } ?: cachedPosters[movie.id],
                                 isFavorite = favoriteIds.contains(movie.id),
                                 completed = prog?.let { vm.isMovieCompleted(it) } == true,
@@ -742,7 +751,7 @@ fun MoviesScreen(
                             val done = prog?.let { vm.isMovieCompleted(it) } == true
                             PosterCard(
                                 posterUrl = movie.posterUrl?.takeIf { it.isNotBlank() } ?: cachedPosters[movie.id],
-                                title = movie.name,
+                                title = movieDisplayNames[movie.id] ?: movie.name,
                                 rating = movie.rating,
                                 completed = done,
                                 progressFraction = if (done || prog == null || prog.durationMs <= 0) null
@@ -1291,6 +1300,7 @@ private fun jsonList(json: String?): List<String> {
 @Composable
 private fun MovieListRow(
     movie: MovieEntity,
+    displayName: String,
     posterUrl: String?,
     isFavorite: Boolean,
     completed: Boolean = false,
@@ -1327,7 +1337,7 @@ private fun MovieListRow(
             }
             Column(Modifier.weight(1f)) {
                 Text(
-                    movie.name,
+                    displayName,
                     style = MaterialTheme.typography.titleSmall,
                     color = when {
                         focused -> colors.primary

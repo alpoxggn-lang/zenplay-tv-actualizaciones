@@ -35,6 +35,7 @@ import tv.own.owntv.core.sync.EpgActivityTracker
 import tv.own.owntv.core.sync.SyncActivityTracker
 import tv.own.owntv.core.sync.SyncProgressCounts
 import tv.own.owntv.core.sync.SyncResult
+import tv.own.owntv.core.sync.warningText
 import tv.own.owntv.core.sync.TrendingActivityTracker
 import tv.own.owntv.core.sync.compactCount
 import tv.own.owntv.core.sync.displayText
@@ -339,8 +340,12 @@ private fun completedLine(
                 add(res.getQuantityString(R.plurals.sync_categories_removed, result.categoriesRemoved, result.categoriesRemoved))
             }
         }.joinToString(res.getString(R.string.sync_counts_separator))
-        if (changes.isBlank()) res.getString(R.string.sync_status_complete, completed.sourceName)
-        else res.getString(R.string.sync_status_complete_with_changes, completed.sourceName, changes)
+        val details = listOfNotNull(
+            changes.takeIf { it.isNotBlank() },
+            result.warnings.warningText(res),
+        ).joinToString(res.getString(R.string.sync_counts_separator))
+        if (details.isBlank()) res.getString(R.string.sync_status_complete, completed.sourceName)
+        else res.getString(R.string.sync_status_complete_with_changes, completed.sourceName, details)
     }
     is SyncResult.Failed -> res.getString(
         R.string.sync_status_failed,

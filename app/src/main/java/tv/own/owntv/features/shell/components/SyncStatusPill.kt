@@ -32,6 +32,7 @@ import tv.own.owntv.R
 import tv.own.owntv.core.network.ConnectivityObserver
 import tv.own.owntv.core.sync.SyncProgressCounts
 import tv.own.owntv.core.sync.SyncResult
+import tv.own.owntv.core.sync.warningText
 import tv.own.owntv.core.util.classifySyncFailure
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -327,6 +328,7 @@ private fun SyncLine.text(): String = when (this) {
 @Composable
 private fun completedLine(completed: SyncActivityTracker.CompletedSync, online: Boolean): String = when (val result = completed.result) {
     is SyncResult.Success -> {
+        val resources = LocalContext.current.resources
         val changes = buildList {
             if (result.categoriesAdded > 0) {
                 add(pluralStringResource(R.plurals.sync_categories_added, result.categoriesAdded, result.categoriesAdded))
@@ -335,8 +337,12 @@ private fun completedLine(completed: SyncActivityTracker.CompletedSync, online: 
                 add(pluralStringResource(R.plurals.sync_categories_removed, result.categoriesRemoved, result.categoriesRemoved))
             }
         }.joinToString(stringResource(R.string.sync_counts_separator))
-        if (changes.isBlank()) stringResource(R.string.sync_status_complete, completed.sourceName)
-        else stringResource(R.string.sync_status_complete_with_changes, completed.sourceName, changes)
+        val details = listOfNotNull(
+            changes.takeIf { it.isNotBlank() },
+            result.warnings.warningText(resources),
+        ).joinToString(stringResource(R.string.sync_counts_separator))
+        if (details.isBlank()) stringResource(R.string.sync_status_complete, completed.sourceName)
+        else stringResource(R.string.sync_status_complete_with_changes, completed.sourceName, details)
     }
     is SyncResult.Failed -> stringResource(
         R.string.sync_status_failed,

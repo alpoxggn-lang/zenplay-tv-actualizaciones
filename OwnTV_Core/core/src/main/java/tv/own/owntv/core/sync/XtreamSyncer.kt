@@ -239,7 +239,13 @@ internal class XtreamSyncer(
             { rows -> support.upsertStable(rows, hashDeferred!!, p.adapter) }
         }
         val total = intArrayOf(0)
-        val remoteIds = if (freshSource) null else HashSet<String>()
+        // Keep provider identity separate from presentation on every pass, including the very first
+        // one. Some Xtream panels repeat a stream in the bulk response (or repeat it again in a
+        // category backfill). The database UNIQUE(sourceId, remoteId) index protects storage, but
+        // filtering here also keeps the visible progress/count honest. Different remote ids are
+        // deliberately retained even when their names are identical: they may be another language,
+        // quality, feed or server option.
+        val remoteIds = HashSet<String>()
         var done = false
         bulkInsertHelper.withOptimizedBulkInsert(
             p.table,
@@ -277,7 +283,7 @@ internal class XtreamSyncer(
                 }
             }
             if (!freshSource && done && !backfillIncomplete) {
-                support.pruneRemoteIds(label, s.id, remoteIds!!, stats, p.adapter.remoteIdsForSource, p.adapter.deleteByRemoteIds)
+                support.pruneRemoteIds(label, s.id, remoteIds, stats, p.adapter.remoteIdsForSource, p.adapter.deleteByRemoteIds)
                 support.pruneCategories(s.id, p.type, categories.seenRemoteIds, label, stats)
             } else if (!freshSource) {
                 Log.i(TAG, "$label prune skipped sourceId=${s.id} reason=incomplete_bulk")
@@ -306,7 +312,7 @@ internal class XtreamSyncer(
                     count = total[0],
                 ),
             )
-            if (!freshSource) pruneAfterFallback(s, p, label, categories, outcome, remoteIds!!, stats)
+            if (!freshSource) pruneAfterFallback(s, p, label, categories, outcome, remoteIds, stats)
         }
         progress.update(p.phase, total[0])
         p.timingKey?.let { stats.phaseTiming[it] = System.currentTimeMillis() - phaseStart }

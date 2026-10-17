@@ -31,6 +31,7 @@ import tv.own.owntv.core.content.movieCountFlow
 import tv.own.owntv.core.content.moviePagingSource
 import tv.own.owntv.core.content.seriesCountFlow
 import tv.own.owntv.core.content.seriesPagingSource
+import tv.own.owntv.core.catalog.qualityLabel
 import tv.own.owntv.core.customize.CustomizationStore
 import tv.own.owntv.core.customize.CustomizeKeys
 import tv.own.owntv.core.customize.SectionCustomizations
@@ -89,6 +90,9 @@ data class VodItem(
     val posterUrl: String?,
     val year: Int?,
     val rating: Double?,
+    val sourceId: Long,
+    val remoteId: String?,
+    val variantQualifiers: List<String>,
 )
 
 /** A section search intentionally ignores the selected folder and scans the whole local catalogue. */
@@ -427,6 +431,15 @@ class LibraryViewModel(
         posterUrl = posterUrl,
         year = year,
         rating = rating,
+        sourceId = sourceId,
+        remoteId = remoteId,
+        variantQualifiers = listOfNotNull(
+            providerLanguage,
+            qualityLabel(qualityRank),
+            advertisedCapabilities,
+            containerExt?.trim()?.uppercase()?.takeIf { it.isNotEmpty() },
+            (year ?: parsedYear)?.takeIf { it > 0 }?.toString(),
+        ),
     )
 
     private fun SeriesEntity.asItem(cust: SectionCustomizations) = VodItem(
@@ -435,6 +448,14 @@ class LibraryViewModel(
         posterUrl = posterUrl,
         year = year,
         rating = rating,
+        sourceId = sourceId,
+        remoteId = remoteId,
+        variantQualifiers = listOfNotNull(
+            providerLanguage,
+            qualityLabel(qualityRank),
+            advertisedCapabilities,
+            (year ?: parsedYear)?.takeIf { it > 0 }?.toString(),
+        ),
     )
 
     val favoriteIds: StateFlow<Set<Long>> = combine(ctx, mediaType) { c, type -> c to type }

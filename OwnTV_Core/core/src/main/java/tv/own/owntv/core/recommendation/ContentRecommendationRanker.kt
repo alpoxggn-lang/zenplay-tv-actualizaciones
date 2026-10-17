@@ -5,7 +5,6 @@ import java.util.Locale
 import tv.own.owntv.core.database.entity.CategoryEntity
 import tv.own.owntv.core.database.entity.MovieEntity
 import tv.own.owntv.core.database.entity.SeriesEntity
-import tv.own.owntv.core.metadata.TitleNormalizer
 
 /** A language-independent genre understood by the local recommendation ranker. */
 enum class SemanticGenre {
@@ -80,17 +79,12 @@ object ContentRecommendationRanker {
     ): List<RecommendationItem<T>> {
         if (limit <= 0) return emptyList()
 
-        val currentIdentity = contentIdentity(current.title, current.year, current.stableKey)
         val currentGenres = semanticGenres(current.genres, current.categoryName)
         val currentCategoryName = fold(current.categoryName.orEmpty())
 
         val ranked = candidates.asSequence()
             .filterNot { it.stableKey == current.stableKey }
-            .mapNotNull { candidate ->
-                val identity = contentIdentity(candidate.title, candidate.year, candidate.stableKey)
-                // Excludes the open row AND another quality/language variant of that same release.
-                if (identity == currentIdentity) return@mapNotNull null
-
+            .map { candidate ->
                 val candidateGenres = semanticGenres(candidate.genres, candidate.categoryName)
                 val overlap = currentGenres.intersect(candidateGenres).size
                 val sameCategory = when {
@@ -107,19 +101,19 @@ object ContentRecommendationRanker {
                 }
                 Ranked(
                     item = candidate,
-                    identity = identity,
+                    identity = candidate.stableKey,
                     tier = tier,
                     genreOverlap = overlap,
-                    yearDistance = yearDistance(currentIdentity.year, identity.year),
+                    yearDistance = yearDistance(current.year, candidate.year),
                 )
             }
             .sortedWith(baseOrder())
             .toList()
 
-        // Rows repeated once per resolution/audio language collapse to one release. Sorting first means
-        // the most relevant, highest-quality representative survives. A remake has a different year and
-        // therefore a different identity, so it remains eligible.
-        val unique = LinkedHashMap<ContentIdentity, Ranked<T>>()
+        // Only collapse the same provider item repeated by a query. A provider may intentionally expose
+        // several playable rows with the same title/year (different audio, quality, source or edition),
+        // so title metadata must never be used as catalogue identity.
+        val unique = LinkedHashMap<String, Ranked<T>>()
         ranked.forEach { unique.putIfAbsent(it.identity, it) }
 
         val out = ArrayList<RecommendationItem<T>>(minOf(limit, unique.size))
@@ -196,12 +190,6 @@ object ContentRecommendationRanker {
         if (currentYear == null || candidateYear == null) Int.MAX_VALUE
         else kotlin.math.abs(currentYear - candidateYear)
 
-    private fun contentIdentity(title: String, year: Int?, stableKey: String): ContentIdentity {
-        val normalized = TitleNormalizer.normalize(title)
-        val titleKey = fold(normalized.query).ifBlank { "__${stableKey.lowercase(Locale.ROOT)}" }
-        return ContentIdentity(titleKey, year ?: normalized.year)
-    }
-
     private fun fold(value: String): String {
         if (value.isBlank()) return ""
         return Normalizer.normalize(value, Normalizer.Form.NFKD)
@@ -212,11 +200,9 @@ object ContentRecommendationRanker {
             .trim()
     }
 
-    private data class ContentIdentity(val title: String, val year: Int?)
-
     private data class Ranked<T>(
         val item: RecommendationItem<T>,
-        val identity: ContentIdentity,
+        val identity: String,
         val tier: Int,
         val genreOverlap: Int,
         val yearDistance: Int,
@@ -266,7 +252,7 @@ fun MovieEntity.toRecommendationItem(
     genres: Collection<String> = emptyList(),
 ): RecommendationItem<MovieEntity> = RecommendationItem(
     value = this,
-    stableKey = "movie:$sourceId:${remoteId?.takeIf { it.isNotBlank() } ?: titleSignature.ifBlank { id.toString() }}",
+    stableKey = recommendationStableKey(),
     title = name,
     year = year ?: parsedYear,
     categoryId = categoryId,
@@ -282,7 +268,7 @@ fun SeriesEntity.toRecommendationItem(
     genres: Collection<String> = emptyList(),
 ): RecommendationItem<SeriesEntity> = RecommendationItem(
     value = this,
-    stableKey = "series:$sourceId:${remoteId?.takeIf { it.isNotBlank() } ?: titleSignature.ifBlank { id.toString() }}",
+    stableKey = recommendationStableKey(),
     title = name,
     year = year ?: parsedYear,
     categoryId = categoryId,
@@ -291,3 +277,22 @@ fun SeriesEntity.toRecommendationItem(
     rating = rating,
     qualityRank = qualityRank,
 )
+
+/** Provider identity used by recommendation deduplication. Display metadata is intentionally absent. */
+internal fun MovieEntity.recommendationStableKey(): String =
+    stableRecommendationKey("movie", sourceId, remoteId, id)
+
+/** Provider identity used by recommendation deduplication. Display metadata is intentionally absent. */
+internal fun SeriesEntity.recommendationStableKey(): String =
+    stableRecommendationKey("series", sourceId, remoteId, id)
+
+private fun stableRecommendationKey(
+    mediaType: String,
+    sourceId: Long,
+    remoteId: String?,
+    localId: Long,
+): String {
+    val providerId = remoteId?.takeIf(String::isNotBlank)
+    return if (providerId != null) "$mediaType:$sourceId:$providerId"
+    else "$mediaType:$sourceId:local:$localId"
+}

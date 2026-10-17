@@ -346,7 +346,7 @@ internal class SyncSupport(
                 val rawCount = batch.size
                 val flushStart = SystemClock.elapsedRealtime()
                 val pendingKeys = ArrayList<String>()
-                val rows = batch.filterNewItems(seenKeys, uniqueKey, pendingKeys)
+                val rows = filterNewCatalogItems(batch, seenKeys, uniqueKey, pendingKeys)
                 val filterMs = SystemClock.elapsedRealtime() - flushStart
                 val skipped = rawCount - rows.size
                 skippedDuplicates += skipped
@@ -409,26 +409,6 @@ internal class SyncSupport(
 
     private fun shouldLogChunk(chunkIndex: Int, insertMs: Long, skipped: Int): Boolean =
         chunkIndex <= 3 || chunkIndex % 20 == 0 || insertMs >= SLOW_INSERT_LOG_MS || skipped > 0
-
-    private fun <T> List<T>.filterNewItems(
-        seenKeys: MutableSet<String>?,
-        uniqueKey: ((T) -> String?)?,
-        pendingKeys: MutableList<String>,
-    ): List<T> {
-        if (seenKeys == null || uniqueKey == null) return this
-        val rows = ArrayList<T>(size)
-        val batchKeys = HashSet<String>()
-        forEach { item ->
-            val key = uniqueKey(item)
-            if (key == null) {
-                rows.add(item)
-            } else if (!seenKeys.contains(key) && batchKeys.add(key)) {
-                pendingKeys.add(key)
-                rows.add(item)
-            }
-        }
-        return rows
-    }
 
     companion object {
         /** Shared log tag — kept as "SyncManager" across the split so existing logcat filters still work. */
@@ -577,6 +557,35 @@ internal class SyncSupport(
         const val CATEGORIES_ADDED_KEY = "categoriesAdded"
         const val CATEGORIES_REMOVED_KEY = "categoriesRemoved"
     }
+}
+
+/**
+ * Accepts each provider item once by its remote identity. The name is intentionally absent from
+ * this decision: two rows called "HBO" or "Dune" with different remote ids are two real catalogue
+ * entries and must both survive. [pendingKeys] is committed to [seenKeys] only after the database
+ * write succeeds (see [SyncSupport.chunked]), so a failed insert cannot poison a retry.
+ *
+ * Internal rather than private so the identity contract can be tested directly without a database.
+ */
+internal fun <T> filterNewCatalogItems(
+    items: List<T>,
+    seenKeys: Set<String>?,
+    uniqueKey: ((T) -> String?)?,
+    pendingKeys: MutableList<String>,
+): List<T> {
+    if (seenKeys == null || uniqueKey == null) return items
+    val rows = ArrayList<T>(items.size)
+    val batchKeys = HashSet<String>()
+    items.forEach { item ->
+        val key = uniqueKey(item)
+        if (key == null) {
+            rows.add(item)
+        } else if (!seenKeys.contains(key) && batchKeys.add(key)) {
+            pendingKeys.add(key)
+            rows.add(item)
+        }
+    }
+    return rows
 }
 
 /**

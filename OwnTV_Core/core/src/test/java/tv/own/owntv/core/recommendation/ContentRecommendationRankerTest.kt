@@ -7,6 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import tv.own.owntv.core.database.entity.CategoryEntity
 import tv.own.owntv.core.database.entity.MovieEntity
+import tv.own.owntv.core.database.entity.SeriesEntity
 import tv.own.owntv.core.model.MediaType
 
 class ContentRecommendationRankerTest {
@@ -62,7 +63,7 @@ class ContentRecommendationRankerTest {
     }
 
     @Test
-    fun excludesCurrentAndQualityVariantsButKeepsRemakes() {
+    fun excludesOnlyCurrentItemAndKeepsSameTitleProviderVariants() {
         val current = item("movie-current", "(4K) Dune (2021)", 2021, 1, "Sci-Fi", listOf("Science Fiction"))
         val candidates = listOf(
             item("movie-current", "Dune", 2021, 1, "Sci-Fi"),
@@ -76,10 +77,26 @@ class ContentRecommendationRankerTest {
         val keys = ranked.map { it.stableKey }
 
         assertFalse("movie-current" in keys)
-        assertFalse("dune-fhd" in keys)
+        assertTrue("dune-fhd" in keys)
         assertTrue("dune-remake" in keys)
         assertTrue("matrix-4k" in keys)
-        assertFalse("matrix-hd" in keys)
+        assertTrue("matrix-hd" in keys)
+    }
+
+    @Test
+    fun repeatedStableIdentityIsTheOnlyCandidateThatCollapses() {
+        val current = item("current", "Main", 2020, 1, "Drama")
+        val first = item("provider:42", "Same title", 2020, 1, "Drama")
+        val repeated = first.copy(value = "same provider row repeated", qualityRank = 99)
+        val separateVariant = item("provider:43", "Same title", 2020, 1, "Drama")
+
+        val ranked = ContentRecommendationRanker.rank(
+            current,
+            listOf(first, repeated, separateVariant),
+            limit = 10,
+        )
+
+        assertEquals(listOf("provider:42", "provider:43"), ranked.map { it.stableKey }.sorted())
     }
 
     @Test
@@ -140,6 +157,72 @@ class ContentRecommendationRankerTest {
         assertEquals(2024, item.year)
         assertEquals("Ciencia ficción", item.categoryName)
         assertEquals(4, item.qualityRank)
+    }
+
+    @Test
+    fun movieAndSeriesAdaptersPreserveSameTitleVariantsByProviderIdentity() {
+        val currentMovie = MovieEntity(
+            id = 10,
+            sourceId = 8,
+            name = "Same title (2024)",
+            streamUrl = "https://example.invalid/movie/10",
+            remoteId = "100",
+            titleSignature = "same-title",
+        )
+        val firstMovie = MovieEntity(
+            id = 1,
+            sourceId = 8,
+            name = "Same title (2024)",
+            streamUrl = "https://example.invalid/movie/1",
+            remoteId = "101",
+            titleSignature = "same-title",
+        )
+        val secondMovie = firstMovie.copy(id = 2, streamUrl = "https://example.invalid/movie/2", remoteId = "102")
+        val repeatedMovie = firstMovie.copy(id = 99)
+        val firstSeries = SeriesEntity(
+            id = 3,
+            sourceId = 8,
+            name = "Same title (2024)",
+            remoteId = "201",
+            titleSignature = "same-title",
+        )
+        val secondSeries = firstSeries.copy(id = 4, remoteId = "202")
+        val currentSeries = firstSeries.copy(id = 5, remoteId = "200")
+
+        assertNotEquals(firstMovie.toRecommendationItem(null).stableKey, secondMovie.toRecommendationItem(null).stableKey)
+        assertEquals(firstMovie.toRecommendationItem(null).stableKey, repeatedMovie.toRecommendationItem(null).stableKey)
+        assertNotEquals(firstSeries.toRecommendationItem(null).stableKey, secondSeries.toRecommendationItem(null).stableKey)
+        assertEquals(
+            setOf("101", "102"),
+            ContentRecommendationRanker.rank(
+                currentMovie.toRecommendationItem(null),
+                listOf(firstMovie, repeatedMovie, secondMovie).map { it.toRecommendationItem(null) },
+                limit = 10,
+            ).mapTo(linkedSetOf()) { it.value.remoteId },
+        )
+        assertEquals(
+            setOf("201", "202"),
+            ContentRecommendationRanker.rank(
+                currentSeries.toRecommendationItem(null),
+                listOf(firstSeries, firstSeries.copy(id = 99), secondSeries).map { it.toRecommendationItem(null) },
+                limit = 10,
+            ).mapTo(linkedSetOf()) { it.value.remoteId },
+        )
+    }
+
+    @Test
+    fun adapterFallsBackToLocalIdInsteadOfTitleWhenProviderIdIsMissing() {
+        val first = MovieEntity(
+            id = 31,
+            sourceId = 8,
+            name = "Same title",
+            streamUrl = "https://example.invalid/movie/31",
+            titleSignature = "same-title",
+        )
+        val second = first.copy(id = 32, streamUrl = "https://example.invalid/movie/32")
+
+        assertEquals("movie:8:local:31", first.toRecommendationItem(null).stableKey)
+        assertEquals("movie:8:local:32", second.toRecommendationItem(null).stableKey)
     }
 
     private fun item(

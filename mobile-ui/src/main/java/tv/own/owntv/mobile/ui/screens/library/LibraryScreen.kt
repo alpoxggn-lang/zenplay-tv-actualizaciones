@@ -60,6 +60,8 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 import tv.own.owntv.core.live.LiveKey
+import tv.own.owntv.core.catalog.CatalogVariantCandidate
+import tv.own.owntv.core.catalog.catalogVariantDisplayNames
 import tv.own.owntv.core.settings.SettingsRepository
 import tv.own.owntv.mobile.R
 import tv.own.owntv.mobile.ui.components.MobileSlider
@@ -132,6 +134,20 @@ fun LibraryScreen(
         LibraryTab.MOVIES -> vm.movies
         LibraryTab.SERIES -> vm.series
     }.collectAsLazyPagingItems()
+    val loadedItems = items.itemSnapshotList.items
+    val displayNames = remember(loadedItems) {
+        catalogVariantDisplayNames(
+            loadedItems.map { item ->
+                CatalogVariantCandidate(
+                    key = item.id,
+                    title = item.name,
+                    sourceId = item.sourceId,
+                    remoteId = item.remoteId,
+                    qualifiers = item.variantQualifiers,
+                )
+            },
+        )
+    }
 
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
@@ -298,7 +314,7 @@ fun LibraryScreen(
                 items(count = items.itemCount, key = items.itemKey { it.id }) { index ->
                     items[index]?.let { item ->
                         MobileListRow(
-                            title = item.name,
+                            title = displayNames[item.id] ?: item.name,
                             subtitle = item.details(),
                             // Beside the grid the title opens in the pane; on a phone it is a
                             // screen of its own. The same screen, reached two ways.
@@ -324,7 +340,7 @@ fun LibraryScreen(
                 items(count = items.itemCount, key = items.itemKey { it.id }) { index ->
                     items[index]?.let { item ->
                         PosterCard(
-                            title = item.name,
+                            title = displayNames[item.id] ?: item.name,
                             imageUrl = item.posterUrl,
                             subtitle = item.details(),
                             progress = progress[item.id]?.takeIf { tab == LibraryTab.MOVIES }

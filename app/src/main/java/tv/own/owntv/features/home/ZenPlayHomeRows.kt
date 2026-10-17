@@ -12,6 +12,10 @@ import tv.own.owntv.core.database.dao.SourceDao
 import tv.own.owntv.core.database.entity.MovieEntity
 import tv.own.owntv.core.database.entity.SeriesEntity
 import tv.own.owntv.core.database.entity.TrendingItemEntity
+import tv.own.owntv.core.catalog.CatalogVariantCandidate
+import tv.own.owntv.core.catalog.catalogVariantCandidate
+import tv.own.owntv.core.catalog.catalogVariantDisplayNames
+import tv.own.owntv.core.catalog.qualityLabel
 import tv.own.owntv.core.home.TrendingHomeItem
 import tv.own.owntv.core.model.MediaType
 import tv.own.owntv.core.repository.activeSourceIds
@@ -131,29 +135,50 @@ class ZenPlayHomeRows(
             movies.getOrNull(i)?.let { add(movieItem(it, size)) }
             series.getOrNull(i)?.let { add(seriesItem(it, size)) }
         }
+    }.withVariantDisplayNames()
+
+    private fun List<TrendingHomeItem>.withVariantDisplayNames(): List<TrendingHomeItem> {
+        val names = catalogVariantDisplayNames(map { item ->
+            val variant = when (item) {
+                is TrendingHomeItem.Movie -> item.movie.catalogVariantCandidate()
+                is TrendingHomeItem.Series -> item.series.catalogVariantCandidate()
+            }
+            CatalogVariantCandidate(
+                key = item.stableKey,
+                title = item.snapshot.localizedTitle,
+                sourceId = variant.sourceId,
+                remoteId = variant.remoteId,
+                qualifiers = variant.qualifiers,
+            )
+        })
+        return map { item ->
+            val snapshot = item.snapshot.copy(localizedTitle = names[item.stableKey] ?: item.snapshot.localizedTitle)
+            when (item) {
+                is TrendingHomeItem.Movie -> item.copy(snapshot = snapshot)
+                is TrendingHomeItem.Series -> item.copy(snapshot = snapshot)
+            }
+        }
     }
 
-    /** Newest additions for [year] (or any year when null), one row per distinct title. */
+    /** Newest additions for [year] (or any year when null), preserving every provider variant. */
     private suspend fun pickTrending(table: String, sourceIds: List<Long>, year: Int?, limit: Int): List<Long> =
         recentIds(table, sourceIds, year, limit)
 
     /**
-     * Ids of the most recently added rows of [table] in [sourceIds], newest first, keeping only the
-     * first row of each title (a provider often lists the same film in several qualities/languages).
+     * Ids of the most recently added rows of [table] in [sourceIds], newest first. Identity belongs to
+     * the provider row, not its title: same-name language/quality/server variants all remain visible.
      */
     private suspend fun recentIds(table: String, sourceIds: List<Long>, year: Int?, limit: Int): List<Long> {
         if (sourceIds.isEmpty()) return emptyList()
         val inList = sourceIds.joinToString(",")
         val yearClause = if (year != null) " AND COALESCE(year, parsedYear) = $year" else ""
-        val sql = "SELECT id, COALESCE(NULLIF(canonicalTitle, ''), name) FROM $table " +
-            "WHERE sourceId IN ($inList)$yearClause ORDER BY addedAt DESC, id DESC LIMIT ${limit * SCAN_FACTOR}"
+        val sql = "SELECT id FROM $table " +
+            "WHERE sourceId IN ($inList)$yearClause ORDER BY addedAt DESC, id DESC LIMIT $limit"
         return db.useReaderConnection { connection ->
             connection.usePrepared(sql) { statement ->
-                val seen = HashSet<String>()
                 val ids = ArrayList<Long>()
                 while (ids.size < limit && statement.step()) {
-                    val title = if (statement.isNull(1)) "" else statement.getText(1).trim().lowercase()
-                    if (title.isEmpty() || seen.add(title)) ids.add(statement.getLong(0))
+                    ids.add(statement.getLong(0))
                 }
                 ids
             }
@@ -165,7 +190,8 @@ class ZenPlayHomeRows(
             snapshot = snapshot(
                 sourceId = movie.sourceId, position = position, id = movie.id, mediaType = MediaType.MOVIE,
                 remoteId = movie.remoteId, name = movie.name, canonical = movie.canonicalTitle,
-                language = movie.providerLanguage, capabilities = movie.advertisedCapabilities,
+                language = movie.providerLanguage, quality = qualityLabel(movie.qualityRank),
+                capabilities = movie.advertisedCapabilities,
                 year = movie.year ?: movie.parsedYear, overview = movie.plot, rating = movie.rating,
             ),
             movie = movie,
@@ -176,7 +202,8 @@ class ZenPlayHomeRows(
             snapshot = snapshot(
                 sourceId = series.sourceId, position = position, id = series.id, mediaType = MediaType.SERIES,
                 remoteId = series.remoteId, name = series.name, canonical = series.canonicalTitle,
-                language = series.providerLanguage, capabilities = series.advertisedCapabilities,
+                language = series.providerLanguage, quality = qualityLabel(series.qualityRank),
+                capabilities = series.advertisedCapabilities,
                 year = series.year ?: series.parsedYear, overview = series.plot, rating = series.rating,
             ),
             series = series,
@@ -191,6 +218,7 @@ class ZenPlayHomeRows(
         name: String,
         canonical: String,
         language: String?,
+        quality: String?,
         capabilities: String?,
         year: Int?,
         overview: String?,
@@ -208,7 +236,7 @@ class ZenPlayHomeRows(
         providerRawName = name,
         canonicalTitle = canonical.ifBlank { name },
         providerLanguage = language,
-        advertisedQuality = null,
+        advertisedQuality = quality,
         advertisedCapabilities = capabilities,
         localizedTitle = name,
         originalTitle = null,
@@ -248,7 +276,5 @@ class ZenPlayHomeRows(
         /** Home only draws the trending row with at least this many titles (TrendingDao.MIN_ELIGIBLE_ITEMS). */
         private const val MIN_TRENDING = 4
         private const val RECENT_LIMIT = 20
-        /** Rows read per wanted title, leaving room for the duplicates that get skipped. */
-        private const val SCAN_FACTOR = 5
     }
 }

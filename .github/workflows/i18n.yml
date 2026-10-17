@@ -105,7 +105,9 @@ jobs:
           # action still asks for it by default, which fails the whole setup step.
           packages: 'platform-tools'
       - name: Assemble Normal debug + release APKs
-        run: ./gradlew :app:assembleNormalDebug :app:assembleNormalRelease --console=plain
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleNormalDebug :app:assembleNormalRelease --console=plain
       - name: Verify pseudolocale packaging
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}

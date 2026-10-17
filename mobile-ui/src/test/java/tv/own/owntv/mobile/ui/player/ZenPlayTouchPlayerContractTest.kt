@@ -144,4 +144,39 @@ class ZenPlayTouchPlayerContractTest {
         assertTrue(multiview.contains(".combinedClickable("))
         assertTrue(multiview.contains(".onFocusChanged { focused = it.isFocused }"))
     }
+
+    @Test
+    fun `live video aspect follows the engine that owns the surface across rotation`() {
+        val stage = source("VideoStage.kt")
+        val screen = source("PlayerScreen.kt")
+        val sheets = source("PlayerSheets.kt")
+
+        // Live TV is ExoPlayer-first on phones/tablets. The aspect sheet and pinch gesture act on
+        // activeEngine, so the surface must observe that engine too instead of mpv's idle state.
+        assertTrue(stage.contains("liveExo?.zoomMode ?: player.zoomMode"))
+        assertTrue(stage.contains("liveExo.videoAspect.collectAsStateWithLifecycle()"))
+        assertTrue(stage.contains("liveExo.videoSize.collectAsStateWithLifecycle()"))
+        assertTrue(screen.contains("player = activeEngine"))
+        assertTrue(screen.contains("activeEngine.setZoomModeByUser(mode)"))
+
+        // The sheet exposes every supported geometry and executes the choice on the active engine.
+        assertTrue(sheets.contains("ZoomMode.entries.forEach"))
+        assertTrue(sheets.contains("player.setZoomModeByUser(mode)"))
+        listOf(
+            "ZoomMode.STRETCH -> fillMaxSize()",
+            "ZoomMode.ORIGINAL ->",
+            "ZoomMode.FILL ->",
+            "ZoomMode.FORCE_16_9 -> 16f / 9f",
+            "ZoomMode.FORCE_4_3 -> 4f / 3f",
+            "else -> aspect // FIT keeps the video's own shape",
+        ).forEach { implementation ->
+            assertTrue("missing video-size implementation: $implementation", stage.contains(implementation))
+        }
+
+        // The same VideoStage remains responsible in portrait and landscape; recomputing from the
+        // current BoxWithConstraints keeps fit/fill/stretch correct after a sensor rotation.
+        assertTrue(stage.contains("BoxWithConstraints("))
+        assertTrue(stage.contains("Modifier.videoZoom(zoom, aspect, videoSize, maxWidth, maxHeight)"))
+        assertTrue(screen.contains("SCREEN_ORIENTATION_FULL_SENSOR"))
+    }
 }

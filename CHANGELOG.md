@@ -7,6 +7,12 @@
 > Issue numbers that are part of a title are fine; explanatory parentheticals are not. The detail —
 > what, why, files and verification — belongs in the commit message, never here.
 
+## v2.2.15 — 2026-10-17
+
+### 🐛 Correcciones
+- **Ajustar, rellenar, estirar, original y proporciones vuelven a cambiar el video de TV en vivo en celular y tableta**
+- **El tamaño elegido se conserva al rotar entre vertical y horizontal**
+
 ## v2.2.14 — 2026-10-17
 
 ### ✨ Funciones nuevas

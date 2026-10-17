@@ -106,7 +106,12 @@ fun VideoStage(
         aspect = a
         videoSize = size
     }
-    val chosenZoom by player.zoomMode.collectAsStateWithLifecycle()
+    // The controls are bound to the engine that actually owns playback (see PlayerScreen). Live TV
+    // normally runs on ExoPlayer, so observing mpv's zoom here made every aspect option appear to do
+    // nothing even though the Exo engine had accepted and remembered the selection. Observe the same
+    // engine that supplies the surface dimensions. When the live ladder switches engines this flow
+    // changes with [liveOnExo], while the saved per-channel choice is restored by the receiving engine.
+    val chosenZoom by (liveExo?.zoomMode ?: player.zoomMode).collectAsStateWithLifecycle()
     val zoom = zoomOverride ?: chosenZoom
 
     // Keeping the screen awake is MainActivity's job, not this composable's: three of these exist and

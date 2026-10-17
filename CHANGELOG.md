@@ -7,6 +7,17 @@
 > Issue numbers that are part of a title are fine; explanatory parentheticals are not. The detail —
 > what, why, files and verification — belongs in the commit message, never here.
 
+## v2.2.14 — 2026-10-17
+
+### ✨ Funciones nuevas
+- **Catálogo completo de TV en vivo, películas y series conservando todas las variantes del servidor**
+- **Etiquetas claras para distinguir idiomas, calidades y señales con el mismo nombre**
+
+### 🐛 Correcciones
+- **Tendencias y recomendaciones ya no ocultan contenidos distintos con títulos iguales**
+- **La sincronización avisa cuando el servidor entrega un catálogo parcial sin borrar contenido anterior**
+- **La validación remota de la actualización vuelve a completar todas las pruebas de Android**
+
 ## v2.2.13 — 2026-10-17
 
 ### ✨ Funciones nuevas

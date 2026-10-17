@@ -245,6 +245,25 @@
 1	technical	core/src/main/java/tv/own/owntv/core/brand/AppIconSwitcher.kt	:restart
 1	technical	core/src/main/java/tv/own/owntv/core/brand/AppRestartActivity.kt	component
 1	technical	core/src/main/java/tv/own/owntv/core/brand/AppRestartActivity.kt	pid
+1	empty	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	\0
+1	technical	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	#$it
+1	technical	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	#${index + 1}
+1	technical	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	$it · #${index + 1}
+1	technical	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	${candidate.title} · $suffix
+1	file-path	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	.m3u8
+1	file-path	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	.mpd
+1	file-path	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	.ts
+1	technical	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	1080p
+1	technical	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	4K
+1	technical	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	8K
+1	protocol	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	DASH
+1	technical	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	HD
+1	protocol	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	HLS
+1	technical	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	ID ${if (it.length <= 12) it else it.takeLast(12)}
+1	technical	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	S${candidate.sourceId}
+1	technical	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	SD
+1	protocol	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	TS
+2	technical	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	·
 7	empty	core/src/main/java/tv/own/owntv/core/catalog/ProviderCatalogMetadata.kt	\0
 1	regex	core/src/main/java/tv/own/owntv/core/catalog/ProviderCatalogMetadata.kt	(?i)(?:\\b5[._ ]1\\b|\\bDDP?\\s*5[._ ]1\\b|\\bAC-?3\\s*5[._ ]1\\b)
 1	regex	core/src/main/java/tv/own/owntv/core/catalog/ProviderCatalogMetadata.kt	(?i)(?:\\b7[._ ]1\\b|\\bDDP?\\s*7[._ ]1\\b)
@@ -2753,12 +2772,11 @@
 1	protocol	core/src/main/java/tv/own/owntv/core/profile/ProfileManager.kt	profile:${profile.id}
 1	protocol	core/src/main/java/tv/own/owntv/core/profile/ProfileManager.kt	profile:${requirement.profile.id}
 1	technical	core/src/main/java/tv/own/owntv/core/recommendation/CatalogRecommendationRepository.kt	$metadataFingerprint:$type:$tmdbId:$includeAdult:$language
-1	technical	core/src/main/java/tv/own/owntv/core/recommendation/CatalogRecommendationRepository.kt	$name|${year ?: normalized.year ?: "?"}
 1	technical	core/src/main/java/tv/own/owntv/core/recommendation/CatalogRecommendationRepository.kt	${row.sourceId}:${row.remoteId ?: row.name}
-1	technical	core/src/main/java/tv/own/owntv/core/recommendation/CatalogRecommendationRepository.kt	?
-1	technical	core/src/main/java/tv/own/owntv/core/recommendation/CatalogRecommendationRepository.kt	id:$fallbackId
 4	empty	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\0
 1	technical	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	$currentStableKey|$tier
+1	technical	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	$mediaType:$sourceId:$providerId
+1	technical	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	$mediaType:$sourceId:local:$localId
 1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	[^\\p{L}\\p{N}]+
 1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:action|accion)\\b
 1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:adventure|aventura)\\b
@@ -2788,9 +2806,8 @@
 1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\b(?:western|westerns|oeste)\\b
 1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\p{M}+
 1	regex	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	\\s+
-1	technical	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	__${stableKey.lowercase(Locale.ROOT)}
-1	technical	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	movie:$sourceId:${remoteId?.takeIf { it.isNotBlank() } ?: titleSignature.ifBlank { id.toString() }}
-1	technical	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	series:$sourceId:${remoteId?.takeIf { it.isNotBlank() } ?: titleSignature.ifBlank { id.toString() }}
+1	protocol	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	movie
+1	protocol	core/src/main/java/tv/own/owntv/core/recommendation/ContentRecommendationRanker.kt	series
 2	technical	core/src/main/java/tv/own/owntv/core/recording/DashManifest.kt	\0
 1	technical	core/src/main/java/tv/own/owntv/core/recording/DashManifest.kt	$it/$ref
 1	technical	core/src/main/java/tv/own/owntv/core/recording/DashManifest.kt	%$format

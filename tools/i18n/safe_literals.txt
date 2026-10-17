@@ -97,12 +97,12 @@
 1	performance	app/src/main/java/tv/own/owntv/features/home/HomeViewModel.kt	home-data
 3	technical	app/src/main/java/tv/own/owntv/features/home/HomeViewModel.kt	w1280
 2	technical	app/src/main/java/tv/own/owntv/features/home/HomeViewModel.kt	w780
-4	empty	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	\0
+3	empty	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	\0
 1	protocol	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	$profileId|$year|${movieSources.sorted()}|${seriesSources.sorted()}
 3	technical	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	,
 1	sql	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	AND COALESCE(year, parsedYear) = $year
-1	sql	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	SELECT id, COALESCE(NULLIF(canonicalTitle, ''), name) FROM $table
-1	sql	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	WHERE sourceId IN ($inList)$yearClause ORDER BY addedAt DESC, id DESC LIMIT ${limit * SCAN_FACTOR}
+1	sql	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	SELECT id FROM $table
+1	sql	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	WHERE sourceId IN ($inList)$yearClause ORDER BY addedAt DESC, id DESC LIMIT $limit
 1	protocol	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	movies
 1	protocol	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	series
 1	preference-key	app/src/main/java/tv/own/owntv/features/home/ZenPlayHomeRows.kt	trending_force_at

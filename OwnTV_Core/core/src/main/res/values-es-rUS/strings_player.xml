@@ -60,6 +60,10 @@
     <string name="player_multiple_channels">Varios canales</string>
     <string name="player_tune_failed">No se pudo sintonizar</string>
     <string name="player_playback_error">Error de reproducción</string>
+    <string name="player_compatible_version_action">Reproducir versión compatible</string>
+    <string name="player_compatible_version_title">¿Reproducir la versión compatible?</string>
+    <string name="player_compatible_version_message">Se conservará tu posición y la reproducción cambiará a esta alternativa.</string>
+    <string name="player_compatible_version_alternative">Alternativa: <xliff:g id="alternative">%1$s</xliff:g></string>
     <string name="player_raw_error">error: <xliff:g id="error">%1$s</xliff:g></string>
     <string name="player_audio_track">Pista de audio</string>
     <string name="player_subtitles">Subtítulos</string>

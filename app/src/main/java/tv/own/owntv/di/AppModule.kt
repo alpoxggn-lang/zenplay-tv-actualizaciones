@@ -97,8 +97,61 @@ val appModule = module {
             get(),
         )
     }
-    viewModelOf(::MovieViewModel)
-    viewModelOf(::SeriesViewModel)
+    // These two view models are now beyond Koin's generated constructor-reference arity after
+    // adding conservative compatible-copy recovery. Keep every dependency named so future
+    // constructor changes fail here at compile time instead of being silently mis-wired.
+    viewModel {
+        MovieViewModel(
+            movieDao = get(),
+            catalogPriority = get(),
+            categoryDao = get(),
+            favoriteDao = get(),
+            historyDao = get(),
+            userDataWriter = get(),
+            progressDao = get(),
+            profileDao = get(),
+            sourceDao = get(),
+            settings = get(),
+            customize = get(),
+            player = get(),
+            launcherIntegrationRepository = get(),
+            contentOrderDao = get(),
+            customCategoryDao = get(),
+            metadata = get(),
+            externalPlayerLauncher = get(),
+            streamUrlResolver = get(),
+            subtitleController = get(),
+            contentAccess = get(),
+            compatibleVariants = get(),
+        )
+    }
+    viewModel {
+        SeriesViewModel(
+            seriesDao = get(),
+            catalogPriority = get(),
+            categoryDao = get(),
+            favoriteDao = get(),
+            historyDao = get(),
+            userDataWriter = get(),
+            progressDao = get(),
+            profileDao = get(),
+            sourceDao = get(),
+            seriesRepository = get(),
+            settings = get(),
+            customize = get(),
+            player = get(),
+            launcherIntegrationRepository = get(),
+            contentOrderDao = get(),
+            customCategoryDao = get(),
+            seriesSortOrderDao = get(),
+            metadata = get(),
+            externalPlayerLauncher = get(),
+            streamUrlResolver = get(),
+            subtitleController = get(),
+            contentAccess = get(),
+            compatibleVariants = get(),
+        )
+    }
     viewModelOf(::SearchViewModel)
     viewModelOf(::ProfilesViewModel)
     // Activity-scoped session state for the profile gate (configuration-only retention, no saved

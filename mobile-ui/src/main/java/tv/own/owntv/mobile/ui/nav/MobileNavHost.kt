@@ -8,13 +8,18 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import tv.own.owntv.mobile.MobileHostInfo
 import tv.own.owntv.mobile.dev.ThemeGalleryScreen
 import tv.own.owntv.mobile.ui.screens.DevRoute
@@ -29,6 +34,7 @@ import tv.own.owntv.mobile.ui.screens.home.HomeScreen
 import tv.own.owntv.mobile.ui.screens.library.DetailScreen
 import tv.own.owntv.mobile.ui.screens.library.LibraryScreen
 import tv.own.owntv.mobile.ui.screens.library.LibraryTab
+import tv.own.owntv.mobile.ui.screens.library.VodTuner
 import tv.own.owntv.mobile.ui.screens.live.ChannelDetailScreen
 import tv.own.owntv.mobile.ui.screens.live.LiveScreen
 import tv.own.owntv.mobile.ui.screens.search.SearchScreen
@@ -264,10 +270,19 @@ fun MobileNavHost(
             // ways of saying "keep it playing". Back has its own path and stops the stream, so it
             // never reaches here and never raises the flag.
             val miniRequested = LocalMiniRequested.current
+            val vodTuner: VodTuner = koinInject()
+            val compatibleAlternative by vodTuner.compatibleAlternative.collectAsStateWithLifecycle()
+            val playerScope = rememberCoroutineScope()
             PlayerScreen(
                 onExit = {
                     miniRequested.value = true
                     navController.leavePlayerStillPlaying()
+                },
+                compatibleAlternativeLabel = compatibleAlternative?.label,
+                onPlayCompatibleVersion = compatibleAlternative?.let {
+                    {
+                        playerScope.launch { vodTuner.playCompatibleVersion() }
+                    }
                 },
             )
         }

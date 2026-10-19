@@ -54,10 +54,10 @@ android {
         // CI injects both values from the release tag (see .github/workflows/android.yml). v2.1.8 was
         // published with versionCode 100011. The universal line keeps a monotonically increasing
         // value from the outset so every future Universal release can update both of its editions.
-        versionCode = (System.getenv("VERSION_CODE") ?: "120216").toInt()
+        versionCode = (System.getenv("VERSION_CODE") ?: "120217").toInt()
         // Keep the fallback name honest. Local release candidates may be installed over the public
         // 2.1.8 because their versionCode is newer, but the updater still compares the visible name.
-        versionName = System.getenv("VERSION_NAME") ?: "2.2.16"
+        versionName = System.getenv("VERSION_NAME") ?: "2.2.17"
 
         // Opt-in local diagnostic APKs keep the rolling playback trace enabled even when they are
         // release-signed (so they can update an installed production build without changing its data).

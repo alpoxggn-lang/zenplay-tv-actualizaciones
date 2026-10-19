@@ -112,6 +112,14 @@ internal object VodSeekPolicy {
         else -> 0L
     }
 
+    /** Carry a logical resume point into another rendition without seeking beyond its EOF. */
+    fun replacementPosition(positionMs: Long, replacementDurationMs: Long?): Long {
+        val position = positionMs.coerceAtLeast(0L)
+        val duration = replacementDurationMs?.takeIf { it > 0L } ?: return position
+        val lastPlayable = (duration - END_GUARD_MS).coerceAtLeast(0L)
+        return position.coerceAtMost(lastPlayable)
+    }
+
     private fun saturatingAdd(left: Long, right: Long): Long = when {
         right > 0L && left > Long.MAX_VALUE - right -> Long.MAX_VALUE
         right < 0L && left < Long.MIN_VALUE - right -> Long.MIN_VALUE

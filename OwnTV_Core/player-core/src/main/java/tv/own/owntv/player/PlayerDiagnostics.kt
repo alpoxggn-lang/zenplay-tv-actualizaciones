@@ -125,9 +125,18 @@ sealed interface PlaybackFailure {
     data object ImageSubtitleAudio : PlaybackFailure
     data object ImageFormat : PlaybackFailure
     data object ImageShow : PlaybackFailure
-    data object BothEnginesExoFirst : PlaybackFailure
-    data class BothEnginesMpvFirst(val exoError: PlaybackFailure) : PlaybackFailure
-    data class ExoDecode(val code: String) : PlaybackFailure
+    data class BothEnginesExoFirst(
+        val exoError: PlaybackFailure,
+        val mpvError: PlaybackFailure,
+    ) : PlaybackFailure
+    data class BothEnginesMpvFirst(
+        val mpvError: PlaybackFailure?,
+        val exoError: PlaybackFailure,
+    ) : PlaybackFailure
+    data class ExoDecode(
+        val code: String,
+        val track: DecodeTrack = DecodeTrack.UNKNOWN,
+    ) : PlaybackFailure
     data class ExoPlay(val code: String) : PlaybackFailure
     data class HardwareFallback(val resolution: String) : PlaybackFailure
     data class HardwareDisabled(val resolution: String) : PlaybackFailure
@@ -145,6 +154,8 @@ sealed interface PlaybackFailure {
     /** Genuine unknown engine/provider text; intentionally not translated. */
     data class Raw(val message: String) : PlaybackFailure
 }
+
+enum class DecodeTrack { VIDEO, AUDIO, UNKNOWN }
 
 /**
  * The one place a [PlaybackFailure] becomes words.
@@ -176,7 +187,7 @@ fun PlaybackFailure.describe(resolve: (Int, List<Any>) -> String): String {
         PlaybackFailure.ImageSubtitleAudio -> str(R.string.player_error_image_subtitle_audio)
         PlaybackFailure.ImageFormat -> str(R.string.player_error_image_format)
         PlaybackFailure.ImageShow -> str(R.string.player_error_image_show)
-        PlaybackFailure.BothEnginesExoFirst -> str(R.string.player_error_both_engines_exo_first)
+        is PlaybackFailure.BothEnginesExoFirst -> str(R.string.player_error_both_engines_exo_first)
         is PlaybackFailure.BothEnginesMpvFirst ->
             str(R.string.player_error_both_engines_mpv_first, exoError.describe(resolve))
         is PlaybackFailure.ExoDecode -> str(R.string.player_error_exo_decode, code)
@@ -206,7 +217,47 @@ fun PlaybackFailure.describe(resolve: (Int, List<Any>) -> String): String {
 data class ProviderBackOff(val httpCode: Int, val message: String?, val secondsLeft: Int)
 
 /** A playback failure broken into semantic reason, technical media details, and raw engine text. */
-data class ErrorInfo(val reason: PlayerFailureReason?, val spec: MediaSpec?, val raw: String?)
+data class ErrorInfo(
+    val reason: PlayerFailureReason?,
+    val spec: MediaSpec?,
+    val raw: String?,
+    /** The failure this diagnostic snapshot belongs to; prevents a prior load racing a new error. */
+    val failure: PlaybackFailure? = null,
+)
+
+/**
+ * Whether a terminal playback failure is a safe place to offer another catalogue rendition.
+ *
+ * This is deliberately narrow. A different file can help when this device cannot decode the video,
+ * but it cannot fix an expired link, a provider/network failure, DRM, or a decoder which is merely
+ * busy. Keeping the decision in player-core makes the TV and touch shells follow the same rule.
+ */
+fun isCompatibleVariantRecoveryFailure(
+    failure: PlaybackFailure?,
+    info: ErrorInfo?,
+    isLive: Boolean,
+): Boolean {
+    if (isLive || failure == null) return false
+    val matchingInfo = info?.takeIf { it.failure == failure }
+
+    fun PlaybackFailure.isUnsupportedVideo(): Boolean = when (this) {
+        is PlaybackFailure.HardwareFormat,
+        is PlaybackFailure.HardwareFallback,
+        is PlaybackFailure.HardwareDisabled,
+        -> true
+        is PlaybackFailure.ExoDecode ->
+            track == DecodeTrack.VIDEO ||
+                (track == DecodeTrack.UNKNOWN && matchingInfo?.reason == PlayerFailureReason.UNSUPPORTED_VIDEO)
+        is PlaybackFailure.BothEnginesExoFirst ->
+            exoError.isUnsupportedVideo() || mpvError.isUnsupportedVideo()
+        is PlaybackFailure.BothEnginesMpvFirst ->
+            mpvError?.isUnsupportedVideo() == true || exoError.isUnsupportedVideo()
+        PlaybackFailure.MpvOpenDecode ->
+            matchingInfo?.reason == PlayerFailureReason.UNSUPPORTED_VIDEO
+        else -> false
+    }
+    return failure.isUnsupportedVideo()
+}
 
 /**
  * Semantic playback failures. [messageRes] is the translated sentence for each; rendering it — which

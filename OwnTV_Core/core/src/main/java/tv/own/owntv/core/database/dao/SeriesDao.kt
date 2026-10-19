@@ -119,6 +119,17 @@ interface SeriesDao {
     @Query("SELECT * FROM series WHERE sourceId = :sourceId AND name = :name LIMIT 1")
     suspend fun findSeriesByName(sourceId: Long, name: String): SeriesEntity?
 
+    /** Exact, bounded parent-show candidates for device-compatible episode fallback. */
+    @Query(
+        "SELECT * FROM series WHERE sourceId = :sourceId AND titleSignature = :titleSignature " +
+            "ORDER BY sortOrder ASC, id ASC LIMIT :limit",
+    )
+    suspend fun compatibleVariantCandidates(
+        sourceId: Long,
+        titleSignature: String,
+        limit: Int,
+    ): List<SeriesEntity>
+
     @Query("SELECT * FROM episodes WHERE seriesId = :seriesId AND remoteId = :remoteId LIMIT 1")
     suspend fun findEpisodeByRemote(seriesId: Long, remoteId: String): EpisodeEntity?
 

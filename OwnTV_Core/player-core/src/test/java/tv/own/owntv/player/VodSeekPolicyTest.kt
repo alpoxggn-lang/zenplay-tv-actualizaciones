@@ -197,4 +197,22 @@ class VodSeekPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun `replacement resume is clamped before the shorter rendition ends`() {
+        assertEquals(
+            4_798_000L,
+            VodSeekPolicy.replacementPosition(
+                positionMs = 5_700_000L,
+                replacementDurationMs = 4_800_000L,
+            ),
+        )
+        assertEquals(
+            5_700_000L,
+            VodSeekPolicy.replacementPosition(
+                positionMs = 5_700_000L,
+                replacementDurationMs = null,
+            ),
+        )
+    }
 }

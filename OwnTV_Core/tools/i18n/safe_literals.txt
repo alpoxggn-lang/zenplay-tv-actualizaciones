@@ -264,6 +264,13 @@
 1	technical	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	SD
 1	protocol	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	TS
 2	technical	core/src/main/java/tv/own/owntv/core/catalog/CatalogVariantPresentation.kt	·
+1	regex	core/src/main/java/tv/own/owntv/core/catalog/CompatibleVariantResolver.kt	(?:^|[^a-z])dv(?:[^a-z]|$)
+1	technical	core/src/main/java/tv/own/owntv/core/catalog/CompatibleVariantResolver.kt	.
+1	protocol	core/src/main/java/tv/own/owntv/core/catalog/CompatibleVariantResolver.kt	__unmatchable_
+1	technical	core/src/main/java/tv/own/owntv/core/catalog/CompatibleVariantResolver.kt	dolby vision
+1	technical	core/src/main/java/tv/own/owntv/core/catalog/CompatibleVariantResolver.kt	dovi
+1	technical	core/src/main/java/tv/own/owntv/core/catalog/CompatibleVariantResolver.kt	hdr
+1	mime	core/src/main/java/tv/own/owntv/core/catalog/CompatibleVariantResolver.kt	mp4
 7	empty	core/src/main/java/tv/own/owntv/core/catalog/ProviderCatalogMetadata.kt	\0
 1	regex	core/src/main/java/tv/own/owntv/core/catalog/ProviderCatalogMetadata.kt	(?i)(?:\\b5[._ ]1\\b|\\bDDP?\\s*5[._ ]1\\b|\\bAC-?3\\s*5[._ ]1\\b)
 1	regex	core/src/main/java/tv/own/owntv/core/catalog/ProviderCatalogMetadata.kt	(?i)(?:\\b7[._ ]1\\b|\\bDDP?\\s*7[._ ]1\\b)
@@ -1230,6 +1237,7 @@
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	ORDER BY (CASE WHEN o.position IS NULL THEN 1 ELSE 0 END), o.position, m.sortOrder, m.name LIMIT :limit
 2	sql	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	ORDER BY addedAt DESC, rating DESC, sortOrder DESC, id DESC LIMIT :limit
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	ORDER BY addedAt DESC, sortOrder DESC, id DESC
+1	sql	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	ORDER BY sortOrder ASC, id ASC LIMIT :limit
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	ORDER BY sortOrder ASC, name ASC, id ASC
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	ORDER BY sortOrder ASC, name ASC, id ASC LIMIT :limit
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	SELECT * FROM movies WHERE categoryId = :categoryId AND name LIKE '%' || :query || '%' ORDER BY addedAt DESC, sortOrder DESC, id DESC
@@ -1247,6 +1255,7 @@
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	SELECT * FROM movies WHERE sourceId = :sourceId AND remoteId IN (:remoteIds)
 1	technical	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	SELECT * FROM movies WHERE sourceId = :sourceId AND streamUrl = :streamUrl LIMIT 2
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	SELECT * FROM movies WHERE sourceId = :sourceId AND titleSignature = '' LIMIT :limit
+1	sql	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	SELECT * FROM movies WHERE sourceId = :sourceId AND titleSignature = :titleSignature
 4	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	SELECT * FROM movies WHERE sourceId IN (:sourceIds)
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	SELECT * FROM movies WHERE sourceId IN (:sourceIds) AND name LIKE '%' || :query || '%' ORDER BY addedAt DESC, sortOrder DESC, id DESC
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/MovieDao.kt	SELECT * FROM movies WHERE sourceId IN (:sourceIds) AND name LIKE '%' || :query || '%' ORDER BY name ASC
@@ -1400,6 +1409,7 @@
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	ORDER BY (CASE WHEN o.position IS NULL THEN 1 ELSE 0 END), o.position, s.sortOrder, s.name LIMIT :limit
 2	sql	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	ORDER BY addedAt DESC, rating DESC, sortOrder DESC, id DESC LIMIT :limit
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	ORDER BY addedAt DESC, sortOrder DESC, id DESC
+1	sql	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	ORDER BY sortOrder ASC, id ASC LIMIT :limit
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	ORDER BY sortOrder ASC, name ASC, id ASC
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	ORDER BY sortOrder ASC, name ASC, id ASC LIMIT :limit
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	SELECT * FROM episodes WHERE id = :id
@@ -1422,6 +1432,7 @@
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	SELECT * FROM series WHERE sourceId = :sourceId AND remoteId = :remoteId LIMIT 1
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	SELECT * FROM series WHERE sourceId = :sourceId AND remoteId IN (:remoteIds)
 1	sql	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	SELECT * FROM series WHERE sourceId = :sourceId AND titleSignature = '' LIMIT :limit
+1	sql	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	SELECT * FROM series WHERE sourceId = :sourceId AND titleSignature = :titleSignature
 4	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	SELECT * FROM series WHERE sourceId IN (:sourceIds)
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	SELECT * FROM series WHERE sourceId IN (:sourceIds) AND name LIKE '%' || :query || '%' ORDER BY addedAt DESC, sortOrder DESC, id DESC
 1	room-schema	core/src/main/java/tv/own/owntv/core/database/dao/SeriesDao.kt	SELECT * FROM series WHERE sourceId IN (:sourceIds) AND name LIKE '%' || :query || '%' ORDER BY name ASC

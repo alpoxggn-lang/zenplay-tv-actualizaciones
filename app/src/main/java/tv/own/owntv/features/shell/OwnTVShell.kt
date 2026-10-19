@@ -359,9 +359,31 @@ fun OwnTVShell(
     // Favorite state for the player HUD's in-stream favorite toggle (live channel / movie / series).
     val liveFavoriteIds by liveVm.favoriteIds.collectAsStateWithLifecycle()
     val playingMovie by movieVm.playingMovie.collectAsStateWithLifecycle()
+    val compatibleMovie by movieVm.compatibleMovie.collectAsStateWithLifecycle()
     val movieFavoriteIds by movieVm.favoriteIds.collectAsStateWithLifecycle()
     val playingSeries by seriesVm.playingSeries.collectAsStateWithLifecycle()
+    val compatibleEpisode by seriesVm.compatibleEpisode.collectAsStateWithLifecycle()
     val seriesFavoriteIds by seriesVm.favoriteIds.collectAsStateWithLifecycle()
+    // Name the exact provider row without exposing its URL (which may contain credentials).
+    val compatibleAlternativeLabel = when (zapSource) {
+        MainSection.MOVIES -> compatibleMovie?.let { movie ->
+            buildList {
+                add(movie.name)
+                tv.own.owntv.core.catalog.qualityLabel(movie.qualityRank)?.let(::add)
+                movie.providerLanguage?.takeIf(String::isNotBlank)?.let(::add)
+                movie.containerExt?.trim()?.uppercase()?.takeIf(String::isNotBlank)?.let(::add)
+            }.joinToString(" · ")
+        }
+        MainSection.SERIES -> compatibleEpisode?.let { variant ->
+            buildList {
+                add(variant.replacementShow.name)
+                tv.own.owntv.core.catalog.qualityLabel(variant.replacementShow.qualityRank)?.let(::add)
+                variant.replacementShow.providerLanguage?.takeIf(String::isNotBlank)?.let(::add)
+                variant.replacementEpisode.containerExt?.trim()?.uppercase()?.takeIf(String::isNotBlank)?.let(::add)
+            }.joinToString(" · ")
+        }
+        else -> null
+    }
     // Favorite toggle for whatever is playing: the live channel, the movie, or the series (episodes
     // favorite their parent series). Picked by the section that armed the stream. Hoisted here because
     // the audio capsule in the top bar carries the same control as the fullscreen HUD.
@@ -1487,7 +1509,12 @@ fun OwnTVShell(
             } else {
                 player.audioOnlyMedia.collectAsStateWithLifecycle()
             }
-            if (audioOnlyMedia) {
+            val activePlayerError by if (liveOnExo) {
+                liveVm.previewEngine.error.collectAsStateWithLifecycle()
+            } else {
+                player.error.collectAsStateWithLifecycle()
+            }
+            if (audioOnlyMedia && activePlayerError == null) {
                 tv.own.owntv.player.AudioOnlyBadge(modifier = Modifier.fillMaxSize(), compact = !isFull)
             }
             // Direct render mode: mpv can't draw subtitles on the decoder-owned surface — the app does.
@@ -1628,6 +1655,16 @@ fun OwnTVShell(
                     // In-stream favorite toggle for the current channel/movie/series.
                     favorite = favActive,
                     onToggleFavorite = favToggle,
+                    compatibleAlternativeLabel = compatibleAlternativeLabel,
+                    onPlayCompatibleVersion = when (zapSource) {
+                        MainSection.MOVIES -> compatibleMovie?.let {
+                            { movieVm.playCompatibleVersion() }
+                        }
+                        MainSection.SERIES -> compatibleEpisode?.let {
+                            { seriesVm.playCompatibleVersion() }
+                        }
+                        else -> null
+                    },
                     // N3 — the zap banner's now/next. Collected inside the slot, so only the banner redraws.
                     zapGuide = if (isLiveChannel) {
                         {

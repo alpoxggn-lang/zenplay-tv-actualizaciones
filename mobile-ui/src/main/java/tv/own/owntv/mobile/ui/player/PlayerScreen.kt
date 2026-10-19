@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -103,6 +104,10 @@ private const val NOTCHES = 20
 @Composable
 fun PlayerScreen(
     onExit: () -> Unit,
+    // Terminal movie/episode decode failure only. The catalogue resolver supplies both values when
+    // it has found a safer copy; recordings and Live TV deliberately keep the ordinary Retry path.
+    compatibleAlternativeLabel: String? = null,
+    onPlayCompatibleVersion: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     tuner: LiveTuner = koinInject(),
     vodTuner: VodTuner = koinInject(),
@@ -128,6 +133,8 @@ fun PlayerScreen(
     val channel by tuner.channel.collectAsStateWithLifecycle()
     val autoFrameRate by settings.autoFrameRate.collectAsStateWithLifecycle(initialValue = false)
     val film by vodTuner.playing.collectAsStateWithLifecycle()
+    val compatibleAlternativeEligible = film?.mediaType == MediaType.MOVIE ||
+        film?.mediaType == MediaType.EPISODE
     val nowNext by tuner.nowNext.collectAsStateWithLifecycle()
     val siblings by tuner.siblings.collectAsStateWithLifecycle()
     val offsetSec by tuner.offsetSec.collectAsStateWithLifecycle()
@@ -597,7 +604,7 @@ fun PlayerScreen(
         // A radio channel has no picture to show and never will, so the rectangle it would fill shows
         // what is playing instead. Not a screen of its own — the controls and the gestures are still
         // these. This is the *only* way full screen ends up without a picture.
-        val noPicture = audioOnlyMedia && !inPip
+        val noPicture = audioOnlyMedia && error == null && !inPip
         if (noPicture) {
             AudioOnlyBackdrop(
                 title = channel?.name ?: film?.title.orEmpty(),
@@ -611,7 +618,17 @@ fun PlayerScreen(
 
         val failure = error
         if (failure != null) {
-            ErrorPanel(failure = failure, info = errorInfo, onRetry = activeEngine::retry)
+            ErrorPanel(
+                failure = failure,
+                info = errorInfo,
+                onRetry = activeEngine::retry,
+                compatibleAlternativeLabel = compatibleAlternativeLabel.takeIf {
+                    compatibleAlternativeEligible
+                },
+                onPlayCompatibleVersion = onPlayCompatibleVersion.takeIf {
+                    compatibleAlternativeEligible
+                },
+            )
         } else if (buffering && !noPicture) {
             // On the same material as every other message over the picture, rather than a bare ring.
             PlayerToast(Modifier.align(Alignment.Center)) {
@@ -898,8 +915,19 @@ private fun skip(tuner: LiveTuner, isLive: Boolean, forward: Boolean) {
 }
 
 @Composable
-private fun ErrorPanel(failure: PlaybackFailure, info: ErrorInfo?, onRetry: () -> Unit) {
+private fun ErrorPanel(
+    failure: PlaybackFailure,
+    info: ErrorInfo?,
+    onRetry: () -> Unit,
+    compatibleAlternativeLabel: String? = null,
+    onPlayCompatibleVersion: (() -> Unit)? = null,
+) {
     val res = LocalResources.current
+    var confirmCompatibleVersion by remember(failure, compatibleAlternativeLabel) {
+        mutableStateOf(false)
+    }
+    val compatibleAlternativeAvailable = compatibleAlternativeLabel != null &&
+        onPlayCompatibleVersion != null
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         PlayerToast {
             Text(
@@ -938,9 +966,60 @@ private fun ErrorPanel(failure: PlaybackFailure, info: ErrorInfo?, onRetry: () -
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
-            TextButton(onClick = onRetry) { Text(stringResource(R.string.common_retry)) }
+            if (compatibleAlternativeAvailable) {
+                Button(onClick = { confirmCompatibleVersion = true }) {
+                    Text(stringResource(R.string.player_compatible_version_action))
+                }
+                TextButton(onClick = onRetry) { Text(stringResource(R.string.common_retry)) }
+            } else {
+                TextButton(onClick = onRetry) { Text(stringResource(R.string.common_retry)) }
+            }
         }
     }
+    if (confirmCompatibleVersion && compatibleAlternativeAvailable) {
+        CompatibleVersionConfirmationDialog(
+            alternativeLabel = compatibleAlternativeLabel,
+            onConfirm = {
+                confirmCompatibleVersion = false
+                onPlayCompatibleVersion()
+            },
+            onDismiss = { confirmCompatibleVersion = false },
+        )
+    }
+}
+
+/** Explicit confirmation before replacing a failed VOD while retaining its saved position. */
+@Composable
+private fun CompatibleVersionConfirmationDialog(
+    alternativeLabel: String?,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        modifier = Modifier.glassDialogWindow(),
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.player_compatible_version_title)) },
+        text = {
+            Column {
+                Text(stringResource(R.string.player_compatible_version_message))
+                alternativeLabel?.takeIf { it.isNotBlank() }?.let { label ->
+                    Text(
+                        text = stringResource(R.string.player_compatible_version_alternative, label),
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text(stringResource(R.string.player_compatible_version_action))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
+        },
+    )
 }
 
 /**

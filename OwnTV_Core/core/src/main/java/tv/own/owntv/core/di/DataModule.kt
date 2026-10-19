@@ -253,6 +253,8 @@ val dataModule = module {
     }
     // seriesDao, sourceDao, xtreamClient, userDataResolver, stalkerClient, stalkerAuthManager
     single { SeriesRepository(get(), get(), get(), get(), get(), get()) }
+    // movieDao, seriesDao, seriesRepository — exact-title fallback for unsupported VOD formats.
+    single { tv.own.owntv.core.catalog.CompatibleVariantResolver(get(), get(), get()) }
     // sourceDao, movieDao, seriesDao, progressDao
     single { LauncherRecommendationPlanner(get(), get(), get(), get(), get(), get()) }
     // sourceDao, channelDao, movieDao, seriesDao, progressDao

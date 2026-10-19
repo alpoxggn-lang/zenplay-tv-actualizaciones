@@ -34,6 +34,7 @@ val libraryModule = module {
             dataSaver = get(),
             cast = get(),
             contentAccess = get(),
+            compatibleVariants = get(),
             downloadDao = get(),
             downloadItemResolver = get(),
             protectedDownloads = get(),

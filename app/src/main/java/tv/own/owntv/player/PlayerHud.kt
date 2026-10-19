@@ -117,7 +117,7 @@ private const val TRACK_POLL_TRIES = 20
 
 internal enum class HudDialog {
     NONE, PLAYBACK_SETTINGS, RECORD, AUDIO, SUBS, SPEED, ZOOM, QUALITY, VOLUME,
-    SUB_TIMING, JUMP_BACK, SLEEP_TIMER,
+    SUB_TIMING, JUMP_BACK, SLEEP_TIMER, COMPATIBLE_VERSION_CONFIRM,
 }
 
 /** What the top-left channel OSD shows for direct tune: the digits being typed, the channel a number
@@ -203,6 +203,10 @@ fun PlayerHud(
     // (no item context). [favorite] = current state — fills the star teal when true.
     favorite: Boolean = false,
     onToggleFavorite: (() -> Unit)? = null,
+    // Terminal VOD decode failure only: the resolver may offer another catalogue entry that this
+    // device can decode. Both values are required; Live TV and unresolved failures keep Retry only.
+    compatibleAlternativeLabel: String? = null,
+    onPlayCompatibleVersion: (() -> Unit)? = null,
     // Live guide card (Before / Now playing / Next for the playing channel) — supplied by the shell
     // (the EPG data lives in LiveViewModel, not the player). Rendered on the right edge whenever the
     // controls are visible, like the top-bar channel card; informational only, never focusable.
@@ -242,6 +246,8 @@ fun PlayerHud(
     val zoomMode by player.zoomMode.collectAsStateWithLifecycle()
     val speed by player.speed.collectAsStateWithLifecycle()
     val isLive = player.isLiveContent
+    val compatibleAlternativeAvailable = !isLive &&
+        compatibleAlternativeLabel != null && onPlayCompatibleVersion != null
     val switchedToExo = stringResource(R.string.player_switch_exo)
     val switchedToMpv = stringResource(R.string.player_switch_mpv)
     val tuneNotFound = stringResource(R.string.player_channel_not_found)
@@ -761,6 +767,20 @@ fun PlayerHud(
                             style = OwnTVButtonStyle.SECONDARY,
                         )
                     }
+                } else if (compatibleAlternativeAvailable) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OwnTVButton(
+                            stringResource(R.string.player_compatible_version_action),
+                            onClick = { dialog = HudDialog.COMPATIBLE_VERSION_CONFIRM },
+                            icon = OwnTVIcon.PLAY,
+                            modifier = Modifier.focusRequester(retryFocus),
+                        )
+                        OwnTVButton(
+                            stringResource(R.string.common_retry),
+                            onClick = { player.retry() },
+                            style = OwnTVButtonStyle.SECONDARY,
+                        )
+                    }
                 } else {
                     OwnTVButton(stringResource(R.string.common_retry), onClick = { player.retry() }, icon = OwnTVIcon.PLAY, modifier = Modifier.focusRequester(retryFocus))
                 }
@@ -878,6 +898,14 @@ fun PlayerHud(
         HudDialog.SLEEP_TIMER -> SleepTimerDialog(
             timer = org.koin.compose.koinInject(),
             programmeEndMs = remember { sleepProgrammeEndMs?.invoke() },
+            onDismiss = { dialog = HudDialog.NONE },
+        )
+        HudDialog.COMPATIBLE_VERSION_CONFIRM -> CompatibleVersionConfirmationDialog(
+            alternativeLabel = compatibleAlternativeLabel,
+            onConfirm = {
+                dialog = HudDialog.NONE
+                onPlayCompatibleVersion?.invoke()
+            },
             onDismiss = { dialog = HudDialog.NONE },
         )
         // "Go back to…". The options are read here, as the list opens, so the clock times shown are

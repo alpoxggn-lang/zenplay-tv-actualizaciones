@@ -1347,6 +1347,12 @@ class OwnTVPlayer(
     private val _errorInfo = MutableStateFlow<ErrorInfo?>(null)
     val errorInfo: StateFlow<ErrorInfo?> = _errorInfo.asStateFlow()
 
+    /** Clear diagnostics before publishing a new error state so collectors never pair two loads. */
+    private fun setPlaybackError(failure: PlaybackFailure?) {
+        _errorInfo.value = null
+        _error.value = failure
+    }
+
     // Captures mpv's own error output (msg-level=warn, set even in release) so the real failure reason is
     // available to show the user. Keeps error/fatal lines, plus warn lines that look like an actual failure
     // (HTTP codes, "failed", "unrecognized", etc.) — ignoring benign per-frame warnings.
@@ -1927,7 +1933,7 @@ class OwnTVPlayer(
         loadGeneration++ // supersede any mpv retry/watchdog work for this item
         errorCheckJob?.cancel(); videoCheckJob?.cancel()
         load.expectingPlayback = false
-        _error.value = null
+        setPlaybackError(null)
         _buffering.value = true
         val gen = loadGeneration
         // Capture the current frame to mask the decoder swap, THEN stop mpv + release its surface on the
@@ -2130,7 +2136,7 @@ class OwnTVPlayer(
         loadGeneration++ // supersede any mpv retry/watchdog work for this item
         errorCheckJob?.cancel(); videoCheckJob?.cancel()
         load.expectingPlayback = false
-        _error.value = null
+        setPlaybackError(null)
         _buffering.value = true
         load.currentHwdec = null // keep the mpv decode guard inert while ExoPlayer owns playback
         if (mpvStuck) {
@@ -2287,7 +2293,7 @@ class OwnTVPlayer(
             val gen = loadGeneration
             errorCheckJob?.cancel(); videoCheckJob?.cancel()
             load.expectingPlayback = false
-            _error.value = null
+            setPlaybackError(null)
             _buffering.value = true
             load.currentHwdec = null // keep the mpv decode guard inert while ExoPlayer owns playback
             load.pendingSeekMs = pos
@@ -2317,7 +2323,7 @@ class OwnTVPlayer(
     private fun vodErrorMessage(mpvMsg: PlaybackFailure): PlaybackFailure {
         val exoErr = item.exoFailureBeforeMpv ?: return mpvMsg
         android.util.Log.w(TAG, "VOD failed on BOTH engines — exo first: '$exoErr' / mpv: '$mpvMsg'")
-        return PlaybackFailure.BothEnginesExoFirst
+        return PlaybackFailure.BothEnginesExoFirst(exoError = exoErr, mpvError = mpvMsg)
     }
 
     /**
@@ -2335,6 +2341,28 @@ class OwnTVPlayer(
         else if (_position.value > 0) _position.value
         else load.pendingSeekMs
 
+    /**
+     * Position to carry into a catalogue replacement after this rendition terminally fails.
+     *
+     * The visible clock is not always authoritative: a failed ranged seek can briefly publish zero
+     * while [LoadState.pendingSeekMs] still contains the destination the user selected. This uses the
+     * same ordering as the mpv -> ExoPlayer recovery path so switching to a compatible rendition never
+     * silently restarts a resumed or scrubbed movie from the beginning.
+     */
+    fun replacementResumePositionMs(replacementDurationMs: Long? = null): Long = if (isLiveContent) {
+        0L
+    } else {
+        VodSeekPolicy.replacementPosition(
+            positionMs = VodSeekPolicy.recoveryPosition(
+                explicitMs = null,
+                pendingTargetMs = load.pendingSeekMs,
+                currentPositionMs = _position.value,
+                fileOpened = load.fileLoaded,
+            ),
+            replacementDurationMs = replacementDurationMs,
+        )
+    }
+
     /** The engine fallback ALSO failed: stop ExoPlayer and surface one combined error. */
     /** "Only ExoPlayer" and ExoPlayer gave up: mpv is not allowed a turn, so this is the final word.
      *  Reported as ExoPlayer's own error — telling the user both engines failed would be a lie, and it
@@ -2344,7 +2372,7 @@ class OwnTVPlayer(
         deactivateExo()
         _isPlaying.value = false
         _buffering.value = false
-        _error.value = exoError
+        setPlaybackError(exoError)
     }
 
     private fun failBothEngines(exoError: PlaybackFailure) {
@@ -2352,7 +2380,12 @@ class OwnTVPlayer(
         deactivateExo()
         _isPlaying.value = false
         _buffering.value = false
-        _error.value = PlaybackFailure.BothEnginesMpvFirst(exoError)
+        setPlaybackError(
+            PlaybackFailure.BothEnginesMpvFirst(
+                mpvError = mpvFailureBeforeFallback,
+                exoError = exoError,
+            ),
+        )
     }
 
     /** ExoPlayer reached end-of-file while it owned VOD playback: mirror mpv's END_FILE auto-play-next
@@ -2670,9 +2703,19 @@ class OwnTVPlayer(
             // error (e.g. MediaCodec 0x80001000) from this stream, else mpv's own last log line.
             scope.launch {
                 _error.collect {
+                    // A decoder can expose audio before the video failure becomes terminal. Do not leave
+                    // the earlier "audio-only media" probe active underneath the error panel: the file is
+                    // not a radio item, its picture failed. Both Android shells also guard this visually,
+                    // but clearing the source state keeps mini-player/PiP consumers correct as well.
+                    if (it != null) _audioOnlyMedia.value = false
                     _errorInfo.value = if (it != null) {
                         val raw = diagnostics.recentError() ?: load.lastMpvError
-                        val info = ErrorInfo(reason = raw?.let(PlayerErrors::reasonFor), spec = mediaSpec(), raw = raw)
+                        val info = ErrorInfo(
+                            reason = raw?.let(PlayerErrors::reasonFor),
+                            spec = mediaSpec(),
+                            raw = raw,
+                            failure = it,
+                        )
                         // Persist for Settings → "Playback error log" (users can't pull logcat after the fact).
                         PlaybackErrorLog.log(context, if (exoActive) "exoplayer" else "mpv", isLiveContent, info)
                         info
@@ -2838,7 +2881,7 @@ class OwnTVPlayer(
                 android.util.Log.w(TAG, "queue item resolve failed: ${e.message}")
                 if (gen == loadGeneration) {
                     _buffering.value = false
-                    _error.value = PlaybackFailure.StreamLink
+                    setPlaybackError(PlaybackFailure.StreamLink)
                 }
                 return@launch
             }
@@ -2947,7 +2990,7 @@ class OwnTVPlayer(
         videoCheckJob?.cancel()
         cancelVodSeekRecovery()
         liveStallJob?.cancel()
-        _error.value = null
+        setPlaybackError(null)
         diagnostics.markLoad() // scope captured codec/audio errors to this stream
         _videoRes.value = null
         _videoFps.value = null
@@ -3220,8 +3263,14 @@ class OwnTVPlayer(
                             android.util.Log.w(TAG, "decoder failure with no rescue rung left — surfacing decode error")
                             load.expectingPlayback = false; _buffering.value = false
                             if (!isLiveContent && fallbackToExoVod(PlaybackFailure.MpvOpenDecode, mpvStuck = false)) return@launch
-                            _error.value = vodErrorMessage(decodeFailureMessage(decoderErr))
-                            _errorInfo.value = ErrorInfo(decoderErr?.let { PlayerErrors.reasonFor(it) }, mediaSpec(), decoderErr)
+                            val terminalFailure = vodErrorMessage(decodeFailureMessage(decoderErr))
+                            setPlaybackError(terminalFailure)
+                            _errorInfo.value = ErrorInfo(
+                                decoderErr?.let { PlayerErrors.reasonFor(it) },
+                                mediaSpec(),
+                                decoderErr,
+                                terminalFailure,
+                            )
                             return@launch
                         }
                         // An archive gets the software rescue even with no decoder text to go on: the
@@ -3233,7 +3282,7 @@ class OwnTVPlayer(
                             return@launch
                         }
                         android.util.Log.w(TAG, "watchdog MOOV-AT-END — FILE_LOADED but no bitrate/height after ${elapsed}ms, aborting (server lacks Range support)")
-                                    _error.value = vodErrorMessage(PlaybackFailure.NotStreaming)
+                        setPlaybackError(vodErrorMessage(PlaybackFailure.NotStreaming))
                         load.expectingPlayback = false; _buffering.value = false
                         videoCheckJob?.cancel()
                         return@launch
@@ -3282,8 +3331,18 @@ class OwnTVPlayer(
                             _isPlaying.value = false
                             _buffering.value = false
                             val raw = load.lastMpvError ?: "No playable data received before timeout"
-                            _error.value = PlayerErrors.visibleFailure(raw, currentUrl, PlaybackFailure.Channel)
-                            _errorInfo.value = ErrorInfo(PlayerErrors.reasonFor(raw), mediaSpec(), raw)
+                            val terminalFailure = PlayerErrors.visibleFailure(
+                                raw,
+                                currentUrl,
+                                PlaybackFailure.Channel,
+                            )
+                            setPlaybackError(terminalFailure)
+                            _errorInfo.value = ErrorInfo(
+                                PlayerErrors.reasonFor(raw),
+                                mediaSpec(),
+                                raw,
+                                terminalFailure,
+                            )
                             mpvAsync { stopWithStopClassification("live open timeout") }
                             return@launch
                         }
@@ -3330,7 +3389,7 @@ class OwnTVPlayer(
                         } else {
                             android.util.Log.w(TAG, "live stall (mpv, Live) — reconnect budget exhausted after $MAX_LIVE_RECONNECTS attempts, surfacing error")
                             _buffering.value = false
-                            _error.value = PlaybackFailure.LostConnection
+                            setPlaybackError(PlaybackFailure.LostConnection)
                             return@launch
                         }
                     } else {
@@ -3364,7 +3423,7 @@ class OwnTVPlayer(
                             } else {
                                 android.util.Log.w(TAG, "no-video (mpv, Live) — reconnect budget exhausted, surfacing error")
                                 _buffering.value = false
-                                _error.value = PlaybackFailure.AudioNoVideo
+                                setPlaybackError(PlaybackFailure.AudioNoVideo)
                                 return@launch
                             }
                         } else {
@@ -3958,7 +4017,7 @@ class OwnTVPlayer(
     fun abandonLive(reason: String) {
         val url = currentUrl
         stop()
-        _error.value = PlayerErrors.visibleFailure(reason, url, PlaybackFailure.Channel)
+        setPlaybackError(PlayerErrors.visibleFailure(reason, url, PlaybackFailure.Channel))
     }
 
     /** True while mpv owns a stream (loaded or loading) — i.e. while it may still hold a provider session. */
@@ -4015,9 +4074,9 @@ class OwnTVPlayer(
         // the core may be blocked in the stuck HTTP read, so the fallback destroys it, as hardReset would).
         if (fallbackToExoVod(PlaybackFailure.MpvOpenDecode, mpvStuck = true)) return
         // Surface the error immediately — the user sees "can't play this video" rather than a blank screen.
-        _error.value = vodErrorMessage(PlaybackFailure.FileCorrupt)
+        setPlaybackError(vodErrorMessage(PlaybackFailure.FileCorrupt))
         if (consecutiveHardResets >= 3) {
-            _error.value = vodErrorMessage(PlaybackFailure.MultipleVideos)
+            setPlaybackError(vodErrorMessage(PlaybackFailure.MultipleVideos))
             videoCheckJob?.cancel()
             android.util.Log.w(TAG, "hardReset thrash guard — $consecutiveHardResets consecutive resets, aborting")
             return
@@ -4732,7 +4791,7 @@ class OwnTVPlayer(
                     // A real frame decoded → playback genuinely works. Dismiss any error the watchdog raised
                     // prematurely while a slow hardware decoder (e.g. Realtek setPortMode negotiation) was
                     // still producing its first frame — otherwise the popup stays stuck over playing video.
-                    if (_error.value != null) _error.value = null
+                    if (_error.value != null) setPlaybackError(null)
                 }
                 updateAspect()
                 enforceDecodeGuard()
@@ -4781,7 +4840,7 @@ class OwnTVPlayer(
         scope.launch {
             _isPlaying.value = false
             _buffering.value = false
-            _error.value = vodErrorMessage(msg)
+            setPlaybackError(vodErrorMessage(msg))
         }
     }
 
@@ -4865,7 +4924,7 @@ class OwnTVPlayer(
                 // This callback runs on mpv's event thread (not main), so sync reads are safe here.
                 load.expectingPlayback = false
                 errorCheckJob?.cancel()
-                _error.value = null
+                setPlaybackError(null)
                 _buffering.value = false // a reconnect's spinner ends when the new file loads
                 // A load that only succeeded once the fallback identity was tried is the proof that this
                 // panel blocklists the default User-Agent. Record it panel-wide (session-only) so every
@@ -5142,7 +5201,10 @@ class OwnTVPlayer(
                                 // 1080p (it can't sustain it — the guard would trip; a clean error is better).
                             } else {
                                 android.util.Log.w(TAG, "direct failed — retries exhausted, showing error")
-                                scope.launch { _buffering.value = false; _error.value = PlaybackFailure.DecoderBusy }
+                                scope.launch {
+                                    _buffering.value = false
+                                    setPlaybackError(PlaybackFailure.DecoderBusy)
+                                }
                             }
                             return@mpvAsync
                         }
@@ -5197,7 +5259,7 @@ class OwnTVPlayer(
                         if (!connectivity.isOnlineNow()) {
                             android.util.Log.w(TAG, "playback didn't start — offline, skipping retries")
                             _buffering.value = false
-                            _error.value = PlaybackFailure.NoInternet
+                            setPlaybackError(PlaybackFailure.NoInternet)
                             return@launch
                         }
                         // A LIVE stream that retried once and still won't start may be on a panel that only
@@ -5330,11 +5392,13 @@ class OwnTVPlayer(
                             // before erroring — it may play what mpv can't on this device/provider.
                             if (!isLiveContent && fallbackToExoVod(PlaybackFailure.MpvStreamNeverStarted, mpvStuck = false)) return@launch
                             _buffering.value = false
-                            _error.value = vodErrorMessage(
-                                PlayerErrors.visibleFailure(
-                                    load.lastMpvError,
-                                    currentUrl,
-                                    PlaybackFailure.StreamUnavailable(item.triedUaFallback),
+                            setPlaybackError(
+                                vodErrorMessage(
+                                    PlayerErrors.visibleFailure(
+                                        load.lastMpvError,
+                                        currentUrl,
+                                        PlaybackFailure.StreamUnavailable(item.triedUaFallback),
+                                    ),
                                 ),
                             )
                         }
@@ -5348,7 +5412,7 @@ class OwnTVPlayer(
                     // succeeds, so the loop ends in playback rather than an endless re-init storm.
                     if (!connectivity.isOnlineNow()) {
                         _buffering.value = false
-                        _error.value = PlaybackFailure.NoInternet
+                        setPlaybackError(PlaybackFailure.NoInternet)
                     } else if (item.liveStallReconnects >= MAX_LIVE_RECONNECTS) {
                         // Bounded, like every other live recovery path. The reconnect below keeps the
                         // item's state (resetRetries = false) — retry() would hand the channel a fresh
@@ -5360,7 +5424,7 @@ class OwnTVPlayer(
                         load.expectingPlayback = false
                         _isPlaying.value = false
                         _buffering.value = false
-                        _error.value = PlaybackFailure.LostConnection
+                        setPlaybackError(PlaybackFailure.LostConnection)
                     } else {
                         item.liveStallReconnects++
                         android.util.Log.w(TAG, "live died mid-play — reconnect attempt ${item.liveStallReconnects}/$MAX_LIVE_RECONNECTS")
@@ -5413,7 +5477,7 @@ class OwnTVPlayer(
                             android.util.Log.w(TAG, "VOD ended mid-stream at ${pos}ms of ${dur}ms, reconnects spent — surfacing error")
                             _isPlaying.value = false
                             _buffering.value = false
-                            _error.value = vodErrorMessage(PlaybackFailure.LostConnection)
+                            setPlaybackError(vodErrorMessage(PlaybackFailure.LostConnection))
                         }
                     }
                 }

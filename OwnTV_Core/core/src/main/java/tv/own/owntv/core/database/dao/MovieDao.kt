@@ -122,6 +122,23 @@ interface MovieDao {
     @Query("SELECT * FROM movies WHERE sourceId = :sourceId AND name = :name LIMIT 1")
     suspend fun findByName(sourceId: Long, name: String): MovieEntity?
 
+    /**
+     * Small, index-served equivalence set used after a device rejects a VOD video's format.
+     *
+     * Deliberately exact and source-scoped: a fuzzy catalogue scan here could silently turn a
+     * failed movie into a remake (or a different provider's entitlement). The resolver performs
+     * the stricter year, language, DRM and capability checks over these rows.
+     */
+    @Query(
+        "SELECT * FROM movies WHERE sourceId = :sourceId AND titleSignature = :titleSignature " +
+            "ORDER BY sortOrder ASC, id ASC LIMIT :limit",
+    )
+    suspend fun compatibleVariantCandidates(
+        sourceId: Long,
+        titleSignature: String,
+        limit: Int,
+    ): List<MovieEntity>
+
     @Query("SELECT * FROM movies WHERE categoryId = :categoryId ORDER BY sortOrder ASC, name ASC")
     fun pagingByCategory(categoryId: Long): PagingSource<Int, MovieEntity>
 

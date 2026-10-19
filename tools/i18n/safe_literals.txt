@@ -170,8 +170,12 @@
 1	preference-key	app/src/main/java/tv/own/owntv/features/more/QuickPreview.kt	quick_live_preview
 1	preference-key	app/src/main/java/tv/own/owntv/features/more/QuickPreview.kt	quick_preview_sound
 2	empty	app/src/main/java/tv/own/owntv/features/movies/MovieViewModel.kt	\0
-1	technical	app/src/main/java/tv/own/owntv/features/movies/MovieViewModel.kt	MOVIE
+3	protocol	app/src/main/java/tv/own/owntv/features/movies/MovieViewModel.kt	MOVIE
 1	log	app/src/main/java/tv/own/owntv/features/movies/MovieViewModel.kt	OwnTVHome
+1	log	app/src/main/java/tv/own/owntv/features/movies/MovieViewModel.kt	compatible Stalker resolve failed movieId=${replacement.id}
+1	log	app/src/main/java/tv/own/owntv/features/movies/MovieViewModel.kt	compatible VOD reconnect failed movieId=${replacement.id}
+1	log	app/src/main/java/tv/own/owntv/features/movies/MovieViewModel.kt	compatible movie switch original=${original.id} replacement=${replacement.id} startPositionMs=$startPositionMs
+1	log	app/src/main/java/tv/own/owntv/features/movies/MovieViewModel.kt	compatible play history failed movieId=${original.id}
 2	log	app/src/main/java/tv/own/owntv/features/movies/MovieViewModel.kt	external play history record failed movieId=${movie.id} profile=$pid
 1	log	app/src/main/java/tv/own/owntv/features/movies/MovieViewModel.kt	play history record failed movieId=${movie.id} profile=$pid
 1	log	app/src/main/java/tv/own/owntv/features/movies/MovieViewModel.kt	play movieId=${movie.id} -> external player
@@ -258,9 +262,11 @@
 1	technical	app/src/main/java/tv/own/owntv/features/series/SeriesScreen.kt	w300
 2	technical	app/src/main/java/tv/own/owntv/features/series/SeriesScreen.kt	✓
 2	empty	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	\0
-3	technical	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	EPISODE
+4	protocol	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	EPISODE
 1	log	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	OwnTVHome
-1	technical	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	SERIES
+2	protocol	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	SERIES
+1	log	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	compatible episode history failed episodeId=${originalEpisode.id}
+1	log	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	compatible episode switch original=${originalEpisode.id} replacement=${alternative.replacementEpisode.id} startPositionMs=$startPositionMs
 2	log	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	external play episode history record failed episodeId=${episode.id} profile=$pid
 2	log	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	external play series history record failed seriesId=${episode.seriesId} profile=$pid
 1	log	app/src/main/java/tv/own/owntv/features/series/SeriesViewModel.kt	openSeries seriesId=${s.id} profile=${ctx.value.profileId}
@@ -500,6 +506,7 @@
 1	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	vtt
 1	technical	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	webp
 1	protocol	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	webvtt
+2	technical	app/src/main/java/tv/own/owntv/features/shell/OwnTVShell.kt	·
 8	technical	app/src/main/java/tv/own/owntv/features/shell/ShellViewModel.kt	\0
 1	log	app/src/main/java/tv/own/owntv/features/shell/ShellViewModel.kt	OwnTVHome
 1	log	app/src/main/java/tv/own/owntv/features/shell/ShellViewModel.kt	activeProfileChanged profile=$pid androidTvHomeEnabled=${settings.androidTvHomeEnabled.first()}

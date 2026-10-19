@@ -7,6 +7,14 @@
 > Issue numbers that are part of a title are fine; explanatory parentheticals are not. The detail —
 > what, why, files and verification — belongs in the commit message, never here.
 
+## v2.2.17 — 2026-10-19
+
+### ✨ Funciones nuevas
+- **Versión compatible sugerida cuando el televisor no admite el video original**
+
+### 🐛 Correcciones
+- **El cambio de versión conserva el minuto, historial, subtítulos y continuidad de episodios**
+
 ## v2.2.16 — 2026-10-18
 
 ### 🐛 Correcciones

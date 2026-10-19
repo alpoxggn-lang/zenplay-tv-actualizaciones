@@ -4,6 +4,7 @@ import android.content.Context
 import android.view.Surface
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
@@ -16,6 +17,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
@@ -341,6 +343,7 @@ class ExoSubtitleEngine(
         callbacks.onError(
             PlaybackFailure.ExoDecode(
                 PlaybackException.getErrorCodeName(PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED),
+                DecodeTrack.AUDIO,
             ),
         )
         return true
@@ -830,7 +833,12 @@ class ExoSubtitleEngine(
                         reason = PlayerFailureReason.STEREO_FALLBACK,
                         detail = "stereo output still silent after recovery: $reason",
                     )
-                    callbacks.onError(PlaybackFailure.ExoDecode("audio output remained silent in stereo"))
+                    callbacks.onError(
+                        PlaybackFailure.ExoDecode(
+                            "audio output remained silent in stereo",
+                            DecodeTrack.AUDIO,
+                        ),
+                    )
                 }
             }
         }
@@ -1205,9 +1213,21 @@ class ExoSubtitleEngine(
 
     private fun friendlyFailure(error: PlaybackException): PlaybackFailure = when (error.errorCode) {
         PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
-        PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+        PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ->
+            if (fallbackMode) {
+                val rendererMime = (error as? ExoPlaybackException)
+                    ?.rendererFormat
+                    ?.sampleMimeType
+                val track = when {
+                    MimeTypes.isVideo(rendererMime) -> DecodeTrack.VIDEO
+                    MimeTypes.isAudio(rendererMime) -> DecodeTrack.AUDIO
+                    else -> DecodeTrack.UNKNOWN
+                }
+                PlaybackFailure.ExoDecode(error.errorCodeName, track)
+            }
+            else PlaybackFailure.ImageFormat
         PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED ->
-            if (fallbackMode) PlaybackFailure.ExoDecode(error.errorCodeName)
+            if (fallbackMode) PlaybackFailure.ExoDecode(error.errorCodeName, DecodeTrack.AUDIO)
             else PlaybackFailure.ImageFormat
         else ->
             if (fallbackMode) PlaybackFailure.ExoPlay(error.errorCodeName)

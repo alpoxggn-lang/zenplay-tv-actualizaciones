@@ -8,10 +8,15 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import tv.own.owntv.core.catalog.CompatibleEpisodeVariant
+import tv.own.owntv.core.catalog.CompatibleVariantResolver
+import tv.own.owntv.core.catalog.qualityLabel
 import tv.own.owntv.core.content.AdultCategoryClassifier
 import tv.own.owntv.core.content.ContentAccessPolicy
 import tv.own.owntv.core.database.dao.CategoryDao
@@ -57,6 +62,7 @@ import tv.own.owntv.player.MpvPlaybackEngine
 import tv.own.owntv.player.OwnTVPlayer
 import tv.own.owntv.player.PlaybackSession
 import tv.own.owntv.player.PlaylistItem
+import tv.own.owntv.player.isCompatibleVariantRecoveryFailure
 
 /**
  * The `itemId` a playing recording carries.
@@ -85,6 +91,30 @@ data class VodPlayback(
      */
     val sourceId: Long? = null,
 )
+
+/**
+ * A catalogue copy which can replace a VOD rendition the device cannot decode.
+ *
+ * The original rows remain part of the value on purpose: playback changes only the provider's
+ * technical stream. Resume progress, history, subtitles and the title shown in the UI continue to
+ * belong to the movie/episode the user selected.
+ */
+sealed interface CompatibleVodAlternative {
+    val label: String
+
+    data class Movie(
+        val original: MovieEntity,
+        val replacement: MovieEntity,
+        override val label: String,
+    ) : CompatibleVodAlternative
+
+    data class Episode(
+        val originalShow: SeriesEntity,
+        val originalEpisode: EpisodeEntity,
+        val replacement: CompatibleEpisodeVariant,
+        override val label: String,
+    ) : CompatibleVodAlternative
+}
 
 /**
  * The VOD half of what is playing — [LiveTuner]'s twin, and for the same reason: a film outlives the
@@ -116,6 +146,7 @@ class VodTuner(
     private val dataSaver: DataSaverGate,
     private val cast: CastController,
     private val contentAccess: ContentAccessPolicy,
+    private val compatibleVariants: CompatibleVariantResolver,
     private val downloadDao: DownloadDao,
     private val downloadItemResolver: DownloadItemResolver,
     private val protectedDownloads: ProtectedDownloadStore,
@@ -130,6 +161,30 @@ class VodTuner(
     private val engine by lazy { MpvPlaybackEngine(player) }
 
     private val _playing = MutableStateFlow<VodPlayback?>(null)
+
+    private val _compatibleAlternative = MutableStateFlow<CompatibleVodAlternative?>(null)
+
+    /** A safer provider copy, exposed only after both playback engines terminally reject VOD video. */
+    val compatibleAlternative: StateFlow<CompatibleVodAlternative?> = _compatibleAlternative
+
+    /** Failed catalogue rows remain excluded for this logical title so Retry cannot form a loop. */
+    private val attemptedMovieIds = linkedSetOf<Long>()
+    private val attemptedEpisodeIds = linkedSetOf<Long>()
+
+    /**
+     * Invalidates suspended playback work as soon as another user/player intent begins. The logical
+     * row alone is insufficient: restarting the same title or changing its queued rendition can
+     * produce an equal [VodPlayback] while the old fallback coroutine is still resolving a URL.
+     */
+    private var playbackIntentGeneration = 0L
+
+    private data class CompatiblePlaybackGuard(
+        val generation: Long,
+        val playback: VodPlayback,
+        val profileId: Long,
+        val mediaUrl: String?,
+        val mediaContentKey: String?,
+    )
 
     /**
      * [stop] saves through Room before it tears down the shared player. A replacement title can be
@@ -177,6 +232,10 @@ class VodTuner(
         val episodes: List<EpisodeEntity>,
         val profileId: Long,
         val parentTmdbId: Long?,
+        /** Engine keys belong to the technical copies, while [episodes] remain the logical queue. */
+        val playbackContentKeys: List<String?>,
+        /** Used to exclude the exact replacement row if a queued replacement also cannot decode. */
+        val playbackEpisodeIds: List<Long>,
     )
 
     private var playingQueue: PlayingQueue? = null
@@ -187,7 +246,13 @@ class VodTuner(
         // keeps that profile's downloads. Stop just this local playback before the new profile can
         // continue consuming the old profile's already-open descriptor.
         scope.launch {
+            var observedProfileId: Long? = null
             settings.activeProfileId.distinctUntilChanged().collect { activeProfileId ->
+                if (observedProfileId != null && observedProfileId != activeProfileId) {
+                    playbackIntentGeneration += 1L
+                    _compatibleAlternative.value = null
+                }
+                observedProfileId = activeProfileId
                 if (protectedPlaybackProfileGate.activeProfileChanged(activeProfileId)) {
                     revokeProtectedPlayback()
                 }
@@ -196,6 +261,86 @@ class VodTuner(
         scope.launch {
             liveTuner.channel.collect { if (it != null) clearPlaying() }
         }
+        // Catalogue lookup is deliberately armed only for a terminal unsupported-video failure.
+        // Network, DRM, decoder-busy, recordings, protected downloads and every Live TV path keep
+        // the normal Retry action and never scan for a different title.
+        scope.launch {
+            combine(player.error, player.errorInfo, playing) { failure, info, item ->
+                Triple(failure, info, item)
+            }.collectLatest { (failure, info, item) ->
+                if (
+                    item == null ||
+                    playingProtectedDownload ||
+                    item.mediaType !in setOf(MediaType.MOVIE, MediaType.EPISODE) ||
+                    !isCompatibleVariantRecoveryFailure(failure, info, player.isLiveContent)
+                ) {
+                    _compatibleAlternative.value = null
+                    return@collectLatest
+                }
+
+                val profileId = currentProfileId()
+                if (profileId == null) {
+                    _compatibleAlternative.value = null
+                    return@collectLatest
+                }
+
+                _compatibleAlternative.value = when (item.mediaType) {
+                    MediaType.MOVIE -> {
+                        val original = withContext(Dispatchers.IO) { movieDao.getById(item.itemId) }
+                        val replacement = original?.let {
+                            compatibleVariants.findMovie(it, attemptedMovieIds + it.id)
+                        }
+                        if (
+                            original != null && replacement != null &&
+                            contentAccess.allows(profileId, original) &&
+                            contentAccess.allows(profileId, replacement)
+                        ) {
+                            CompatibleVodAlternative.Movie(
+                                original,
+                                replacement,
+                                compatibleMovieLabel(replacement),
+                            )
+                        } else null
+                    }
+
+                    MediaType.EPISODE -> {
+                        val originalEpisode = withContext(Dispatchers.IO) {
+                            seriesDao.getEpisodeById(item.itemId)
+                        }
+                        if (originalEpisode == null) {
+                            null
+                        } else {
+                            val originalShow = withContext(Dispatchers.IO) {
+                                seriesDao.getSeriesById(originalEpisode.seriesId)
+                            }
+                            val replacement = originalShow?.let { show ->
+                                compatibleVariants.findEpisode(
+                                    show,
+                                    originalEpisode,
+                                    attemptedEpisodeIds + originalEpisode.id,
+                                )
+                            }
+                            if (
+                                originalShow != null && replacement != null &&
+                                contentAccess.allows(profileId, originalShow) &&
+                                contentAccess.allows(profileId, originalEpisode) &&
+                                contentAccess.allows(profileId, replacement.replacementShow) &&
+                                contentAccess.allows(profileId, replacement.replacementEpisode)
+                            ) {
+                                CompatibleVodAlternative.Episode(
+                                    originalShow,
+                                    originalEpisode,
+                                    replacement,
+                                    compatibleEpisodeLabel(replacement),
+                                )
+                            } else null
+                        }
+                    }
+
+                    else -> null
+                }
+            }
+        }
         // The player advances a queue by itself (auto-next, and the HUD's prev/next), so everything
         // keyed to "the episode playing" — the title on screen, the resume position, the subtitle
         // search context — has to be re-pointed by whoever owns it. Nobody tells this class otherwise.
@@ -203,6 +348,11 @@ class VodTuner(
             player.queueItemChanged.collect { index ->
                 val q = playingQueue ?: return@collect
                 val episode = q.episodes.getOrNull(index) ?: return@collect
+                playbackIntentGeneration += 1L
+                _compatibleAlternative.value = null
+                attemptedEpisodeIds.clear()
+                attemptedEpisodeIds += episode.id
+                q.playbackEpisodeIds.getOrNull(index)?.let(attemptedEpisodeIds::add)
                 // Deliberately no saveProgress() here: by the time this arrives the player is already
                 // on the new episode at position ~0, so a write would stamp that over the finished
                 // one's real position. The five-second timer saved it while it was still playing.
@@ -213,6 +363,7 @@ class VodTuner(
                     episodeLabel(episode),
                     q.show.posterUrl,
                     q.show.id,
+                    q.show.sourceId,
                 )
                 playingProfileId = q.profileId
                 subtitleController.setEpisode(q.profileId, q.show, episode, q.parentTmdbId)
@@ -243,6 +394,8 @@ class VodTuner(
      * not be resolved — so the caller must not navigate to the player screen.
      */
     suspend fun playMovie(movieId: Long, startPositionMs: Long = 0): Boolean {
+        resetCompatibleAlternatives()
+        attemptedMovieIds += movieId
         val movie = withContext(Dispatchers.IO) { movieDao.getById(movieId) } ?: return false
         val pid = currentProfileId() ?: return false
         if (!contentAccess.allows(pid, movie)) return false
@@ -300,6 +453,8 @@ class VodTuner(
      * watching episode after episode; stopping dead at the end of each one is not the same feature.
      */
     suspend fun playEpisode(episodeId: Long, startPositionMs: Long = 0): Boolean {
+        resetCompatibleAlternatives()
+        attemptedEpisodeIds += episodeId
         val episode = withContext(Dispatchers.IO) { seriesDao.getEpisodeById(episodeId) } ?: return false
         val show = withContext(Dispatchers.IO) { seriesDao.getSeriesById(episode.seriesId) } ?: return false
         val pid = currentProfileId() ?: return false
@@ -374,7 +529,230 @@ class VodTuner(
         subtitleController.setEpisode(pid, show, episode, parentTmdbId)
         // Nothing follows a cast episode, so there is no queue to follow either — and a queue kept
         // here would have the player's advance callback re-pointing a stream it is not driving.
-        playingQueue = if (handedOver) null else PlayingQueue(show, episodes, pid, parentTmdbId)
+        playingQueue = if (handedOver) {
+            null
+        } else {
+            PlayingQueue(
+                show = show,
+                episodes = episodes,
+                profileId = pid,
+                parentTmdbId = parentTmdbId,
+                playbackContentKeys = episodes.map { ep ->
+                    enginePinKey(show.sourceId, "EPISODE", ep.remoteId)
+                },
+                playbackEpisodeIds = episodes.map(EpisodeEntity::id),
+            )
+        }
+        return true
+    }
+
+    /**
+     * Replace the failed provider rendition after the user confirms the player prompt.
+     *
+     * This never calls [playMovie] or [playEpisode]: those are new logical plays and deliberately
+     * reset retry state. Here only the stream, headers and engine key change; the original catalogue
+     * ids stay in [playing], progress, history and subtitle context.
+     */
+    suspend fun playCompatibleVersion(): Boolean {
+        val selected = _compatibleAlternative.value ?: return false
+        val current = _playing.value ?: return false
+        val guard = captureCompatiblePlaybackGuard(current) ?: return false
+        val replacementDurationMs = when (selected) {
+            is CompatibleVodAlternative.Movie -> selected.replacement.durationSecs
+            is CompatibleVodAlternative.Episode -> selected.replacement.replacementEpisode.durationSecs
+        }?.toLong()?.times(1_000L)
+        val startPositionMs = player.replacementResumePositionMs(replacementDurationMs)
+        _compatibleAlternative.value = null
+        saveProgress()
+        return when (selected) {
+            is CompatibleVodAlternative.Movie -> {
+                playCompatibleMovie(selected, current, guard, startPositionMs)
+            }
+            is CompatibleVodAlternative.Episode -> {
+                playCompatibleEpisode(selected, current, guard, startPositionMs)
+            }
+        }
+    }
+
+    private suspend fun playCompatibleMovie(
+        selected: CompatibleVodAlternative.Movie,
+        current: VodPlayback,
+        guard: CompatiblePlaybackGuard,
+        startPositionMs: Long,
+    ): Boolean {
+        if (current.mediaType != MediaType.MOVIE || current.itemId != selected.original.id) return false
+        val profileId = guard.profileId
+        if (
+            !contentAccess.allows(profileId, selected.original) ||
+            !contentAccess.allows(profileId, selected.replacement) ||
+            !dataSaver.allowsStreaming()
+        ) return false
+
+        val replacement = selected.replacement
+        val source = withContext(Dispatchers.IO) { sourceDao.getById(replacement.sourceId) }
+        val url = resolve(source, replacement.streamUrl) ?: return false
+        val replacementKey = enginePinKey(replacement.sourceId, "MOVIE", replacement.remoteId)
+        val logicalTrackKey = enginePinKey(
+            selected.original.sourceId,
+            "MOVIE",
+            selected.original.remoteId,
+        )
+        // Last operation before the synchronous hand-off. Every DAO/access/URL suspension above can
+        // resume after Stop, a profile switch, a queue advance or another title has already begun.
+        if (!compatiblePlaybackStillCurrent(guard)) return false
+        attemptedMovieIds += selected.replacement.id
+        player.play(
+            url = url,
+            title = selected.original.name,
+            year = selected.original.year?.toString(),
+            isLive = false,
+            startPositionMs = startPositionMs,
+            userAgent = source?.userAgent,
+            httpHeaders = SourceOverrides.headersWithReferer(replacement.httpHeaders, source),
+            drmConfig = replacement.drmConfig,
+            manifestType = replacement.manifestType,
+            contentKey = replacementKey,
+            reconnectProvider = reconnectFor(source, replacement.streamUrl),
+            vodEngineOverride = SourceOverrides.vodEngineOf(source),
+            trackKey = logicalTrackKey,
+        )
+        val logicalPlayback = VodPlayback(
+            mediaType = MediaType.MOVIE,
+            itemId = selected.original.id,
+            title = selected.original.name,
+            posterUrl = selected.original.posterUrl,
+            sourceId = selected.original.sourceId,
+        )
+        beginPlaybackState(profileId, logicalPlayback)
+        playingQueue = null
+        val tmdbId = runCatching { metadata.resolveMovie(selected.original)?.tmdbId?.toLong() }
+            .getOrNull()
+        subtitleController.setMovie(profileId, selected.original, tmdbId)
+        recordHistory(profileId, MediaType.MOVIE, selected.original.id)
+        return true
+    }
+
+    private suspend fun playCompatibleEpisode(
+        selected: CompatibleVodAlternative.Episode,
+        current: VodPlayback,
+        guard: CompatiblePlaybackGuard,
+        startPositionMs: Long,
+    ): Boolean {
+        if (current.mediaType != MediaType.EPISODE || current.itemId != selected.originalEpisode.id) {
+            return false
+        }
+        val profileId = guard.profileId
+        if (
+            !contentAccess.allows(profileId, selected.originalShow) ||
+            !contentAccess.allows(profileId, selected.originalEpisode) ||
+            !contentAccess.allows(profileId, selected.replacement.replacementShow) ||
+            !contentAccess.allows(profileId, selected.replacement.replacementEpisode) ||
+            !dataSaver.allowsStreaming()
+        ) return false
+
+        // Pair the COMPLETE logical queue by season + episode. When the safer rendition does not
+        // contain a future episode/season, keep that exact logical episode's original stream in the
+        // queue. Omitting it would make auto-next stop at the last replacement; borrowing a nearby
+        // replacement would be worse because it could play the wrong episode.
+        val logicalQueue = playingQueue?.episodes
+            ?.takeIf { queue -> queue.any { it.id == selected.originalEpisode.id } }
+            ?: listOf(selected.originalEpisode)
+        val currentNumber = selected.originalEpisode.seasonNumber to
+            selected.originalEpisode.episodeNumber
+        val replacementsByNumber = selected.replacement.replacementQueue
+            .associateBy { replacement ->
+                replacement.seasonNumber to replacement.episodeNumber
+            }
+            .toMutableMap()
+            .apply {
+                // The resolver selected this exact current episode after ranking duplicates; do not
+                // let another duplicate with the same S/E replace that decision.
+                put(currentNumber, selected.replacement.replacementEpisode)
+            }
+        val paired = logicalQueue.map { logical ->
+            val number = logical.seasonNumber to logical.episodeNumber
+            logical to (replacementsByNumber[number] ?: logical)
+        }
+        val startIndex = paired.indexOfFirst { (logical, _) ->
+            logical.id == selected.originalEpisode.id
+        }
+        if (startIndex < 0) return false
+        val replacementShow = selected.replacement.replacementShow
+        val source = withContext(Dispatchers.IO) { sourceDao.getById(replacementShow.sourceId) }
+        val needsResolve = streamUrlResolver.needsResolve(source)
+        val logicalTrackKey = enginePinKey(
+            selected.originalShow.sourceId,
+            "SERIES",
+            selected.originalShow.remoteId,
+        )
+        val playbackKeys = paired.map { (_, replacement) ->
+            enginePinKey(replacementShow.sourceId, "EPISODE", replacement.remoteId)
+        }
+        // See the movie path: no suspended operation is allowed between this stable-snapshot guard
+        // and playEpisodes(), so stale fallback work cannot replace a newer playback.
+        if (!compatiblePlaybackStillCurrent(guard)) return false
+        attemptedEpisodeIds += selected.replacement.replacementEpisode.id
+        player.playEpisodes(
+            items = paired.mapIndexed { index, (logical, replacement) ->
+                PlaylistItem(
+                    url = replacement.streamUrl,
+                    meta = MediaMeta(
+                        title = selected.originalShow.name,
+                        subtitle = episodeLabel(logical),
+                        logoUrl = selected.originalShow.posterUrl,
+                        contentKey = playbackKeys[index],
+                        trackKey = logicalTrackKey,
+                        seasonNumber = logical.seasonNumber,
+                        episodeNumber = logical.episodeNumber,
+                    ),
+                    resolveUrl = if (needsResolve && source != null) {
+                        {
+                            streamUrlResolver.resolve(
+                                source,
+                                replacement.streamUrl,
+                                vod = true,
+                                episode = replacement.episodeNumber,
+                            )
+                        }
+                    } else null,
+                    httpHeaders = SourceOverrides.headersWithReferer(replacement.httpHeaders, source),
+                    drmConfig = replacement.drmConfig,
+                    manifestType = replacement.manifestType,
+                )
+            },
+            startIndex = startIndex,
+            startPositionMs = startPositionMs,
+            userAgent = source?.userAgent,
+            vodEngineOverride = SourceOverrides.vodEngineOf(source),
+        )
+        val logicalPlayback = VodPlayback(
+            mediaType = MediaType.EPISODE,
+            itemId = selected.originalEpisode.id,
+            title = selected.originalShow.name,
+            subtitle = episodeLabel(selected.originalEpisode),
+            posterUrl = selected.originalShow.posterUrl,
+            seriesId = selected.originalShow.id,
+            sourceId = selected.originalShow.sourceId,
+        )
+        beginPlaybackState(profileId, logicalPlayback)
+        val parentTmdbId = runCatching {
+            metadata.resolveSeries(selected.originalShow)?.tmdbId?.toLong()
+        }.getOrNull()
+        subtitleController.setEpisode(
+            profileId,
+            selected.originalShow,
+            selected.originalEpisode,
+            parentTmdbId,
+        )
+        playingQueue = PlayingQueue(
+            show = selected.originalShow,
+            episodes = paired.map { it.first },
+            profileId = profileId,
+            parentTmdbId = parentTmdbId,
+            playbackContentKeys = playbackKeys,
+            playbackEpisodeIds = paired.map { it.second.id },
+        )
+        recordHistory(profileId, MediaType.EPISODE, selected.originalEpisode.id)
         return true
     }
 
@@ -386,6 +764,7 @@ class VodTuner(
      * currently allow playback. No media URL, headers or reconnect path are exposed.
      */
     suspend fun playDownload(downloadId: Long): Boolean {
+        resetCompatibleAlternatives()
         val pid = currentProfileId() ?: return false
         val storedDownload = withContext(Dispatchers.IO) {
             downloadDao.getByIdForProfile(downloadId, pid)
@@ -482,6 +861,7 @@ class VodTuner(
      *   scrub bar on the one recording a user most wants to skip through.
      */
     suspend fun playRecording(filePath: String, title: String, posterUrl: String?): Boolean {
+        resetCompatibleAlternatives()
         val pid = currentProfileId() ?: return false
         if (settings.externalPlayerFor(MediaType.LIVE).first()) {
             externalPlayerLauncher.launch(filePath, title)
@@ -539,6 +919,7 @@ class VodTuner(
     /** Hand the item to VLC, MX Player or whatever else is installed — the long-press action, and the
      *  "External player" setting's route. History is still recorded; a resume position cannot be. */
     suspend fun playExternal(movie: MovieEntity): Boolean {
+        resetCompatibleAlternatives()
         val pid = currentProfileId() ?: return false
         if (!contentAccess.allows(pid, movie)) return false
         val source = withContext(Dispatchers.IO) { sourceDao.getById(movie.sourceId) }
@@ -547,6 +928,7 @@ class VodTuner(
 
     /** [playExternal] for an episode of [show]. */
     suspend fun playExternal(show: SeriesEntity, episode: EpisodeEntity): Boolean {
+        resetCompatibleAlternatives()
         val pid = currentProfileId() ?: return false
         if (episode.seriesId != show.id) return false
         if (!contentAccess.allows(pid, episode)) return false
@@ -556,6 +938,7 @@ class VodTuner(
 
     /** Stop playing altogether — the mini player's close button, and nothing else. */
     fun stop() {
+        resetCompatibleAlternatives()
         val ticket = playbackExitGate.requestExit() ?: return
         // Capture both the identity and clock before launching. If Room is busy and a replacement
         // title starts first, this write still belongs to the title the user actually closed.
@@ -587,6 +970,7 @@ class VodTuner(
 
     /** The television is taking the film; the phone keeps only where it had got to. */
     override fun releaseToCast(): Long {
+        resetCompatibleAlternatives()
         val position = player.position.value
         session.attach(null)
         player.stop()
@@ -668,6 +1052,7 @@ class VodTuner(
         onCast: Boolean = false,
         protectedDownload: Boolean = false,
     ) {
+        playbackIntentGeneration += 1L
         // Invalidates any older stop that is still waiting for its progress write to finish. This is
         // on the main playback path and runs before any suspending work below.
         playbackExitGate.playbackStarted()
@@ -698,6 +1083,7 @@ class VodTuner(
 
     private fun clearPlaying(invalidateExitTickets: Boolean = true) {
         if (invalidateExitTickets) playbackExitGate.playbackCleared()
+        resetCompatibleAlternatives()
         _playing.value = null
         playingProfileId = -1L
         playingProtectedDownload = false
@@ -708,6 +1094,68 @@ class VodTuner(
         // still be offering to search OpenSubtitles for the film while a channel is playing.
         subtitleController.clear()
     }
+
+    private fun resetCompatibleAlternatives() {
+        playbackIntentGeneration += 1L
+        _compatibleAlternative.value = null
+        attemptedMovieIds.clear()
+        attemptedEpisodeIds.clear()
+    }
+
+    /** Snapshot both ownership layers: logical catalogue identity and exact physical player load. */
+    private fun captureCompatiblePlaybackGuard(
+        playback: VodPlayback,
+    ): CompatiblePlaybackGuard? {
+        if (_playing.value != playback || playingProfileId < 0L || player.isLiveContent) return null
+        val mediaUrl = player.currentMediaUrl ?: return null
+        // Hand-written M3U rows can legitimately lack remoteId/contentKey; their exact URL plus the
+        // generation and logical identity still form a stable guard.
+        val mediaContentKey = player.currentMediaContentKey
+        return CompatiblePlaybackGuard(
+            generation = playbackIntentGeneration,
+            playback = playback,
+            profileId = playingProfileId,
+            mediaUrl = mediaUrl,
+            mediaContentKey = mediaContentKey,
+        )
+    }
+
+    /**
+     * Re-check after every suspending lookup and immediately before replacing the player's load.
+     * The second state comparison happens after DataStore returns because a profile/playback change
+     * can occur while that read is suspended.
+     */
+    private suspend fun compatiblePlaybackStillCurrent(
+        guard: CompatiblePlaybackGuard,
+    ): Boolean {
+        if (!compatiblePlaybackMatchesSnapshot(guard)) return false
+        val activeProfileId = currentProfileId()
+        return activeProfileId == guard.profileId && compatiblePlaybackMatchesSnapshot(guard)
+    }
+
+    private fun compatiblePlaybackMatchesSnapshot(guard: CompatiblePlaybackGuard): Boolean =
+        playbackIntentGeneration == guard.generation &&
+            _playing.value == guard.playback &&
+            playingProfileId == guard.profileId &&
+            !player.isLiveContent &&
+            player.currentMediaUrl == guard.mediaUrl &&
+            player.currentMediaContentKey == guard.mediaContentKey
+
+    private fun compatibleMovieLabel(movie: MovieEntity): String = buildList {
+        add(movie.name)
+        qualityLabel(movie.qualityRank)?.let(::add)
+        movie.providerLanguage?.trim()?.takeIf(String::isNotEmpty)?.let(::add)
+        movie.containerExt?.trim()?.removePrefix(".")?.uppercase()
+            ?.takeIf(String::isNotEmpty)?.let(::add)
+    }.joinToString(" · ")
+
+    private fun compatibleEpisodeLabel(variant: CompatibleEpisodeVariant): String = buildList {
+        add(variant.replacementShow.name)
+        qualityLabel(variant.replacementShow.qualityRank)?.let(::add)
+        variant.replacementShow.providerLanguage?.trim()?.takeIf(String::isNotEmpty)?.let(::add)
+        variant.replacementEpisode.containerExt?.trim()?.removePrefix(".")?.uppercase()
+            ?.takeIf(String::isNotEmpty)?.let(::add)
+    }.joinToString(" · ")
 
     private suspend fun handOver(
         title: String,

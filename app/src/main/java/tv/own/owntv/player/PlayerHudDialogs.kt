@@ -557,6 +557,77 @@ private fun StepButton(label: String, enabled: Boolean, modifier: Modifier = Mod
     }
 }
 
+/**
+ * Last user-controlled gate before replacing an incompatible VOD stream with a catalogue
+ * alternative. The resolver supplies only presentation text here; switching and restoring the
+ * saved position stay outside the HUD. A real popup window isolates D-pad focus from the failed
+ * player's Retry action underneath it.
+ */
+@Composable
+internal fun CompatibleVersionConfirmationDialog(
+    alternativeLabel: String?,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = OwnTVTheme.colors
+    val confirmFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { requestFocusRetrying(confirmFocus) }
+    BackHandler { onDismiss() }
+
+    tv.own.owntv.ui.components.OwnTVPopup(
+        onDismissRequest = onDismiss,
+        fontScale = 1f,
+        layoutScale = 1f,
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize().modalScrim(strength = 1.2f).trapAllFocusExit().focusGroup(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                modifier = Modifier.dialogPanel(width = 520.dp, padding = 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    stringResource(R.string.player_compatible_version_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = colors.onSurface,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    stringResource(R.string.player_compatible_version_message),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                alternativeLabel?.takeIf { it.isNotBlank() }?.let { label ->
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        stringResource(R.string.player_compatible_version_alternative, label),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.accent,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                Spacer(Modifier.height(22.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OwnTVButton(
+                        stringResource(R.string.player_compatible_version_action),
+                        onClick = onConfirm,
+                        icon = OwnTVIcon.PLAY,
+                        modifier = Modifier.focusRequester(confirmFocus),
+                    )
+                    OwnTVButton(
+                        stringResource(R.string.common_cancel),
+                        onClick = onDismiss,
+                        style = tv.own.owntv.ui.components.OwnTVButtonStyle.SECONDARY,
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun DialogScaffold(
     title: String,

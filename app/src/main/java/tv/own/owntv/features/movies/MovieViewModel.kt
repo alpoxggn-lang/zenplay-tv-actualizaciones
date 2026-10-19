@@ -43,6 +43,7 @@ import tv.own.owntv.core.customize.CategoryRailEditor
 import tv.own.owntv.core.customize.MoveKind
 import tv.own.owntv.core.customize.railCategories
 import tv.own.owntv.core.content.ContentAccessPolicy
+import tv.own.owntv.core.catalog.CompatibleVariantResolver
 import tv.own.owntv.core.database.dao.CategoryDao
 import tv.own.owntv.core.database.dao.ContentOrderDao
 import tv.own.owntv.core.database.dao.CustomCategoryDao
@@ -66,6 +67,7 @@ import tv.own.owntv.features.live.LiveRailItem
 import tv.own.owntv.core.repository.activeProfileSources
 import tv.own.owntv.core.settings.SettingsRepository
 import tv.own.owntv.player.OwnTVPlayer
+import tv.own.owntv.player.isCompatibleVariantRecoveryFailure
 import tv.own.owntv.ui.components.OwnTVIcon
 import tv.own.owntv.core.live.LiveKey
 import tv.own.owntv.core.live.parseLiveKey
@@ -94,6 +96,7 @@ class MovieViewModel(
     private val streamUrlResolver: tv.own.owntv.core.stalker.StreamUrlResolver,
     private val subtitleController: tv.own.owntv.core.subtitles.SubtitleController,
     private val contentAccess: ContentAccessPolicy,
+    private val compatibleVariants: CompatibleVariantResolver,
 ) : ViewModel() {
 
     data class MovieMoveState(val items: List<MovieEntity>, val activeIndex: Int, val contextKey: String)
@@ -323,6 +326,16 @@ class MovieViewModel(
     private val _playingMovie = MutableStateFlow<MovieEntity?>(null)
     val playingMovie: StateFlow<MovieEntity?> = _playingMovie.asStateFlow()
 
+    /** A conservative, same-title rendition available after an unsupported-video failure. */
+    private val _compatibleMovie = MutableStateFlow<MovieEntity?>(null)
+    val compatibleMovie: StateFlow<MovieEntity?> = _compatibleMovie.asStateFlow()
+
+    /** Every rendition tried for the current logical film, so a bad fallback can never loop. */
+    private val attemptedMovieIds = linkedSetOf<Long>()
+
+    /** Invalidates a compatible-copy request as soon as another logical play is requested. */
+    private var compatiblePlaybackGeneration = 0L
+
     /**
      * What we handed the player, pinned at [play] time — the only thing a resume position may be
      * written against.
@@ -332,7 +345,12 @@ class MovieViewModel(
      * minted per play and never equals the stored cmd, so those movies never saved a position at all;
      * and switching profile mid-film wrote the position into the *new* profile's Continue Watching.
      */
-    private data class PlayingRef(val movie: MovieEntity, val profileId: Long, val contentKey: String?)
+    private data class PlayingRef(
+        val movie: MovieEntity,
+        val profileId: Long,
+        val contentKey: String?,
+        val playbackUrl: String,
+    )
 
     private var playingRef: PlayingRef? = null
 
@@ -352,6 +370,25 @@ class MovieViewModel(
             player.isPlaying.collect { playing ->
                 if (wasPlaying && !playing) saveProgressNow()
                 wasPlaying = playing
+            }
+        }
+        // Resolve lazily and only after the player has classified a terminal video incompatibility.
+        // Network/DRM/provider failures never scan the catalogue and therefore never show the action.
+        viewModelScope.launch {
+            combine(player.error, player.errorInfo, _playingMovie) { failure, info, movie ->
+                Triple(failure, info, movie)
+            }.collectLatest { (failure, info, movie) ->
+                val ref = playingRef
+                if (
+                    movie == null || ref == null || ref.movie.id != movie.id || !playerIsOn(ref) ||
+                    !isCompatibleVariantRecoveryFailure(failure, info, player.isLiveContent)
+                ) {
+                    _compatibleMovie.value = null
+                    return@collectLatest
+                }
+                val candidate = compatibleVariants.findMovie(movie, attemptedMovieIds + movie.id)
+                val pid = currentProfileId()
+                _compatibleMovie.value = candidate?.takeIf { canPlay(it, pid) }
             }
         }
         // Resolve the poster fallback for what is on screen. Debounced so a fast scroll issues one
@@ -610,6 +647,10 @@ class MovieViewModel(
     }
 
     fun play(movie: MovieEntity, startPositionMs: Long = 0) {
+        compatiblePlaybackGeneration += 1
+        attemptedMovieIds.clear()
+        attemptedMovieIds += movie.id
+        _compatibleMovie.value = null
         viewModelScope.launch {
             val pid = currentProfileId()
             if (!canPlay(movie, pid)) return@launch
@@ -678,7 +719,7 @@ class MovieViewModel(
                 } else null,
             )
             _playingMovie.value = movie
-            playingRef = pid?.let { PlayingRef(movie, it, pinKey) }
+            playingRef = pid?.let { PlayingRef(movie, it, pinKey, playUrl) }
             // Enable the player's OpenSubtitles search for this movie (subtitle plan §4). tmdbId is
             // resolved from the metadata cache when available (review R7) for a stronger match.
             if (pid != null) {
@@ -692,6 +733,85 @@ class MovieViewModel(
                     Log.w(TAG, "play history record failed movieId=${movie.id} profile=$pid", t)
                 }
             }
+        }
+    }
+
+    /** Replace only the failed stream rendition; progress/history/subtitle context stay on the film
+     * the user selected, and the fallback starts at the authoritative recovery position. */
+    fun playCompatibleVersion() {
+        val original = _playingMovie.value ?: return
+        val replacement = _compatibleMovie.value ?: return
+        val expectedPlayback = playingRef?.takeIf { it.movie.id == original.id } ?: return
+        val expectedGeneration = compatiblePlaybackGeneration
+        val startPositionMs = player.replacementResumePositionMs(
+            replacement.durationSecs?.toLong()?.times(1_000L),
+        )
+        _compatibleMovie.value = null
+        saveProgressNow()
+        viewModelScope.launch {
+            val pid = currentProfileId()
+            if (pid != expectedPlayback.profileId) return@launch
+            if (!canPlay(original, pid) || !canPlay(replacement, pid)) return@launch
+            val source = sourceDao.getById(replacement.sourceId)
+            val playUrl = if (streamUrlResolver.needsResolve(source)) {
+                try {
+                    streamUrlResolver.resolve(source!!, replacement.streamUrl, vod = true)
+                } catch (e: Exception) {
+                    Log.w(TAG, "compatible Stalker resolve failed movieId=${replacement.id}", e)
+                    return@launch
+                }
+            } else {
+                replacement.streamUrl
+            }
+            // Source/profile resolution can suspend. If the user stopped playback or opened another
+            // title meanwhile, this old confirmation must never replace the newer session.
+            if (
+                compatiblePlaybackGeneration != expectedGeneration ||
+                playingRef !== expectedPlayback ||
+                _playingMovie.value?.id != original.id ||
+                !playerIsOn(expectedPlayback) ||
+                currentProfileId() != pid
+            ) return@launch
+            val replacementPin = tv.own.owntv.core.player.enginePinKey(
+                replacement.sourceId, "MOVIE", replacement.remoteId,
+            )
+            val logicalTrackKey = tv.own.owntv.core.player.enginePinKey(
+                original.sourceId, "MOVIE", original.remoteId,
+            )
+            Log.i(
+                TAG,
+                "compatible movie switch original=${original.id} replacement=${replacement.id} startPositionMs=$startPositionMs",
+            )
+            attemptedMovieIds += replacement.id
+            player.play(
+                playUrl,
+                title = original.name,
+                year = original.year?.toString(),
+                isLive = false,
+                startPositionMs = startPositionMs,
+                userAgent = source?.userAgent,
+                httpHeaders = SourceOverrides.headersWithReferer(replacement.httpHeaders, source),
+                vodEngineOverride = SourceOverrides.vodEngineOf(source),
+                drmConfig = replacement.drmConfig,
+                manifestType = replacement.manifestType,
+                contentKey = replacementPin,
+                trackKey = logicalTrackKey,
+                reconnectProvider = if (streamUrlResolver.needsResolve(source)) {
+                    tv.own.owntv.core.stalker.ReconnectUrlProvider {
+                        runCatching { streamUrlResolver.resolve(source!!, replacement.streamUrl, vod = true) }
+                            .onFailure { Log.w(TAG, "compatible VOD reconnect failed movieId=${replacement.id}", it) }
+                            .getOrNull()
+                    }
+                } else null,
+            )
+            // Keep user data attached to the logical film, not to the provider's technical copy.
+            _playingMovie.value = original
+            playingRef = PlayingRef(original, pid, replacementPin, playUrl)
+            val tmdbId = runCatching { metadata.resolveMovie(original)?.tmdbId?.toLong() }.getOrNull()
+            subtitleController.setMovie(pid, original, tmdbId)
+            runCatching {
+                historyDao.record(WatchHistoryEntity(profileId = pid, mediaType = MediaType.MOVIE, itemId = original.id))
+            }.onFailure { Log.w(TAG, "compatible play history failed movieId=${original.id}", it) }
         }
     }
 
@@ -798,7 +918,7 @@ class MovieViewModel(
      */
     private fun playerIsOn(ref: PlayingRef): Boolean =
         if (ref.contentKey != null) player.currentMediaContentKey == ref.contentKey
-        else player.currentMediaUrl != null && player.currentMediaUrl == ref.movie.streamUrl
+        else player.currentMediaUrl != null && player.currentMediaUrl == ref.playbackUrl
 
     /** Persist the resume position if the player is still on the movie we started. */
     fun saveProgressNow() {

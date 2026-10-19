@@ -43,6 +43,8 @@ import tv.own.owntv.core.customize.MoveKind
 import tv.own.owntv.core.customize.railCategories
 import tv.own.owntv.core.customize.CustomizeKeys
 import tv.own.owntv.core.content.ContentAccessPolicy
+import tv.own.owntv.core.catalog.CompatibleEpisodeVariant
+import tv.own.owntv.core.catalog.CompatibleVariantResolver
 import tv.own.owntv.core.database.dao.CategoryDao
 import tv.own.owntv.core.database.dao.ContentOrderDao
 import tv.own.owntv.core.database.dao.CustomCategoryDao
@@ -71,6 +73,7 @@ import tv.own.owntv.core.settings.SettingsRepository
 import tv.own.owntv.player.MediaMeta
 import tv.own.owntv.player.OwnTVPlayer
 import tv.own.owntv.player.PlaylistItem
+import tv.own.owntv.player.isCompatibleVariantRecoveryFailure
 import tv.own.owntv.ui.components.OwnTVIcon
 import tv.own.owntv.core.live.LiveKey
 import tv.own.owntv.core.live.parseLiveKey
@@ -100,6 +103,7 @@ class SeriesViewModel(
     private val streamUrlResolver: tv.own.owntv.core.stalker.StreamUrlResolver,
     private val subtitleController: tv.own.owntv.core.subtitles.SubtitleController,
     private val contentAccess: ContentAccessPolicy,
+    private val compatibleVariants: CompatibleVariantResolver,
 ) : ViewModel() {
 
     data class SeriesMoveState(val items: List<SeriesEntity>, val activeIndex: Int, val contextKey: String)
@@ -321,6 +325,14 @@ class SeriesViewModel(
     private val _playingSeries = MutableStateFlow<SeriesEntity?>(null)
     val playingSeries: StateFlow<SeriesEntity?> = _playingSeries.asStateFlow()
 
+    private val _playingEpisode = MutableStateFlow<EpisodeEntity?>(null)
+    val playingEpisode: StateFlow<EpisodeEntity?> = _playingEpisode.asStateFlow()
+
+    private val _compatibleEpisode = MutableStateFlow<CompatibleEpisodeVariant?>(null)
+    val compatibleEpisode: StateFlow<CompatibleEpisodeVariant?> = _compatibleEpisode.asStateFlow()
+    private val attemptedEpisodeIds = linkedSetOf<Long>()
+    private var compatiblePlaybackGeneration = 0L
+
     private val _selectedSeason = MutableStateFlow(1)
     val selectedSeason: StateFlow<Int> = _selectedSeason.asStateFlow()
 
@@ -340,7 +352,12 @@ class SeriesViewModel(
      * per play and never matched at all, and switching profile mid-episode wrote the position into
      * the new profile's Continue Watching.
      */
-    private data class PlayingEpisodeRef(val episode: EpisodeEntity, val profileId: Long, val contentKey: String?)
+    private data class PlayingEpisodeRef(
+        val episode: EpisodeEntity,
+        val profileId: Long,
+        val contentKey: String?,
+        val playbackUrl: String,
+    )
 
     private var playingEpisodeRef: PlayingEpisodeRef? = null
 
@@ -361,6 +378,29 @@ class SeriesViewModel(
             player.isPlaying.collect { playing ->
                 if (wasPlaying && !playing) saveEpisodeProgressNow()
                 wasPlaying = playing
+            }
+        }
+        viewModelScope.launch {
+            combine(player.error, player.errorInfo, _playingSeries, _playingEpisode) { failure, info, show, episode ->
+                arrayOf(failure, info, show, episode)
+            }.collectLatest { values ->
+                val failure = values[0] as? tv.own.owntv.player.PlaybackFailure
+                val info = values[1] as? tv.own.owntv.player.ErrorInfo
+                val show = values[2] as? SeriesEntity
+                val episode = values[3] as? EpisodeEntity
+                val ref = playingEpisodeRef
+                if (show == null || episode == null || ref == null ||
+                    ref.episode.id != episode.id || !playerIsOn(ref) ||
+                    !isCompatibleVariantRecoveryFailure(failure, info, player.isLiveContent)
+                ) {
+                    _compatibleEpisode.value = null
+                    return@collectLatest
+                }
+                val candidate = compatibleVariants.findEpisode(show, episode, attemptedEpisodeIds + episode.id)
+                val pid = currentProfileId()
+                _compatibleEpisode.value = candidate?.takeIf {
+                    canPlay(it.replacementShow, it.replacementEpisode, pid)
+                }
             }
         }
         // Auto-play continuation across seasons: the player advances within a season itself, then signals
@@ -391,12 +431,22 @@ class SeriesViewModel(
             player.queueItemChanged.collect { index ->
                 val q = playingQueue ?: return@collect
                 val ep = q.episodes.getOrNull(index) ?: return@collect
+                compatiblePlaybackGeneration += 1
+                _compatibleEpisode.value = null
+                attemptedEpisodeIds.clear()
+                attemptedEpisodeIds += ep.id
+                q.playbackEpisodeIds.getOrNull(index)?.let(attemptedEpisodeIds::add)
                 // The auto-advanced episode is now the one progress is saved against. No flush of the
                 // outgoing one here: the player already loaded the new item, so its position has been
                 // reset and saving now would overwrite a finished episode with ~0.
                 playingEpisodeRef = PlayingEpisodeRef(
-                    ep, q.profileId, tv.own.owntv.core.player.enginePinKey(q.show.sourceId, "EPISODE", ep.remoteId),
+                    ep,
+                    q.profileId,
+                    q.playbackContentKeys.getOrNull(index),
+                    q.playbackUrls.getOrElse(index) { ep.streamUrl },
                 )
+                _playingSeries.value = q.show
+                _playingEpisode.value = ep
                 subtitleController.setEpisode(q.profileId, q.show, ep, q.parentTmdbId)
             }
         }
@@ -409,20 +459,36 @@ class SeriesViewModel(
         val episodes: List<EpisodeEntity>,
         val profileId: Long,
         val parentTmdbId: Long?,
+        val playbackContentKeys: List<String?>,
+        val playbackUrls: List<String>,
+        val playbackEpisodeIds: List<Long>,
     )
 
     private var playingQueue: PlayingQueue? = null
 
-    /** A season's last episode finished with auto-play on — start the next season's first episode, if any.
-     *  Matches the just-finished episode by its stream URL (robust to in-season auto-advance). */
-    private fun continueToNextSeason() {
-        val url = player.currentMediaUrl ?: return
-        val all = episodes.value
-        val finished = all.firstOrNull { it.streamUrl == url } ?: return // not one of this series' episodes
-        val nextEpisode = all
+    /** A season's last episode finished with auto-play on — start the next season's first episode.
+     *  Identity stays on the logical episode even when the physical stream is a compatible copy. */
+    private suspend fun continueToNextSeason() {
+        val show = _playingSeries.value ?: return
+        val expectedPlayback = playingEpisodeRef
+            ?.takeIf { it.episode.seriesId == show.id }
+            ?: return
+        val expectedGeneration = compatiblePlaybackGeneration
+        val finished = expectedPlayback.episode
+        // Read the playing show's rows directly. The user may browse another detail page while the
+        // player keeps running, so the screen-owned [episodes] flow is not authoritative here.
+        val all = seriesDao.episodesBySeriesOnce(show.id)
+        val nextQueue = all
             .filter { it.seasonNumber == finished.seasonNumber + 1 }
-            .minByOrNull { it.episodeNumber } ?: return // no next season — series finished
-        playEpisode(nextEpisode)
+            .sortedBy { it.episodeNumber }
+        val nextEpisode = nextQueue.firstOrNull() ?: return
+        if (
+            compatiblePlaybackGeneration != expectedGeneration ||
+            playingEpisodeRef !== expectedPlayback ||
+            _playingSeries.value?.id != show.id ||
+            !playerIsOn(expectedPlayback)
+        ) return
+        playEpisodeQueue(show, nextQueue, nextEpisode)
     }
 
     /**
@@ -432,7 +498,7 @@ class SeriesViewModel(
      */
     private fun playerIsOn(ref: PlayingEpisodeRef): Boolean =
         if (ref.contentKey != null) player.currentMediaContentKey == ref.contentKey
-        else player.currentMediaUrl != null && player.currentMediaUrl == ref.episode.streamUrl
+        else player.currentMediaUrl != null && player.currentMediaUrl == ref.playbackUrl
 
     /** Saves the position of the episode the player is actually on — including one the player itself
      *  switched to via prev/next or auto-advance, which re-pins the ref in [init]. */
@@ -950,6 +1016,10 @@ class SeriesViewModel(
     }
 
     fun playEpisodeQueue(show: SeriesEntity, queue: List<EpisodeEntity>, episode: EpisodeEntity, startPositionMs: Long = 0) {
+        compatiblePlaybackGeneration += 1
+        attemptedEpisodeIds.clear()
+        attemptedEpisodeIds += episode.id
+        _compatibleEpisode.value = null
         viewModelScope.launch {
             if (episode.seriesId != show.id) return@launch
             val pid = currentProfileId()
@@ -958,6 +1028,7 @@ class SeriesViewModel(
             if (authorizedQueue.none { it.id == episode.id }) return@launch
             _openedSeries.value = show
             _playingSeries.value = show
+            _playingEpisode.value = episode
             _lastPlayedEpisodeId.value = episode.id
             // External player (global toggle): launch only the selected episode (external players are
             // single-item — no prev/next queue). History is still recorded; resume position and the
@@ -996,7 +1067,10 @@ class SeriesViewModel(
             val needsResolve = streamUrlResolver.needsResolve(source)
             playingEpisodeRef = pid?.let {
                 PlayingEpisodeRef(
-                    episode, it, tv.own.owntv.core.player.enginePinKey(show.sourceId, "EPISODE", episode.remoteId),
+                    episode,
+                    it,
+                    tv.own.owntv.core.player.enginePinKey(show.sourceId, "EPISODE", episode.remoteId),
+                    episode.streamUrl,
                 )
             }
             player.playEpisodes(
@@ -1033,7 +1107,17 @@ class SeriesViewModel(
                 val parentTmdbId = runCatching { metadata.resolveSeries(show)?.tmdbId?.toLong() }.getOrNull()
                 subtitleController.setEpisode(pid, show, episode, parentTmdbId)
                 // Remember the queue so player-driven advances re-point the context (Phase 5, init).
-                playingQueue = PlayingQueue(show, authorizedQueue, pid, parentTmdbId)
+                playingQueue = PlayingQueue(
+                    show,
+                    authorizedQueue,
+                    pid,
+                    parentTmdbId,
+                    authorizedQueue.map { ep ->
+                        tv.own.owntv.core.player.enginePinKey(show.sourceId, "EPISODE", ep.remoteId)
+                    },
+                    authorizedQueue.map(EpisodeEntity::streamUrl),
+                    authorizedQueue.map(EpisodeEntity::id),
+                )
             }
             if (pid != null) {
                 runCatching {
@@ -1047,6 +1131,127 @@ class SeriesViewModel(
                     Log.w(TAG, "playEpisodeQueue series history record failed seriesId=${episode.seriesId} profile=$pid", t)
                 }
             }
+        }
+    }
+
+    /** Switch the failed rendition while keeping the logical series/episode and its progress. */
+    fun playCompatibleVersion() {
+        val originalShow = _playingSeries.value ?: return
+        val originalEpisode = _playingEpisode.value ?: return
+        val alternative = _compatibleEpisode.value ?: return
+        val expectedPlayback = playingEpisodeRef
+            ?.takeIf { it.episode.id == originalEpisode.id }
+            ?: return
+        val expectedGeneration = compatiblePlaybackGeneration
+        val startPositionMs = player.replacementResumePositionMs(
+            alternative.replacementEpisode.durationSecs?.toLong()?.times(1_000L),
+        )
+        _compatibleEpisode.value = null
+        saveEpisodeProgressNow()
+        viewModelScope.launch {
+            val pid = currentProfileId()
+            if (pid != expectedPlayback.profileId) return@launch
+            if (!canPlay(originalShow, originalEpisode, pid) ||
+                !canPlay(alternative.replacementShow, alternative.replacementEpisode, pid)
+            ) return@launch
+
+            // Preserve every logical episode in the active queue. Use the safer rendition only for
+            // exact S/E matches; where it has a gap, keep that episode's original stream rather than
+            // shortening the queue and silently skipping content on auto-next.
+            val originalQueue = playingQueue?.episodes
+                ?.takeIf { queue -> queue.any { it.id == originalEpisode.id } }
+                ?: listOf(originalEpisode)
+            val currentNumber = originalEpisode.seasonNumber to originalEpisode.episodeNumber
+            val replacementsByNumber = alternative.replacementQueue
+                .associateBy { replacement ->
+                    replacement.seasonNumber to replacement.episodeNumber
+                }
+                .toMutableMap()
+                .apply {
+                    // The resolver ranked this exact row. Do not let a duplicate S/E encountered
+                    // later in the provider queue replace the user's confirmed alternative.
+                    put(currentNumber, alternative.replacementEpisode)
+                }
+            val paired = originalQueue.map { logical ->
+                val number = logical.seasonNumber to logical.episodeNumber
+                logical to (replacementsByNumber[number] ?: logical)
+            }
+            val startIndex = paired.indexOfFirst { it.first.id == originalEpisode.id }
+            if (startIndex < 0) return@launch
+            val source = sourceDao.getById(alternative.replacementShow.sourceId)
+            val needsResolve = streamUrlResolver.needsResolve(source)
+            val logicalTrackKey = tv.own.owntv.core.player.enginePinKey(
+                originalShow.sourceId, "SERIES", originalShow.remoteId,
+            )
+            val playbackKeys = paired.map { (_, replacement) ->
+                tv.own.owntv.core.player.enginePinKey(
+                    alternative.replacementShow.sourceId, "EPISODE", replacement.remoteId,
+                )
+            }
+            // DAO/profile work above can suspend. Do not let an obsolete confirmation interrupt a
+            // newer episode, a stopped player, or a profile switch.
+            if (
+                compatiblePlaybackGeneration != expectedGeneration ||
+                playingEpisodeRef !== expectedPlayback ||
+                _playingSeries.value?.id != originalShow.id ||
+                _playingEpisode.value?.id != originalEpisode.id ||
+                !playerIsOn(expectedPlayback) ||
+                currentProfileId() != pid
+            ) return@launch
+            Log.i(
+                TAG,
+                "compatible episode switch original=${originalEpisode.id} replacement=${alternative.replacementEpisode.id} startPositionMs=$startPositionMs",
+            )
+            attemptedEpisodeIds += alternative.replacementEpisode.id
+            playingEpisodeRef = PlayingEpisodeRef(
+                originalEpisode,
+                pid,
+                playbackKeys[startIndex],
+                paired[startIndex].second.streamUrl,
+            )
+            player.playEpisodes(
+                items = paired.mapIndexed { index, (logical, replacement) ->
+                    PlaylistItem(
+                        url = replacement.streamUrl,
+                        meta = MediaMeta(
+                            title = logical.name.takeIf { it.isNotBlank() },
+                            subtitle = originalShow.name,
+                            seasonNumber = logical.seasonNumber,
+                            episodeNumber = logical.episodeNumber,
+                            contentKey = playbackKeys[index],
+                            trackKey = logicalTrackKey,
+                        ),
+                        resolveUrl = if (needsResolve && source != null) {
+                            { streamUrlResolver.resolve(source, replacement.streamUrl, vod = true, episode = replacement.episodeNumber) }
+                        } else null,
+                        httpHeaders = tv.own.owntv.core.settings.SourceOverrides.headersWithReferer(replacement.httpHeaders, source),
+                        drmConfig = replacement.drmConfig,
+                        manifestType = replacement.manifestType,
+                    )
+                },
+                startIndex = startIndex,
+                startPositionMs = startPositionMs,
+                userAgent = source?.userAgent,
+                vodEngineOverride = tv.own.owntv.core.settings.SourceOverrides.vodEngineOf(source),
+            )
+            _playingSeries.value = originalShow
+            _playingEpisode.value = originalEpisode
+            _lastPlayedEpisodeId.value = originalEpisode.id
+            val parentTmdbId = runCatching { metadata.resolveSeries(originalShow)?.tmdbId?.toLong() }.getOrNull()
+            subtitleController.setEpisode(pid, originalShow, originalEpisode, parentTmdbId)
+            playingQueue = PlayingQueue(
+                originalShow,
+                paired.map { it.first },
+                pid,
+                parentTmdbId,
+                playbackKeys,
+                paired.map { it.second.streamUrl },
+                paired.map { it.second.id },
+            )
+            runCatching {
+                historyDao.record(WatchHistoryEntity(profileId = pid, mediaType = MediaType.EPISODE, itemId = originalEpisode.id))
+                historyDao.record(WatchHistoryEntity(profileId = pid, mediaType = MediaType.SERIES, itemId = originalShow.id))
+            }.onFailure { Log.w(TAG, "compatible episode history failed episodeId=${originalEpisode.id}", it) }
         }
     }
 

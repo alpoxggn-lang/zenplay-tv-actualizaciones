@@ -72,4 +72,14 @@ class ZenPlayMobileShellContractTest {
         assertFalse(fullscreenHost.contains("GlassNest"))
         assertTrue(browsingHost.contains("GlassNest(GlassSurface.PANELS)"))
     }
+
+    @Test
+    fun metadataLimitNoticeWaitsUntilThePlayerCloses() {
+        val notice = source.substringAfter("LaunchedEffect(budgetRefusedAt, fullscreen)")
+            .substringBefore("// The startup update check")
+
+        assertTrue(notice.contains("budgetRefusedAt > 0L"))
+        assertTrue(notice.contains("!budgetNoticeShown && !fullscreen"))
+        assertTrue(notice.contains("budgetNoticeShown = true"))
+    }
 }

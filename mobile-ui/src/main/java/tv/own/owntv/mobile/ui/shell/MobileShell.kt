@@ -449,8 +449,10 @@ fun MobileShell(
     val metadataBudget: MetadataBudget = koinInject()
     val budgetRefusedAt by metadataBudget.refusedAt.collectAsStateWithLifecycle()
     var budgetNoticeShown by remember { mutableStateOf(false) }
-    LaunchedEffect(budgetRefusedAt) {
-        if (budgetRefusedAt > 0L && !budgetNoticeShown) {
+    LaunchedEffect(budgetRefusedAt, fullscreen) {
+        // Metadata never gates playback. Defer this once-per-launch notice until the full player (or
+        // setup) closes, so it cannot cover video or its controls; keeping the flag false preserves it.
+        if (budgetRefusedAt > 0L && !budgetNoticeShown && !fullscreen) {
             budgetNoticeShown = true
             Toast.makeText(
                 context,

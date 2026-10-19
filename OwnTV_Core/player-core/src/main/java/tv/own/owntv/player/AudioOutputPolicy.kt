@@ -40,8 +40,11 @@ object AudioOutputPolicy {
     /** Never advance audio for this long while playing with an audio track = the output is dead. */
     const val NO_AUDIO_GRACE_MS = 6_000L
 
-    /** Underruns within [UNDERRUN_WINDOW_MS] that mean the sink is starving, not hiccuping. */
+    // Kept for source/binary compatibility with older diagnostics consumers. Underruns no longer
+    // escalate playback recovery; see AudioWatchdog.onAudioUnderrun.
+    @Deprecated("Audio underruns are diagnostic only")
     const val UNDERRUN_LIMIT = 4
+    @Deprecated("Audio underruns are diagnostic only")
     const val UNDERRUN_WINDOW_MS = 10_000L
 
     @Volatile private var latched = false
@@ -71,6 +74,17 @@ object AudioOutputPolicy {
         latchReason = null
     }
 }
+
+/** What to do after a decoder accepted an audio track but the output still produced silence. */
+internal enum class SilentAudioRecovery { REBUILD_WITH_STEREO, TRY_ALTERNATE_ENGINE }
+
+/**
+ * One stereo rebuild is useful; rebuilding an already-stereo sink again is the same attempt in a loop.
+ * At that point the other playback engine is the only recovery that adds a genuinely different route.
+ */
+internal fun silentAudioRecovery(stereoSinkAlreadyActive: Boolean): SilentAudioRecovery =
+    if (stereoSinkAlreadyActive) SilentAudioRecovery.TRY_ALTERNATE_ENGINE
+    else SilentAudioRecovery.REBUILD_WITH_STEREO
 
 /**
  * A [DefaultRenderersFactory] that can be pinned to plain stereo PCM.
@@ -248,7 +262,7 @@ object StereoDownmix {
  * This is a listener plus a [poll] that the owning engine calls from the health tick it already
  * runs — it deliberately owns no timer of its own, so it cannot keep an engine alive after release.
  *
- * Detection, in order of confidence:
+ * Strong failure signals, in order of confidence:
  *
  *  1. **`onAudioSinkError`** — the sink told us outright. Immediate. Excludes
  *     `UnexpectedDiscontinuityException`, which reports a gap in the *stream's* timestamps and is
@@ -259,9 +273,11 @@ object StereoDownmix {
  *     the second does not within [AudioOutputPolicy.NO_AUDIO_GRACE_MS] of *playing* time, the output
  *     accepted the format and produced silence — the exact RMK62 signature. Playing time, not wall
  *     clock: a channel that spends eight seconds buffering has not failed at anything.
- *  3. **Repeated underruns.** One is a hiccup; [AudioOutputPolicy.UNDERRUN_LIMIT] inside
- *     [AudioOutputPolicy.UNDERRUN_WINDOW_MS] is a sink that cannot keep up with the format it said
- *     it could play.
+ *
+ * Audio underruns are deliberately diagnostic only. Media3 reports the same callback when an audio
+ * sink cannot keep up and when a slow network simply stops feeding it; escalating that ambiguous
+ * signal made weak connections latch to stereo or switch engines even though the output was healthy.
+ * The two signals above identify output failure without confusing it with network starvation.
  *
  * A hit calls back once per player instance; the owner is expected to latch stereo and rebuild.
  */
@@ -278,8 +294,6 @@ class AudioWatchdog : AnalyticsListener {
     @Volatile private var playingSinceArmMs = 0L
     @Volatile private var lastTickMs = 0L
 
-    private val underrunTimes = ArrayDeque<Long>()
-
     /** The audio format currently feeding the sink, for the stream-info readout. */
     @Volatile var audioFormat: Format? = null
         private set
@@ -294,7 +308,6 @@ class AudioWatchdog : AnalyticsListener {
         pendingReason = null; fired = false
         armed = false; advancing = false
         playingSinceArmMs = 0L; lastTickMs = 0L
-        synchronized(underrunTimes) { underrunTimes.clear() }
         audioFormat = null; passthrough = false; decoderInitialized = false
     }
 
@@ -363,22 +376,15 @@ class AudioWatchdog : AnalyticsListener {
         bufferSizeMs: Long,
         elapsedSinceLastFeedMs: Long,
     ) {
-        val now = android.os.SystemClock.elapsedRealtime()
-        // Individual underruns were silent until the limit tripped, which made "sound keeps cutting
-        // out" impossible to confirm from a log: below the limit there was no evidence at all, and at
-        // the limit only a verdict. One line each is cheap — healthy playback produces none.
+        // Keep every underrun visible to support diagnostics, but never turn it into an audio-output
+        // verdict. A weak connection produces this exact callback while the sink is perfectly healthy;
+        // treating repeated callbacks as terminal caused needless stereo latches and engine handoffs.
+        // Genuine sink failures still arrive through onAudioSinkError, and accepted audio that never
+        // advances is still caught by poll().
         android.util.Log.w(
             "AudioOutputPolicy",
             "audio underrun: buffer=${bufferSize}B/${bufferSizeMs}ms, ${elapsedSinceLastFeedMs}ms since last feed",
         )
-        val hit = synchronized(underrunTimes) {
-            underrunTimes.addLast(now)
-            while (underrunTimes.isNotEmpty() && now - underrunTimes.first() > AudioOutputPolicy.UNDERRUN_WINDOW_MS) {
-                underrunTimes.removeFirst()
-            }
-            underrunTimes.size >= AudioOutputPolicy.UNDERRUN_LIMIT
-        }
-        if (hit) raise("audio output underran ${AudioOutputPolicy.UNDERRUN_LIMIT}× in ${AudioOutputPolicy.UNDERRUN_WINDOW_MS / 1000}s")
     }
 
     override fun onAudioSinkError(eventTime: AnalyticsListener.EventTime, audioSinkError: Exception) {

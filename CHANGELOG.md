@@ -7,6 +7,14 @@
 > Issue numbers that are part of a title are fine; explanatory parentheticals are not. The detail —
 > what, why, files and verification — belongs in the commit message, never here.
 
+## v2.2.16 — 2026-10-18
+
+### 🐛 Correcciones
+- **Reanudar o empezar desde cero vuelve a responder en películas y episodios con control remoto o pantalla táctil**
+- **La reproducción resiste mejor conexiones inestables sin cambiar la calidad seleccionada**
+- **Las pistas de audio incompatibles y las salidas sin sonido cambian automáticamente a una ruta compatible**
+- **El aviso del límite de metadatos deja de cubrir el video y sus controles**
+
 ## v2.2.15 — 2026-10-17
 
 ### 🐛 Correcciones

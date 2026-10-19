@@ -90,4 +90,28 @@ object ExoAudioGate {
     fun anyPlayableAudio(tracks: Tracks): Boolean = tracks.groups.any { g ->
         g.type == C.TRACK_TYPE_AUDIO && (0 until g.length).any { g.isTrackSupported(it, true) }
     }
+
+    /**
+     * A manually overridden audio track is selected even though this ExoPlayer cannot render it, while
+     * another advertised audio track is playable.
+     *
+     * This is deliberately narrower than [anyPlayableAudio]: the latter answers whether the item can be
+     * played at all, while this catches the silent remembered-language/manual-override case. Media3's
+     * automatic selector avoids an unsupported track by itself; an explicit override is the path that can
+     * pin one anyway. The owning engine clears only that audio override and lets Media3 choose the safe
+     * sibling, preserving video quality, subtitles and every other preference.
+     */
+    fun selectedAudioUnsupportedWithPlayableAlternative(tracks: Tracks): Boolean {
+        var selectedUnsupported = false
+        var playable = false
+        tracks.groups.forEach { group ->
+            if (group.type != C.TRACK_TYPE_AUDIO) return@forEach
+            for (index in 0 until group.length) {
+                val supported = group.isTrackSupported(index, true)
+                if (supported) playable = true
+                if (group.isTrackSelected(index) && !supported) selectedUnsupported = true
+            }
+        }
+        return selectedUnsupported && playable
+    }
 }

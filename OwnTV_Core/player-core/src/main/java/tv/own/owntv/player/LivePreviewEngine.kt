@@ -224,6 +224,10 @@ class LivePreviewEngine(
     // without that decoder) — the VM hands such a stream to mpv (FFmpeg decodes everything) so it isn't silent.
     private val _audioUnsupported = MutableStateFlow(false)
     val audioUnsupported: StateFlow<Boolean> = _audioUnsupported.asStateFlow()
+    // The audio sink failed even after a plain stereo rebuild. Retrying this identical ExoPlayer path
+    // would loop forever; LiveExoWatchdog hands the tune to mpv, which uses a different decoder/output.
+    private val _audioOutputFailed = MutableStateFlow(false)
+    val audioOutputFailed: StateFlow<Boolean> = _audioOutputFailed.asStateFlow()
     // One-shot per load: audio/position is progressing normally and a video track exists, but ExoPlayer has
     // never rendered a single frame of it — the "audio plays, no picture" case the freeze/frame watchdogs
     // below can't see (they only catch a freeze AFTER frames were once seen, or a total position stall).
@@ -797,11 +801,26 @@ class LivePreviewEngine(
                 // for 5.1 did not ask for silence — and cannot be turned off. On a hit the session latches
                 // to stereo (which every engine reads) and this channel is rebuilt on a stereo-only sink.
                 audioWatchdog.poll(p.isPlaying)?.let { reason ->
-                    LiveDiagnosticsLog.event("audioWatchdog: $reason — forcing stereo for this session")
-                    AudioOutputPolicy.latchStereo("exo/live: $reason")
-                    PlaybackErrorLog.event(context, "ExoPlayer", live = true, reason = PlayerFailureReason.STEREO_FALLBACK, detail = reason)
-                    onAudioFallback?.invoke()
-                    rebuildForSettingChange()
+                    when (silentAudioRecovery(!AudioOutputPolicy.allowsMultichannel(surroundMode))) {
+                        SilentAudioRecovery.REBUILD_WITH_STEREO -> {
+                            LiveDiagnosticsLog.event("audioWatchdog: $reason — forcing stereo for this session")
+                            AudioOutputPolicy.latchStereo("exo/live: $reason")
+                            PlaybackErrorLog.event(context, "ExoPlayer", live = true, reason = PlayerFailureReason.STEREO_FALLBACK, detail = reason)
+                            onAudioFallback?.invoke()
+                            rebuildForSettingChange()
+                        }
+                        SilentAudioRecovery.TRY_ALTERNATE_ENGINE -> {
+                            LiveDiagnosticsLog.event("audioWatchdog: stereo output still silent — handing live playback to mpv")
+                            PlaybackErrorLog.event(
+                                context,
+                                "ExoPlayer",
+                                live = true,
+                                reason = PlayerFailureReason.STEREO_FALLBACK,
+                                detail = "stereo output still silent after recovery: $reason",
+                            )
+                            _audioOutputFailed.value = true
+                        }
+                    }
                     return
                 }
                 // Audio-plays-no-video: a video track exists but has never rendered a single frame, even
@@ -1139,6 +1158,7 @@ class LivePreviewEngine(
         }
 
         override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+            if (recoverUnsupportedAudioOverride(tracks)) return
             rebuildTracks(tracks); updateStreamChips(); ensureFpsMeasurement()
         }
         override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) { _cues.value = cueGroup.cues }
@@ -1369,6 +1389,7 @@ class LivePreviewEngine(
         _audioCount.value = 0
         _subCount.value = 0
         _subtitleOn.value = false; _cues.value = emptyList(); _audioUnsupported.value = false
+        _audioOutputFailed.value = false
         _noVideoDetected.value = false
         _audioOnlyMedia.value = false // re-decided from this stream's own track list
         _videoHeight.value = null; _videoAspect.value = null; _videoSize.value = null; _streamChips.value = emptyList(); _videoFps.value = null
@@ -1644,6 +1665,7 @@ class LivePreviewEngine(
         tune.audioTrackList = emptyList(); tune.audioSelections = emptyList(); _audioCount.value = 0
         tune.textTrackList = emptyList(); tune.textSelections = emptyList(); _subCount.value = 0
         _subtitleOn.value = false; _cues.value = emptyList(); _audioUnsupported.value = false
+        _audioOutputFailed.value = false
         _noVideoDetected.value = false; tune.noVideoTriggered = false; tune.readySinceMs = 0L
         _audioOnlyMedia.value = false // re-decided from this stream's own track list
         mainHandler.removeCallbacks(audioOnlyConfirmation)
@@ -2523,6 +2545,25 @@ class LivePreviewEngine(
 
     override fun audioTracks(): List<TrackOption> = tune.audioTrackList
     override fun textTracks(): List<TrackOption> = tune.textTrackList
+
+    /**
+     * A remembered/manual language override can outlive the device decoder that supported it (or be
+     * synced from another device). If that override pins an unsupported track while a playable sibling
+     * exists, release only the audio override and let Media3 select that sibling instead of playing video
+     * silently. Automatic selections are left untouched.
+     */
+    private fun recoverUnsupportedAudioOverride(tracks: androidx.media3.common.Tracks): Boolean {
+        val p = player ?: return false
+        val hasAudioOverride = p.trackSelectionParameters.overrides.keys.any {
+            it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO
+        }
+        if (!hasAudioOverride || !ExoAudioGate.selectedAudioUnsupportedWithPlayableAlternative(tracks)) return false
+        LiveDiagnosticsLog.event("unsupported selected audio override — choosing a playable track")
+        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_AUDIO)
+            .build()
+        return true
+    }
 
     /** Build the audio + subtitle track lists from the active stream so the HUD menus can switch language /
      *  subtitles (multi-track live channels, or a VOD file imported via M3U). Mirrors [ExoSubtitleEngine]. */

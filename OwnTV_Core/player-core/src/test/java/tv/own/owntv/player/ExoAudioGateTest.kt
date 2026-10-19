@@ -54,11 +54,11 @@ class ExoAudioGateTest {
         assertEquals(Verdict.UNSUPPORTED, verdict("mlp", device = setOf(MimeTypes.AUDIO_TRUEHD)))
     }
 
-    private fun audioGroup(vararg support: Int): Tracks.Group {
+    private fun audioGroup(vararg support: Int, selected: BooleanArray = BooleanArray(support.size)): Tracks.Group {
         val formats = support.indices.map {
             Format.Builder().setId(it.toString()).setSampleMimeType(MimeTypes.AUDIO_DTS).build()
         }
-        return Tracks.Group(TrackGroup(*formats.toTypedArray()), false, support, BooleanArray(support.size))
+        return Tracks.Group(TrackGroup(*formats.toTypedArray()), false, support, selected)
     }
 
     @Test
@@ -67,6 +67,36 @@ class ExoAudioGateTest {
         assertTrue(ExoAudioGate.anyPlayableAudio(Tracks(listOf(audioGroup(C.FORMAT_UNSUPPORTED_SUBTYPE, C.FORMAT_HANDLED)))))
         assertFalse(ExoAudioGate.anyPlayableAudio(Tracks(listOf(audioGroup(C.FORMAT_UNSUPPORTED_SUBTYPE)))))
         assertFalse(ExoAudioGate.anyPlayableAudio(Tracks.EMPTY))
+    }
+
+    @Test
+    fun `unsupported selected audio is released only when a playable sibling exists`() {
+        val mixed = Tracks(
+            listOf(
+                audioGroup(
+                    C.FORMAT_UNSUPPORTED_SUBTYPE,
+                    C.FORMAT_HANDLED,
+                    selected = booleanArrayOf(true, false),
+                ),
+            ),
+        )
+        assertTrue(ExoAudioGate.selectedAudioUnsupportedWithPlayableAlternative(mixed))
+        assertFalse(
+            ExoAudioGate.selectedAudioUnsupportedWithPlayableAlternative(
+                Tracks(listOf(audioGroup(C.FORMAT_HANDLED, selected = booleanArrayOf(true)))),
+            ),
+        )
+        assertFalse(
+            ExoAudioGate.selectedAudioUnsupportedWithPlayableAlternative(
+                Tracks(listOf(audioGroup(C.FORMAT_UNSUPPORTED_SUBTYPE, selected = booleanArrayOf(true)))),
+            ),
+        )
+    }
+
+    @Test
+    fun `silent stereo output changes engines instead of rebuilding forever`() {
+        assertEquals(SilentAudioRecovery.REBUILD_WITH_STEREO, silentAudioRecovery(stereoSinkAlreadyActive = false))
+        assertEquals(SilentAudioRecovery.TRY_ALTERNATE_ENGINE, silentAudioRecovery(stereoSinkAlreadyActive = true))
     }
 
     @Test

@@ -41,6 +41,7 @@ fun OwnTVPopup(
     dismissOnBackPress: Boolean = true,
     dismissOnClickOutside: Boolean = true,
     fontScale: Float = 0.70f,
+    layoutScale: Float = 0.70f,
     content: @Composable () -> Unit,
 ) {
     Dialog(
@@ -105,7 +106,11 @@ fun OwnTVPopup(
         val availableHeightPx = (usableBottomPx - topSafePx).coerceAtLeast(1)
         val availableHeightDp = with(baseDensity) { availableHeightPx.toDp() }
 
-        val popupScale = 0.70f
+        // Most dense settings popups use the compact TV-safe scale. Small decision prompts can opt
+        // out so moving them into this focus-isolated window does not also change their established
+        // size. Keeping this separate from [fontScale] matters: text size and popup geometry are two
+        // independent accessibility choices.
+        val popupScale = layoutScale.coerceIn(0.50f, 1f)
         // The host owns the fixed TV-safe base scale. PopupFontTheme applies the user's independent
         // popup geometry and font controls for both hosted and legacy inline popup content.
         val popupDensity = Density(

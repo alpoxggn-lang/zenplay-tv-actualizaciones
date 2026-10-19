@@ -1,5 +1,6 @@
 package tv.own.owntv.player
 
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
@@ -20,13 +21,13 @@ import tv.own.owntv.core.settings.LiveLatency
 class LiveBufferTest {
 
     @Test
-    fun `the defaults are byte-identical to the values that were hardcoded before the setting existed`() {
-        // Balanced + Pre-buffer Off must never be a behaviour change for a user who touched nothing.
+    fun `the defaults keep fast startup but recover with a deeper cushion`() {
         val lc = LiveBuffer.loadControlFor(bufferSecs = null, prerollSecs = LiveBuffer.PREROLL_OFF)
         assertEquals(8_000, lc.minBufferMs)
         assertEquals(10_000, lc.maxBufferMs)
         assertEquals(LiveBuffer.DEFAULT_START_MS, lc.bufferForPlaybackMs)
         assertEquals(LiveBuffer.DEFAULT_RESTART_MS, lc.bufferForPlaybackAfterRebufferMs)
+        assertTrue(lc.bufferForPlaybackAfterRebufferMs > lc.bufferForPlaybackMs)
     }
 
     @Test
@@ -45,6 +46,9 @@ class LiveBufferTest {
         assertEquals(2_000, LiveBuffer.loadControlFor(LiveBuffer.LOW_SECS, 0).minBufferMs)
         assertEquals(8_000, LiveBuffer.loadControlFor(null, 0).minBufferMs)
         assertEquals(15_000, LiveBuffer.loadControlFor(LiveBuffer.STABLE_SECS, 0).minBufferMs)
+        // Explicit low latency remains authoritative; resilience must not manufacture extra delay.
+        assertEquals(2_000, LiveBuffer.loadControlFor(LiveBuffer.LOW_SECS, 0).bufferForPlaybackAfterRebufferMs)
+        assertEquals(1_000, LiveBuffer.loadControlFor(LiveBuffer.CUSTOM_MIN, 0).bufferForPlaybackAfterRebufferMs)
     }
 
     @Test
@@ -138,5 +142,25 @@ class LiveBufferTest {
             (lowRam.toLong() * justDeeper / LiveBuffer.BALANCED_SECS).toInt(),
             LiveBuffer.targetBufferBytes(justDeeper, 0, lowRam, lowSpec = true),
         )
+    }
+
+    @Test
+    fun `mpv recovery cushion respects the available live cache`() {
+        assertEquals(3, LiveBuffer.mpvRebufferSecs(prerollSecs = 0, availableBufferSecs = 30))
+        assertEquals(2, LiveBuffer.mpvRebufferSecs(prerollSecs = 0, availableBufferSecs = 2))
+        assertEquals(10, LiveBuffer.mpvRebufferSecs(prerollSecs = 10, availableBufferSecs = 10))
+    }
+
+    @Test
+    fun `changing live depth reapplies mpv recovery wait with the cache`() {
+        val source = File("src/main/java/tv/own/owntv/player/OwnTVPlayer.kt").readText()
+        val collector = source
+            .substringAfter("playbackSettings.field { it.liveBufferSeconds }.onEach {")
+            .substringBefore("}.launchIn(scope)")
+
+        assertTrue(collector.contains("LiveBuffer.mpvRebufferSecs("))
+        val cache = collector.indexOf("setPropertyString(\"cache-secs\", live.cache)")
+        val wait = collector.indexOf("setPropertyString(\"cache-pause-wait\", rebufferWaitSecs.toString())")
+        assertTrue("cache and reachable recovery threshold must update together", cache >= 0 && wait > cache)
     }
 }

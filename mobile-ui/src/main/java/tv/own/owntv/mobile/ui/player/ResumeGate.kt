@@ -3,14 +3,21 @@ package tv.own.owntv.mobile.ui.player
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import tv.own.owntv.core.settings.SettingsRepository
 import tv.own.owntv.mobile.R
@@ -78,6 +85,29 @@ private fun ResumeSheet(
     onStartOver: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val startOverFocus = remember { FocusRequester() }
+    val resumeFocus = remember { FocusRequester() }
+    var decided by remember(positionMs) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    fun choose(action: () -> Unit) {
+        if (decided) return
+        decided = true
+        // Leave the modal mounted through the pointer/key release. This prevents a keyboard or
+        // Bluetooth remote from replaying that release on the episode card exposed underneath.
+        scope.launch {
+            withFrameNanos { }
+            action()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        repeat(4) {
+            withFrameNanos { }
+            if (runCatching { resumeFocus.requestFocus() }.getOrDefault(false)) return@LaunchedEffect
+        }
+    }
+
     MobileBottomSheet(
         onDismissRequest = onDismiss,
         title = stringResource(R.string.common_resume_prompt),
@@ -88,7 +118,19 @@ private fun ResumeSheet(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = MobileDimens.ScreenPaddingH),
         )
-        MobileListRow(title = stringResource(R.string.common_resume), onClick = onResume)
-        MobileListRow(title = stringResource(R.string.common_start_over), onClick = onStartOver)
+        MobileListRow(
+            title = stringResource(R.string.common_resume),
+            modifier = Modifier
+                .focusRequester(resumeFocus)
+                .focusProperties { down = startOverFocus },
+            onClick = { choose(onResume) },
+        )
+        MobileListRow(
+            title = stringResource(R.string.common_start_over),
+            modifier = Modifier
+                .focusRequester(startOverFocus)
+                .focusProperties { up = resumeFocus },
+            onClick = { choose(onStartOver) },
+        )
     }
 }

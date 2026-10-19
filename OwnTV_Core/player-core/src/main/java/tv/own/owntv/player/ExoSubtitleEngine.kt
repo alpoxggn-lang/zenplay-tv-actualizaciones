@@ -259,6 +259,7 @@ class ExoSubtitleEngine(
         }
 
         override fun onTracksChanged(tracks: Tracks) {
+            if (recoverUnsupportedAudioOverride(tracks)) return
             if (reportUndecodableAudio(tracks)) return
             updateVideoTrackPresence(tracks)
             rebuildAudioTracks(tracks)
@@ -593,14 +594,21 @@ class ExoSubtitleEngine(
         // can't open them, and Media3 swallows a side-loaded subtitle's load failure silently (the
         // track lists but never produces cues). The TransferListener stays on the inner OkHttp factory
         // so local subtitle-file bytes don't inflate the measured network bitrate.
-        // N18 — a chosen timeout replaces the shared client's (connect 15 s, read 20 s) for films only;
-        // newBuilder() keeps its pool, proxy, DNS and interceptors.
-        val client = filmTimeoutSecs.takeIf { it > 0 }?.let { secs ->
-            streamingHttp.client.newBuilder()
-                .connectTimeout(secs.toLong(), java.util.concurrent.TimeUnit.SECONDS)
-                .readTimeout(secs.toLong(), java.util.concurrent.TimeUnit.SECONDS)
-                .build()
-        } ?: streamingHttp.client
+        // N18 — a chosen timeout replaces both connect + read waits exactly. Auto keeps the shared
+        // client's quick 15 s connect failure but gives an ESTABLISHED media response 60 s between
+        // reads: a congested server can pause and recover without turning one slow spell into a full
+        // engine handoff. newBuilder() retains the stream pool, proxy, DNS, TLS and interceptors.
+        val client = streamingHttp.client.newBuilder()
+            .readTimeout(
+                FilmNetwork.exoReadTimeoutSecs(filmTimeoutSecs).toLong(),
+                java.util.concurrent.TimeUnit.SECONDS,
+            )
+            .apply {
+                filmTimeoutSecs.takeIf { it > 0 }?.let { secs ->
+                    connectTimeout(secs.toLong(), java.util.concurrent.TimeUnit.SECONDS)
+                }
+            }
+            .build()
         val http = OkHttpDataSource.Factory(client)
             .setUserAgent(HttpClient.DEFAULT_USER_AGENT)
             .setTransferListener(throughputTracker)
@@ -614,7 +622,15 @@ class ExoSubtitleEngine(
         val maxBufferMs = FilmNetwork.bufferSecs(filmBufferSecs, budget) * 1000
         val minBufferMs = (maxBufferMs / 2).coerceIn(15_000, maxBufferMs)
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(minBufferMs, maxBufferMs, 2_500, 5_000)
+            // Initial startup is unchanged; only a stream that already underruns waits longer before
+            // resuming. That prevents the 1–2 second play/buffer loop on jittery links without changing
+            // bitrate, selected quality or the normal fast-start path.
+            .setBufferDurationsMs(
+                minBufferMs,
+                maxBufferMs,
+                FilmNetwork.EXO_START_BUFFER_MS,
+                FilmNetwork.exoRebufferMs(filmBufferSecs, budget),
+            )
             // Durations alone are not a memory bound: at 120 s (the top RAM tier) a 4K stream can ask the
             // allocator for hundreds of MB before the duration target is met, and a TV app dies long
             // before that. Media3's own default is derived from the duration, so scale with the same
@@ -798,10 +814,25 @@ class ExoSubtitleEngine(
         // latches to stereo and the owner restarts this item — the sink's capabilities are decided at
         // construction, so nothing short of a rebuild can undo a bad choice.
         audioWatchdog.poll(p.isPlaying)?.let { reason ->
-            android.util.Log.w("ExoSubtitleEngine", "audio watchdog: $reason — forcing stereo for this session")
-            AudioOutputPolicy.latchStereo("exo/vod: $reason")
-            PlaybackErrorLog.event(context, "ExoPlayer", live = false, reason = PlayerFailureReason.STEREO_FALLBACK, detail = reason)
-            onAudioFallback?.invoke()
+            when (silentAudioRecovery(builtForStereo)) {
+                SilentAudioRecovery.REBUILD_WITH_STEREO -> {
+                    android.util.Log.w("ExoSubtitleEngine", "audio watchdog: $reason — forcing stereo for this session")
+                    AudioOutputPolicy.latchStereo("exo/vod: $reason")
+                    PlaybackErrorLog.event(context, "ExoPlayer", live = false, reason = PlayerFailureReason.STEREO_FALLBACK, detail = reason)
+                    onAudioFallback?.invoke()
+                }
+                SilentAudioRecovery.TRY_ALTERNATE_ENGINE -> {
+                    android.util.Log.w(TAG, "audio watchdog: stereo output still silent — handing VOD to alternate engine")
+                    PlaybackErrorLog.event(
+                        context,
+                        "ExoPlayer",
+                        live = false,
+                        reason = PlayerFailureReason.STEREO_FALLBACK,
+                        detail = "stereo output still silent after recovery: $reason",
+                    )
+                    callbacks.onError(PlaybackFailure.ExoDecode("audio output remained silent in stereo"))
+                }
+            }
         }
     }
 
@@ -883,6 +914,19 @@ class ExoSubtitleEngine(
     var onSoftwareRescue: ((url: String, fromStart: Boolean) -> Unit)? = null
 
     private val audioWatchdog = AudioWatchdog()
+
+    /** See the live-engine twin: abandon only an explicit unsupported audio override, never a normal
+     * automatic selection, and preserve every non-audio track parameter. */
+    private fun recoverUnsupportedAudioOverride(tracks: Tracks): Boolean {
+        val p = player ?: return false
+        val hasAudioOverride = p.trackSelectionParameters.overrides.keys.any { it.type == C.TRACK_TYPE_AUDIO }
+        if (!hasAudioOverride || !ExoAudioGate.selectedAudioUnsupportedWithPlayableAlternative(tracks)) return false
+        android.util.Log.w(TAG, "unsupported selected audio override — choosing a playable track")
+        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+            .build()
+        return true
+    }
 
     /** Select an audio track by the id we published in [Callbacks.onAudioTracks]. */
     fun selectAudio(id: Int) {

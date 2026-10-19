@@ -75,6 +75,31 @@ class LiveExoWatchdog(
             engine.segmentsRefused.first { it }
             if (stillOurs()) handOver("provider refuses ExoPlayer's signed segment URLs")
         }
+        launch {
+            // MPEG-TS/HLS track discovery is often incomplete for much longer than a fixed settle
+            // delay while the channel is still opening. Do not judge that provisional list at all:
+            // first require the tune to reach PLAYING (the same open verdict used below), then keep
+            // watching for late track changes for the rest of this tune.
+            val opened = engine.state.first {
+                it == LivePreviewEngine.State.PLAYING || it == LivePreviewEngine.State.ERROR
+            }
+            if (!stillOurs() || opened != LivePreviewEngine.State.PLAYING) return@launch
+            while (stillOurs()) {
+                engine.audioUnsupported.first { it }
+                // Even after opening, manifests can update the groups incrementally. Require the
+                // unsupported verdict to remain stable through one final short settle window.
+                delay(TRACK_SETTLE_MS)
+                if (!stillOurs()) return@launch
+                if (engine.audioUnsupported.value) {
+                    handOver("no decodable audio track")
+                    return@launch
+                }
+            }
+        }
+        launch {
+            engine.audioOutputFailed.first { it }
+            if (stillOurs()) handOver("stereo audio output remained silent")
+        }
 
         // Bounded, because "neither" is a real outcome. A pre-buffer is requested silence: 10s of it
         // means the first frame is *supposed* to be ~10s out, so the deadline moves with it or every
@@ -118,13 +143,6 @@ class LiveExoWatchdog(
         // channel played, wedged with the watchers still waiting, or the watcher never ran.
         log("'$channelName' opened on ExoPlayer")
         onOpened()
-        // Give the track list a moment to settle, then route silent streams to the other engine.
-        delay(TRACK_SETTLE_MS)
-        if (!stillOurs()) return@coroutineScope
-        if (engine.audioUnsupported.value) {
-            handOver("no decodable audio track")
-            return@coroutineScope
-        }
         watchAfterFirstFrame(channelName)
     }
 
@@ -203,7 +221,7 @@ class LiveExoWatchdog(
          */
         private const val STALL_HANDOFF_GRACE_MS = 2_000L
 
-        /** Let the track list settle after the first frame before judging the audio. */
+        /** Let an incrementally published track list settle before judging all audio unsupported. */
         private const val TRACK_SETTLE_MS = 300L
 
         /** A flapping stream must not fill the log with the same line. */

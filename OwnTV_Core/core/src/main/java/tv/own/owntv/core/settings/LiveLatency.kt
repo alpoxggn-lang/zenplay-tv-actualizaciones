@@ -64,9 +64,17 @@ object LiveBuffer {
     const val BALANCED_SECS = 8
     private const val IDLE_WINDOW_SECS = 2
 
-    /** Today's hardcoded start thresholds, and what "Pre-buffer = Off" still means. */
+    /**
+     * Fast first-frame threshold and the more patient *rebuffer* threshold. A healthy tune still starts
+     * after one second; only a channel that already ran dry waits up to four seconds before resuming,
+     * avoiding a play/buffer/play loop on jittery links. An explicit Low/custom latency depth below four
+     * seconds remains authoritative and caps the recovery threshold in [loadControlFor].
+     */
     const val DEFAULT_START_MS = 1_000
-    const val DEFAULT_RESTART_MS = 2_000
+    const val DEFAULT_RESTART_MS = 4_000
+
+    /** mpv equivalent, used only after a real cache underrun (never for initial tune). */
+    const val MPV_DEFAULT_RESTART_SECS = 3
 
     /** The "Pre-buffer" choices, in seconds. 0 = Off (engine defaults). */
     val PREROLL_CHOICES = listOf(0, 2, 5, 10)
@@ -84,8 +92,8 @@ object LiveBuffer {
      * Turn the user's Live latency preset ([bufferSecs], null = Balanced) and "Pre-buffer"
      * choice ([prerollSecs], 0 = Off) into load-control durations (F06/F07).
      *
-     * With the defaults (Balanced + Off) this returns **exactly** the values that were hardcoded
-     * before, so the default Live TV behaviour is byte-identical.
+     * Balanced + Off keeps the same depth and quick initial start as before; only recovery after an
+     * actual underrun is more patient. No representation/bitrate decision is changed here.
      *
      * The pre-roll raises the buffer floor when it has to: `DefaultLoadControl` requires
      * `minBufferMs >= bufferForPlayback*`, and asking to buffer 10 s before starting means the buffer
@@ -93,10 +101,14 @@ object LiveBuffer {
      * rather than throwing.
      */
     fun loadControlFor(bufferSecs: Int?, prerollSecs: Int): LoadControlMs {
+        val depthSecs = bufferSecs ?: BALANCED_SECS
         val prerollMs = prerollSecs.coerceAtLeast(0) * 1000
         val startMs = if (prerollMs > 0) prerollMs else DEFAULT_START_MS
-        val restartMs = if (prerollMs > 0) prerollMs else DEFAULT_RESTART_MS
-        val depthSecs = bufferSecs ?: BALANCED_SECS
+        val restartMs = if (prerollMs > 0) {
+            prerollMs
+        } else {
+            DEFAULT_RESTART_MS.coerceAtMost(depthSecs * 1000)
+        }
         val minMs = (depthSecs * 1000).coerceAtLeast(maxOf(startMs, restartMs))
         return LoadControlMs(
             minBufferMs = minMs,
@@ -104,6 +116,15 @@ object LiveBuffer {
             bufferForPlaybackMs = startMs,
             bufferForPlaybackAfterRebufferMs = restartMs,
         )
+    }
+
+    /**
+     * mpv's recovery threshold for live. The user-selected pre-roll wins; otherwise the three-second
+     * jitter cushion is capped to the real cache depth so Low/custom latency never quietly grows.
+     */
+    fun mpvRebufferSecs(prerollSecs: Int, availableBufferSecs: Int): Int {
+        val requested = if (prerollSecs > 0) prerollSecs else MPV_DEFAULT_RESTART_SECS
+        return requested.coerceAtMost(availableBufferSecs.coerceAtLeast(1))
     }
 
     /**

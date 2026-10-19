@@ -803,9 +803,9 @@ class OwnTVPlayer(
         // forever during OPEN so the stream never starts. [streamLavfOptionsFor] owns that distinction and
         // is the single place stream-lavf-o is decided, for this path and the loadfile path alike.
         setPropertyString("stream-lavf-o", streamLavfOptionsFor(url, isLiveContent, effectiveHls))
-        // "Pre-buffer" (F07): mpv's own pre-roll gate — hold the picture until the cache
-        // holds N seconds, and do the same after an underrun (which is what "pause 3-4 s then play
-        // makes it smooth" was doing by hand). Live only; 0 restores mpv's defaults.
+        // "Pre-buffer" (F07): mpv's own initial pre-roll gate for Live. Recovery after a genuine
+        // underrun is intentionally separate: even with pre-roll Off, waiting a few seconds avoids the
+        // one-second play/buffer loop on jittery connections. Initial tune stays unchanged.
         val prerollSecs = effectivePrerollSecs()
         // N18 — a film's own buffer and network timeout (Settings; 0 = Auto = the values used before).
         // Set on every load, live included, so a channel after a film gets the device's values back.
@@ -814,6 +814,7 @@ class OwnTVPlayer(
         val networkTimeout = if (isLiveContent) LIVE_NETWORK_TIMEOUT_SECS
         else FilmNetwork.mpvTimeoutSecs(film?.vodNetworkTimeoutSecs ?: 0)
         setPropertyString("network-timeout", networkTimeout.toString())
+        var rebufferWaitSecs = if (isLiveContent) LiveBuffer.MPV_DEFAULT_RESTART_SECS else FilmNetwork.MPV_REBUFFER_SECS
         playerBudget?.let { budget ->
             // A live choice must reach BOTH values or the larger cache silently wins.
             val live = MpvLiveBuffer.resolve(effectiveLiveBufferSecs(), prerollSecs, budget)
@@ -825,6 +826,11 @@ class OwnTVPlayer(
                 "cache-secs",
                 if (isLiveContent) live.cache else FilmNetwork.bufferSecs(film?.vodBufferSecs ?: 0, budget).toString(),
             )
+            rebufferWaitSecs = if (isLiveContent) {
+                LiveBuffer.mpvRebufferSecs(prerollSecs, live.cache.toIntOrNull() ?: LiveBuffer.MPV_DEFAULT_RESTART_SECS)
+            } else {
+                FilmNetwork.mpvRebufferSecs(film?.vodBufferSecs ?: 0, budget)
+            }
             if (isLiveContent) {
                 android.util.Log.i(
                     TAG,
@@ -834,11 +840,10 @@ class OwnTVPlayer(
         }
         if (isLiveContent && prerollSecs > 0) {
             setPropertyString("cache-pause-initial", "yes")
-            setPropertyString("cache-pause-wait", prerollSecs.toString())
         } else {
             setPropertyString("cache-pause-initial", "no")
-            setPropertyString("cache-pause-wait", "1")
         }
+        setPropertyString("cache-pause-wait", rebufferWaitSecs.toString())
         // Broken-timestamp live streams (some IPTV 4K feeds send non-increasing/duplicate PTS): mpv is
         // strict about PTS and drops nearly every frame ("Invalid video timestamp: X -> X"), which looks
         // like lag even though decode is fine (ExoPlayer tolerates it). The workaround is to stop timing
@@ -1138,9 +1143,17 @@ class OwnTVPlayer(
             if (initialized && isLiveContent && liveBufferOverride == null) {
                 playerBudget?.let { budget ->
                     val live = MpvLiveBuffer.resolve(effectiveLiveBufferSecs(), effectivePrerollSecs(), budget)
+                    val rebufferWaitSecs = LiveBuffer.mpvRebufferSecs(
+                        effectivePrerollSecs(),
+                        live.cache.toIntOrNull() ?: LiveBuffer.MPV_DEFAULT_RESTART_SECS,
+                    )
                     mpvAsync {
                         setPropertyString("demuxer-readahead-secs", live.readahead)
                         setPropertyString("cache-secs", live.cache)
+                        // Keep the recovery gate in the same atomic settings update. Otherwise changing
+                        // Balanced → Custom 1–2 s left the old 3 s wait behind, a threshold the newly
+                        // shrunken cache could never reach, and playback stayed buffering forever.
+                        setPropertyString("cache-pause-wait", rebufferWaitSecs.toString())
                     }
                 }
             }

@@ -1,6 +1,5 @@
 package tv.own.owntv.ui.components
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
@@ -17,10 +16,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalResources
@@ -28,6 +30,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import kotlinx.coroutines.launch
 import tv.own.owntv.R
 import tv.own.owntv.ui.theme.OwnTVTheme
 
@@ -43,29 +46,85 @@ fun ResumeDialog(
     onDismiss: () -> Unit,
 ) {
     val colors = OwnTVTheme.colors
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    BackHandler { onDismiss() }
-    // Lighter scrim + translucent card: the paused video stays visible behind the prompt.
-    Box(
-        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).trapAllFocusExit().focusGroup(),
-        contentAlignment = Alignment.Center,
+    val startOverFocus = remember { FocusRequester() }
+    val resumeFocus = remember { FocusRequester() }
+    val decision = remember(positionMs) { ResumeDialogDecisionGate() }
+    val scope = rememberCoroutineScope()
+
+    fun choose(action: () -> Unit) {
+        if (!decision.claim()) return
+        // A few TV remotes deliver the Select key's release/repeat to the activity when an inline
+        // overlay is removed in the same dispatch. Keep this window alive through the current frame;
+        // otherwise the episode row underneath receives that tail event and immediately opens the
+        // same question again. The gate also makes both actions exactly-once while the frame settles.
+        scope.launch {
+            withFrameNanos { }
+            action()
+        }
+    }
+
+    // A platform dialog owns a separate focus window. That is important here because the Movies and
+    // Series browse panes deliberately trap D-pad focus; the old inline overlay could look focused
+    // while the selected episode row still owned the key event underneath it.
+    OwnTVPopup(
+        onDismissRequest = onDismiss,
+        fontScale = 1f,
+        layoutScale = 1f,
     ) {
-        Column(Modifier.dialogPanel(padding = 28.dp, fill = colors.surfaceContainerHigh.copy(alpha = 0.88f))) {
-            Text(stringResource(R.string.common_resume_prompt), style = MaterialTheme.typography.titleLarge, color = colors.onSurface)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                stringResource(R.string.common_resume_position, formatTimestamp(positionMs)),
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(22.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OwnTVButton(stringResource(R.string.common_start_over), onClick = onStartOver, style = OwnTVButtonStyle.SECONDARY)
-                Spacer(Modifier.weight(1f))
-                OwnTVButton(stringResource(R.string.common_resume), onClick = onResume, icon = OwnTVIcon.PLAY, modifier = Modifier.focusRequester(focus))
+        LaunchedEffect(Unit) {
+            // Some Fire TV builds attach the dialog focus tree one frame later than Android TV.
+            // Retry for a few frames rather than leaving the remote stranded on the browse row.
+            repeat(4) {
+                withFrameNanos { }
+                if (runCatching { resumeFocus.requestFocus() }.getOrDefault(false)) return@LaunchedEffect
             }
         }
+        // Lighter scrim + translucent card: the paused video stays visible behind the prompt.
+        Box(
+            modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).trapAllFocusExit().focusGroup(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(Modifier.dialogPanel(padding = 28.dp, fill = colors.surfaceContainerHigh.copy(alpha = 0.88f))) {
+                Text(stringResource(R.string.common_resume_prompt), style = MaterialTheme.typography.titleLarge, color = colors.onSurface)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.common_resume_position, formatTimestamp(positionMs)),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(22.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OwnTVButton(
+                        stringResource(R.string.common_start_over),
+                        onClick = { choose(onStartOver) },
+                        style = OwnTVButtonStyle.SECONDARY,
+                        modifier = Modifier
+                            .focusRequester(startOverFocus)
+                            .focusProperties { right = resumeFocus },
+                    )
+                    Spacer(Modifier.weight(1f))
+                    OwnTVButton(
+                        stringResource(R.string.common_resume),
+                        onClick = { choose(onResume) },
+                        icon = OwnTVIcon.PLAY,
+                        modifier = Modifier
+                            .focusRequester(resumeFocus)
+                            .focusProperties { left = startOverFocus },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** One dialog decision, even if an OEM remote repeats Select while the overlay is closing. */
+internal class ResumeDialogDecisionGate {
+    private var claimed = false
+
+    fun claim(): Boolean {
+        if (claimed) return false
+        claimed = true
+        return true
     }
 }
 

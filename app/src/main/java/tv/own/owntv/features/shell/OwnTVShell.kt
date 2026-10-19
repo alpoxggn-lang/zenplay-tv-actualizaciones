@@ -212,8 +212,10 @@ fun OwnTVShell(
     val budgetRefusedAt by metadataBudget.refusedAt.collectAsStateWithLifecycle()
     var budgetNoticeShown by remember { mutableStateOf(false) }
     val budgetNotice = androidx.compose.ui.res.stringResource(tv.own.owntv.R.string.settings_metadata_limit_reached)
-    LaunchedEffect(budgetRefusedAt) {
-        if (budgetRefusedAt > 0L && !budgetNoticeShown) {
+    LaunchedEffect(budgetRefusedAt, playerMode) {
+        // Metadata is decorative and never playback-critical. Keep the notice pending while fullscreen,
+        // mini-player or Audio Mode owns the screen, then show it once the user returns to browsing.
+        if (budgetRefusedAt > 0L && !budgetNoticeShown && playerMode == PlayerMode.NONE) {
             budgetNoticeShown = true
             localSubToast.show(budgetNotice)
         }
@@ -1690,7 +1692,6 @@ fun OwnTVShell(
                         onDismiss = { showLocalSubPicker = false },
                     )
                 }
-                tv.own.owntv.ui.components.InAppToast(localSubToast)
                 // A catch-up pick that could not be resolved. Raised from Live TV wherever an archive
                 // URL comes back null — "Watch from start", "Go back to…" and the external hand-off —
                 // all of which used to fail in complete silence.
@@ -1773,6 +1774,11 @@ fun OwnTVShell(
             }
         }
       }
+
+    // One shell-level host for subtitle/catch-up/startup/metadata notices. It must stay composed when
+    // playback closes: the metadata-limit notice is deliberately deferred until playerMode returns to
+    // NONE, and a host nested inside FULLSCREEN/MINI would consume that pending message invisibly.
+    tv.own.owntv.ui.components.InAppToast(localSubToast)
 
     if (showExit) {
         tv.own.owntv.ui.components.OwnTVPopup(onDismissRequest = { showExit = false }) {

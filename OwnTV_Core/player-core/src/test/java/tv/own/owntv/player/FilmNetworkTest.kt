@@ -5,7 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 import tv.own.owntv.core.player.PlayerBudget
 
-/** N18 — films' buffer, timeout and reconnects; every Auto must be what the engines did before. */
+/** N18 — films' buffer, timeout, underrun recovery and reconnects. */
 class FilmNetworkTest {
 
     private val lowSpec = PlayerBudget("48MiB", "16MiB", readaheadSecs = "10", cacheSecs = "30", lowSpec = true)
@@ -15,6 +15,7 @@ class FilmNetworkTest {
         assertEquals(30, FilmNetwork.bufferSecs(0, lowSpec))
         assertEquals("10", FilmNetwork.readaheadSecs(0, lowSpec))
         assertEquals(60, FilmNetwork.mpvTimeoutSecs(0))
+        assertEquals(60, FilmNetwork.exoReadTimeoutSecs(0))
     }
 
     @Test
@@ -22,6 +23,20 @@ class FilmNetworkTest {
         assertEquals(300, FilmNetwork.bufferSecs(300, lowSpec))
         assertEquals("300", FilmNetwork.readaheadSecs(300, lowSpec))
         assertEquals(10, FilmNetwork.mpvTimeoutSecs(10))
+        assertEquals(10, FilmNetwork.exoReadTimeoutSecs(10))
+    }
+
+    @Test
+    fun `slow-link recovery waits longer only after an underrun`() {
+        assertEquals(5, FilmNetwork.mpvRebufferSecs(0, lowSpec))
+        assertEquals(8_000, FilmNetwork.exoRebufferMs(0, lowSpec))
+        assertEquals(2_500, FilmNetwork.EXO_START_BUFFER_MS)
+    }
+
+    @Test
+    fun `recovery is bounded even when the user requests a very deep cache`() {
+        assertEquals(FilmNetwork.MPV_REBUFFER_SECS, FilmNetwork.mpvRebufferSecs(300, lowSpec))
+        assertEquals(FilmNetwork.EXO_REBUFFER_MS, FilmNetwork.exoRebufferMs(300, lowSpec))
     }
 
     @Test

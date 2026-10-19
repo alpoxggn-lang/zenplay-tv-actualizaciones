@@ -4440,12 +4440,12 @@
 1	technical	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	${f.channelCount}ch
 1	technical	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	${f.sampleRate / 1000}kHz
 1	technical	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	?
+2	compiler	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	Audio underruns are diagnostic only
 7	technical	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	AudioOutputPolicy
 1	compiler	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	DEPRECATION
 1	technical	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	audio
 1	log	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	audio decoder: $decoderName (init ${initializationDurationMs}ms, passthrough=$passthrough)
 1	log	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	audio format -> ${format.sampleMimeType} ${format.channelCount}ch ${format.sampleRate}Hz
-1	technical	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	audio output underran ${AudioOutputPolicy.UNDERRUN_LIMIT}× in ${AudioOutputPolicy.UNDERRUN_WINDOW_MS / 1000}s
 1	log	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	audio path: passthrough — the TV is decoding this stream
 1	technical	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	audio sink error: ${audioSinkError.message ?: audioSinkError.javaClass.simpleName}
 1	log	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	audio timestamp discontinuity: ${audioSinkError.actualPresentationTimeUs - audioSinkError.expectedPresentationTimeUs}us
@@ -4496,7 +4496,7 @@
 1	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	(decodedDrops=${currentDroppedFrames(player) - dropsBaseline} format=${player?.videoFormat?.sampleMimeType})
 1	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	, requested=${if (softwarePreferred) "software" else "hardware"})
 1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	AV1
-1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	ExoPlayer
+2	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	ExoPlayer
 1	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	ExoPlayer error: ${error.errorCodeName}
 2	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	ExoSubtitleEngine
 1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	H.264
@@ -4507,8 +4507,10 @@
 1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	VP9
 1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	ass
 1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	audio mode: video track ${if (disabled) "off" else "back on"}
+1	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	audio output remained silent in stereo
 1	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	audio track -> id=$id lang=${f?.language}
 1	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	audio watchdog: $reason — forcing stereo for this session
+1	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	audio watchdog: stereo output still silent — handing VOD to alternate engine
 1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	av01
 1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	avc
 1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	back on
@@ -4534,7 +4536,9 @@
 1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	software rescue: no frame on the hardware decoder, restarting in software decode
 1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	ssa
 1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	stereo
+1	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	stereo output still silent after recovery: $reason
 1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	subshift_
+1	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	unsupported selected audio override — choosing a playable track
 1	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	video decoder: $decoderName (init ${initializationDurationMs}ms,
 1	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	video input format: ${format.sampleMimeType} ${format.width}x${format.height} fps=${format.frameRate}
 1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	vp9
@@ -4562,6 +4566,7 @@
 1	log	player-core/src/main/java/tv/own/owntv/player/LiveExoWatchdog.kt	no video frame rendered (audio plays, no picture)
 1	log	player-core/src/main/java/tv/own/owntv/player/LiveExoWatchdog.kt	played, then stalled for ${STALL_HANDOFF_MS / 1000}s without recovering
 1	log	player-core/src/main/java/tv/own/owntv/player/LiveExoWatchdog.kt	provider refuses ExoPlayer's signed segment URLs
+1	log	player-core/src/main/java/tv/own/owntv/player/LiveExoWatchdog.kt	stereo audio output remained silent
 1	log	player-core/src/main/java/tv/own/owntv/player/LiveLadder.kt	ExoPlayer + HLS
 1	log	player-core/src/main/java/tv/own/owntv/player/LiveLadder.kt	ExoPlayer + TS
 1	log	player-core/src/main/java/tv/own/owntv/player/LiveLadder.kt	mpv + HLS
@@ -4610,7 +4615,7 @@
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	Cookie
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	ENDED
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	EXO
-5	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	ExoPlayer
+6	log	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	ExoPlayer
 1	log	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	ExoPlayer error: ${error.errorCodeName}
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	H.264
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	HEVC
@@ -4646,6 +4651,7 @@
 2	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	audio
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	audio: ${audioSinkError.message ?: audioSinkError.javaClass.simpleName}
 1	log	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	audioWatchdog: $reason — forcing stereo for this session
+1	log	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	audioWatchdog: stereo output still silent — handing live playback to mpv
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	av01
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	avc
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	buffer stopped growing at ${buffered}ms
@@ -4770,6 +4776,7 @@
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	software
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	stallWatchdog armed (${STALL_MS}ms)
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	state_changed state=$name playWhenReady=${p?.playWhenReady} isPlaying=${p?.isPlaying}
+1	log	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	stereo output still silent after recovery: $reason
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	still ${buffered}ms after ${waitedMs}ms
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	stop() — intentional
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	stream
@@ -4786,6 +4793,7 @@
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	type=${response.header("Content-Type").orEmpty()}
 2	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	und
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	unknown
+1	log	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	unsupported selected audio override — choosing a playable track
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	uri=${HttpClient.redactUrl(loadEventInfo.uri.toString())}
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	url=${HttpClient.redactUrl(finalUrl)}$via$body
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	url=${HttpClient.redactUrl(request.url.toString())}
@@ -4868,7 +4876,6 @@
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	/sdk_
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	/timeshift/
 4	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	0
-1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	1
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	1.0
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	10
 1	technical	player-core/src/main/java/tv/own/owntv/player/OwnTVPlayer.kt	1000000

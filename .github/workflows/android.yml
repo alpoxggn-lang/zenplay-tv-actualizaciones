@@ -196,8 +196,8 @@ jobs:
             fi
           else
             # Non-tag artifacts mirror app/build.gradle.kts and are never published as Releases.
-            NAME="2.2.17"
-            CODE=120217
+            NAME="2.2.18"
+            CODE=120218
           fi
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "code=$CODE" >> "$GITHUB_OUTPUT"

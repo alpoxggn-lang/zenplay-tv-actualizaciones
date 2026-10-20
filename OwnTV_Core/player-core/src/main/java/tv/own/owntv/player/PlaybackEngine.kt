@@ -81,6 +81,12 @@ interface PlaybackEngine {
     fun adjustVolumeByUser(delta: Int) = adjustVolume(delta)
     fun toggleMute()
     fun retry()
+    /**
+     * Re-anchor picture and sound after the window/surface changes shape (PiP, rotation, fullscreen).
+     * Implementations preserve the user's pause state and manual A/V delay. Cast and engines without
+     * a local clock may leave the default no-op.
+     */
+    fun reanchorAudioVideo() {}
     fun selectAudio(id: Int)
     fun selectSubtitle(id: Int)
     fun disableSubtitles()
@@ -203,6 +209,7 @@ class MpvPlaybackEngine(private val p: OwnTVPlayer) : PlaybackEngine {
     override fun adjustVolumeByUser(delta: Int) = p.adjustVolumeByUser(delta)
     override fun toggleMute() = p.toggleMute()
     override fun retry() = p.retry()
+    override fun reanchorAudioVideo() = p.reanchorAudioVideo()
     override fun selectAudio(id: Int) = p.selectAudio(id)
     override fun selectSubtitle(id: Int) = p.selectSubtitle(id)
     override fun disableSubtitles() = p.disableSubtitles()

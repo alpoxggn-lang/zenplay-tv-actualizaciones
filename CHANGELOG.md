@@ -7,6 +7,13 @@
 > Issue numbers that are part of a title are fine; explanatory parentheticals are not. The detail —
 > what, why, files and verification — belongs in the commit message, never here.
 
+## v2.2.18 — 2026-10-19
+
+### 🐛 Correcciones
+- **Audio e imagen permanecen sincronizados en TV en vivo, películas y series**
+- **Volver de pantalla flotante o rotar el dispositivo resincroniza la reproducción**
+- **Canales con marcas de tiempo defectuosas conservan un único reloj de reproducción**
+
 ## v2.2.17 — 2026-10-19
 
 ### ✨ Funciones nuevas

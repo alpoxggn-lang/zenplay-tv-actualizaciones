@@ -751,6 +751,18 @@ class ExoSubtitleEngine(
     fun wantsToPlay(): Boolean = player?.playWhenReady == true
     fun togglePlayPause() { player?.let { if (it.playWhenReady) it.pause() else it.play() } }
 
+    /**
+     * Re-anchor Media3's renderer clock after PiP/rotation without a network seek. Stopping and starting
+     * ready renderers makes DefaultMediaClock sample the AudioSink again; it neither changes position nor
+     * rebuilds the media item, so Range-hostile VOD cannot be stranded and a paused item stays paused.
+     */
+    fun reanchorAudioVideo() {
+        val p = player ?: return
+        if (audioOnly || !p.playWhenReady || p.playbackState != Player.STATE_READY) return
+        p.pause()
+        p.play()
+    }
+
     /** Absolute seek for a direct timeline gesture. Preserve playWhenReady rather than isPlaying:
      * isPlaying is false while Exo buffers the seek, even when the user never asked it to pause. */
     fun seekTo(positionMs: Long) {

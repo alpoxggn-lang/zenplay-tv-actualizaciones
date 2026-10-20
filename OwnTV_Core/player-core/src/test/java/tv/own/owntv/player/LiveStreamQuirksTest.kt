@@ -204,7 +204,11 @@ class LiveStreamQuirksTest {
         // A discontinuity at an ad break is normal live TV; the pathological feeds complain every frame.
         assertTrue(OwnTVPlayer.BROKEN_PTS_HITS > 1)
         assertTrue(OwnTVPlayer.BROKEN_PTS_RX.containsMatchIn("Invalid video timestamp: 5.000000 -> 4.000000"))
-        assertTrue(OwnTVPlayer.BROKEN_PTS_RX.containsMatchIn("Audio/Video desynchronisation detected!"))
+        assertTrue(OwnTVPlayer.BROKEN_PTS_RX.containsMatchIn("video: non-monotonic PTS detected"))
+        // A generic A/V warning describes the consequence, not proof that video PTS are malformed.
+        // Treating it as proof used to activate free-running timing and amplify the original offset.
+        assertFalse(OwnTVPlayer.BROKEN_PTS_RX.containsMatchIn("Audio/Video desynchronisation detected!"))
+        assertFalse(OwnTVPlayer.BROKEN_PTS_RX.containsMatchIn("audio: non-monotonic PTS detected"))
         assertFalse(OwnTVPlayer.BROKEN_PTS_RX.containsMatchIn("Using hardware decoding (mediacodec)."))
     }
 

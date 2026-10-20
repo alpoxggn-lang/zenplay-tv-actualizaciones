@@ -2327,6 +2327,21 @@ class LivePreviewEngine(
         if (p.isPlaying) p.pause() else p.play()
     }
 
+    /**
+     * Re-sample Media3's AudioSink clock after a Surface handoff. This deliberately avoids seek/reprepare:
+     * many IPTV servers expose an unseekable live edge or a single connection slot. Paused, buffering,
+     * radio and explicit Audio Mode sessions remain untouched.
+     */
+    override fun reanchorAudioVideo() {
+        val p = player ?: return
+        if (
+            _audioOnly.value || _audioOnlyMedia.value || !p.playWhenReady ||
+            p.playbackState != Player.STATE_READY
+        ) return
+        p.pause()
+        p.play()
+    }
+
     override fun setZoomMode(mode: ZoomMode) { _zoomMode.value = mode } // ExoPreviewSurface observes this + videoAspect/Size and sizes the surface (see Modifier.videoZoom)
 
     override fun adjustVolume(delta: Int) {

@@ -480,12 +480,14 @@ class OwnTVPlayer(
         )
         /** mpv's own report that a live feed's video timestamps can't be trusted. See [LiveStreamQuirks]. */
         val BROKEN_PTS_RX = Regex(
-            "invalid video timestamp|non-monotonic|desynchroni",
+            "invalid\\s+video\\s+(?:pts|dts|timestamp)|" +
+                "(?:video|stream\\s*#?\\s*0:0)[^\\r\\n]*non[- ]monotonic[^\\r\\n]*(?:pts|dts|timestamp)?|" +
+                "non[- ]monotonic[^\\r\\n]*(?:video|stream\\s*#?\\s*0:0)[^\\r\\n]*(?:pts|dts|timestamp)?",
             RegexOption.IGNORE_CASE,
         )
 
         /**
-         * How many broken-timestamp warnings before free-running video timing is switched on.
+         * How many broken-timestamp warnings before the stream is reopened with generated timestamps.
          *
          * A single discontinuity (an ad break, a mux glitch) is normal on live TV and must NOT cost the
          * stream its A/V sync; the feeds that need the workaround emit this on essentially every frame,
@@ -638,7 +640,7 @@ class OwnTVPlayer(
 
     // Vsync-aligned presentation was TRIED for live and does not work on this VO — do not re-attempt it
     // via mpv options. Measured 2026-07-27 on a 30.000002Hz panel, 4K live, vo=mediacodec_embed:
-    //   - default (video-sync=desync): mpv presents with no vsync alignment. The TV's own pipeline logged
+    //   - the former default (video-sync=desync) presented with no vsync alignment. The TV's own pipeline logged
     //     ~94 mistimed frames/min (W/VideoClient "vSyncDiff"), average interval 33668µs vs the correct
     //     33333µs. That is the mild judder users see; decode is clean (frame-drops=0, decoder-drops=0).
     //   - feeding mpv the panel rate (display-fps-override, accepted: display-fps read back 30.000002)
@@ -666,7 +668,9 @@ class OwnTVPlayer(
     // libmpv's android VO — a native-side change, not an option. libmpv is already on its newest release
     // (1.0.0 = mpv 0.41.0), and mpv master still uses the untimed av_mediacodec_release_buffer, so there
     // is no upgrade that fixes this. Accepted: live on mpv keeps mild judder; ExoPlayer is the smooth
-    // engine and mpv remains the fallback for streams ExoPlayer can't open.
+    // engine and mpv remains the fallback for streams ExoPlayer can't open. mpv now uses audio as its
+    // master clock: this does not solve the measured display-cadence limitation, but it prevents cadence
+    // jitter from becoming a steadily growing lip-sync offset.
 
     private val _directRender = MutableStateFlow(false)
     /** True while the direct (decoder-to-surface) output is in use — HUD hides zoom, app draws subs. */
@@ -844,37 +848,20 @@ class OwnTVPlayer(
             setPropertyString("cache-pause-initial", "no")
         }
         setPropertyString("cache-pause-wait", rebufferWaitSecs.toString())
-        // Broken-timestamp live streams (some IPTV 4K feeds send non-increasing/duplicate PTS): mpv is
-        // strict about PTS and drops nearly every frame ("Invalid video timestamp: X -> X"), which looks
-        // like lag even though decode is fine (ExoPlayer tolerates it). The workaround is to stop timing
-        // video against the audio master clock — derive it from the container FPS (correct-pts=no),
-        // present each frame for its nominal duration (video-sync=desync) and never drop (framedrop=no).
-        //
-        // It is applied ONLY to feeds mpv has actually complained about ([noteBrokenTimestamp], learned in
-        // LiveStreamQuirks), never to live as a class. Free-running video timing is by definition unsynced
-        // from audio, so on a normal feed — whose PTS are perfectly sound — it slowly drifts the picture
-        // away from the sound, which is exactly the "audio early or late" a provider's raw MPEG-TS showed.
-        // A healthy stream therefore keeps mpv's accurate, audio-synced default, same as VOD.
-        val brokenPts = isLiveContent && LiveStreamQuirks.hasBrokenTimestamps(url)
-        setPropertyString("correct-pts", if (brokenPts) "no" else "yes")
-        // On `vo=gpu` (the software/copy rescue paths) mpv DOES control scan-out, so it can align frames
-        // to the display's vsync and resample audio to match — which is what removes 24/25 fps judder.
-        // On the direct `mediacodec_embed` path it is meaningless: frames go to the decoder's surface and
-        // the display picks its own cadence, so the setting there stays `audio` and Auto frame rate is the
-        // only cure (F13).
-        setPropertyString(
-            "video-sync",
-            when {
-                brokenPts -> "desync"
-                !useDirect() -> "display-resample"
-                else -> "audio"
-            },
-        )
-        setPropertyString("framedrop", if (brokenPts) "no" else "decoder+vo")
+        // Broken-timestamp live streams (some IPTV 4K feeds send non-increasing/duplicate PTS) first get
+        // the tolerant demuxer rung below. [hasBrokenTimestamps] means that rung also failed and this load
+        // needs nominal FPS; even then the resolved profile keeps audio as master, never `desync`.
+        val brokenPts = isLiveContent &&
+            (item.brokenPtsRecoveryStage >= 2 || LiveStreamQuirks.hasBrokenTimestamps(url))
+        val sync = MpvAvSyncPolicy.resolve(isLiveContent, brokenPts, useDirect())
+        setPropertyString("correct-pts", sync.correctPts)
+        setPropertyString("video-sync", sync.videoSync)
+        setPropertyString("framedrop", sync.frameDrop)
         val trim = rawTs && !item.forceFullProbe
         usedTrimmedProbe = trim
         // Error tolerance: this load's retry rung, or a stream already caught needing it this session.
-        val tolerant = item.tolerantDemuxThisLoad || LiveStreamQuirks.needsTolerantDemux(url)
+        val tolerant = item.brokenPtsRecoveryStage >= 1 || item.tolerantDemuxThisLoad ||
+            LiveStreamQuirks.needsTolerantDemux(url) || brokenPts
         if (!trim) {
             // Full probe — needed for HDR, complete track lists, and to open HLS/other live cleanly. Capping
             // the analyze time (even to 2.5 s) wedges mpv's HLS open on this hardware — it never reaches the
@@ -1360,7 +1347,12 @@ class OwnTVPlayer(
         override fun logMessage(prefix: String, level: Int, text: String) {
             val t = text.trim()
             if (t.isEmpty()) return
-            if (isLiveContent && BROKEN_PTS_RX.containsMatchIn(t)) noteBrokenTimestamp()
+            if (isLiveContent && BROKEN_PTS_RX.containsMatchIn(t)) {
+                // mpv can finish logging the outgoing decoder after a zap. Bind the warning to the
+                // exact load/item generation visible now; [noteBrokenTimestamp] validates all three
+                // again before it is allowed to mutate recovery state or reopen anything.
+                noteBrokenTimestamp(load, item, loadGeneration)
+            }
             val keep = level <= 20 /* error/fatal */ || (level <= 30 /* warn */ && FAILURE_RX.containsMatchIn(t))
             if (!keep) return
             val safe = HttpClient.redactUrl("${prefix.trim().trimEnd(':')}: $t")
@@ -1376,19 +1368,65 @@ class OwnTVPlayer(
 
 
     /**
-     * mpv complained about this live feed's timestamps. Past [BROKEN_PTS_HITS] that is the pathological
-     * feed, not a discontinuity: switch to free-running video timing right away (both properties apply at
-     * runtime) and remember the stream so its next open starts that way, `correct-pts` included — that one
-     * only takes effect at decoder init, so this load keeps the accurate-PTS decode path.
+     * mpv complained repeatedly about this live feed's video timestamps. First reopen once with FFmpeg's
+     * `genpts`/`discardcorrupt` tolerance while keeping normal PTS correction. `genpts` only fills missing
+     * timestamps, so duplicate/backward PTS may survive; when that repaired load reaches the threshold
+     * again, remember a nominal-FPS last resort and reopen once more. Both profiles keep audio as master.
      */
-    private fun noteBrokenTimestamp() {
-        if (load.brokenPtsHandled || ++load.brokenPtsHits < BROKEN_PTS_HITS) return
-        load.brokenPtsHandled = true
-        currentUrl?.let { LiveStreamQuirks.rememberBrokenTimestamps(it) }
-        LiveDiagnosticsLog.event("mpv reported ${load.brokenPtsHits} broken video timestamps — switching to free-running video timing")
-        mpvAsync {
-            setPropertyString("video-sync", "desync")
-            setPropertyString("framedrop", "no")
+    private fun noteBrokenTimestamp(
+        observedLoad: LoadState,
+        observedItem: ItemState,
+        observedGeneration: Int,
+    ) {
+        if (
+            observedGeneration != loadGeneration || observedLoad !== load || observedItem !== item ||
+            !observedLoad.fileLoaded || !isLiveContent
+        ) return
+        val hits = synchronized(observedLoad) {
+            if (
+                observedGeneration != loadGeneration || observedLoad !== load || observedItem !== item ||
+                !observedLoad.fileLoaded || observedLoad.brokenPtsHandled
+            ) return
+            observedLoad.brokenPtsHits++
+            if (observedLoad.brokenPtsHits < BROKEN_PTS_HITS) return
+            observedLoad.brokenPtsHandled = true
+            observedLoad.brokenPtsHits
+        }
+        val url = currentUrl ?: return
+        if (
+            observedGeneration != loadGeneration || observedLoad !== load || observedItem !== item ||
+            currentUrl != url || !isLiveContent
+        ) return
+        val nominalAlreadyActive = observedItem.brokenPtsRecoveryStage >= 2 ||
+            LiveStreamQuirks.hasBrokenTimestamps(url)
+        if (nominalAlreadyActive) {
+            observedItem.brokenPtsRecoveryStage = 2
+            return
+        }
+        val tolerantAlreadyTried = observedItem.brokenPtsRecoveryStage >= 1 ||
+            LiveStreamQuirks.needsTolerantDemux(url)
+        if (tolerantAlreadyTried) {
+            observedItem.brokenPtsRecoveryStage = 2
+            LiveStreamQuirks.rememberBrokenTimestamps(url)
+        } else {
+            observedItem.brokenPtsRecoveryStage = 1
+            LiveStreamQuirks.rememberNeedsTolerantDemux(url)
+            observedItem.tolerantDemuxThisLoad = true
+        }
+        LiveDiagnosticsLog.event(
+            if (tolerantAlreadyTried) {
+                "mpv still reports broken video timestamps after genpts — reopening with nominal FPS and audio master"
+            } else {
+                "mpv reported $hits broken video timestamps — reopening with genpts and one A/V clock"
+            },
+        )
+        scope.launch {
+            if (
+                observedGeneration == loadGeneration && observedLoad === load && observedItem === item &&
+                isLiveContent && currentUrl == url
+            ) {
+                reloadLive(url, resetRetries = false)
+            }
         }
     }
 
@@ -2620,6 +2658,11 @@ class OwnTVPlayer(
             // MediaCodec stage to catch the picture back up to the audio clock. It only drops when actually
             // behind, so content that decodes in time is untouched.
             setOptionString("framedrop", "decoder+vo")
+            // Android AudioTrack timestamps can jump slightly while a Surface is resized/recreated
+            // (rotation, PiP, fullscreen). Smooth those measurements and explicitly keep mpv's normal
+            // start/seek alignment enabled so a temporary clock wobble cannot become a fixed offset.
+            setOptionString("autosync", MpvAvSyncPolicy.AUTO_SYNC_SAMPLES.toString())
+            setOptionString("initial-audio-sync", "yes")
             // Quiet logcat in release; debug builds keep decoder/video-out logs for diagnosing
             // hwdec behavior on real TVs (which decoder engaged, why fallbacks happened).
             setOptionString("msg-level", if (tv.own.owntv.core.CoreBuildInfo.debug) "all=warn,vd=v,vo=v" else "all=warn")
@@ -3509,6 +3552,34 @@ class OwnTVPlayer(
         // A pause changes what "healthy" means, but it does not cancel the destination. Replace the
         // watchdog ticket so the old coroutine cannot recover/clear the seek after this newer intent.
         rearmVodSeekRecoveryForIntent(resume)
+    }
+
+    /**
+     * Re-anchor the active local decoder after a PiP/fullscreen/orientation surface transition.
+     *
+     * Re-assert mpv's single-clock timing profile without seeking, reconnecting, or touching the user's
+     * pause state. Media3 already reattaches its AudioSink and video surface on lifecycle transitions;
+     * forcing a same-position network seek here could stall otherwise healthy VOD and live streams.
+     */
+    fun reanchorAudioVideo() {
+        if (exoActive) {
+            exoEngine?.reanchorAudioVideo()
+            return
+        }
+        if (!initialized || currentUrl == null) return
+        val generation = loadGeneration
+        val live = isLiveContent
+        val brokenPts = live && (
+            item.brokenPtsRecoveryStage >= 2 ||
+                currentUrl?.let(LiveStreamQuirks::hasBrokenTimestamps) == true
+            )
+        val sync = MpvAvSyncPolicy.resolve(live, brokenPts, useDirect())
+        mpvAsync {
+            if (generation != loadGeneration) return@mpvAsync
+            setPropertyString("video-sync", sync.videoSync)
+            setPropertyString("framedrop", sync.frameDrop)
+            setPropertyString("autosync", MpvAvSyncPolicy.AUTO_SYNC_SAMPLES.toString())
+        }
     }
 
     /** Absolute seek for direct timeline taps/drags and system media scrubbers. */
@@ -5513,7 +5584,7 @@ class OwnTVPlayer(
 internal data class LoadState(
     /** Set when mpv fires EVENT_FILE_LOADED; with [loadStartTime] it decides which stage of the
      *  VOD/archive load watchdog applies - open timeout at 10s, moov-at-end at 6s, decode at 7s. */
-    var fileLoaded: Boolean = false,
+    @field:Volatile var fileLoaded: Boolean = false,
     /** When loadUrl started, for the watchdog stages above. */
     var loadStartTime: Long = 0L,
     /** Load this item paused (restoring a backgrounded VOD). */
@@ -5566,6 +5637,12 @@ internal data class ItemState(
      *  reject. [triedTolerantDemux] keeps it to a single attempt. */
     @field:Volatile var tolerantDemuxThisLoad: Boolean = false,
     @field:Volatile var triedTolerantDemux: Boolean = false,
+    /**
+     * Broken live PTS recovery for this logical channel, independent of a renewable/signed URL:
+     * 0 = normal, 1 = tolerant genpts reload already selected, 2 = nominal-FPS last resort selected.
+     * Internal reloads keep [ItemState], so even a fresh Stalker URL can never restart the ladder.
+     */
+    @field:Volatile var brokenPtsRecoveryStage: Int = 0,
     /** With no custom User-Agent, a failed load is retried once under the neutral FALLBACK_USER_AGENT -
      *  some panels sit behind a WAF that blocklists player identities by name. */
     @field:Volatile var triedUaFallback: Boolean = false,

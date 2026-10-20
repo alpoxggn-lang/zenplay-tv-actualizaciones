@@ -22,6 +22,8 @@ import androidx.room.useWriterConnection
 import android.view.WindowManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -188,6 +190,8 @@ open class MainActivity : FragmentActivity() {
     private var pausedForBackground = false
     private var droppedVideoForBackground = false
     private var wasInPipWindow = false
+    /** Debounces PiP/rotation callbacks until the resized Surface has reached the active engine. */
+    private var avSyncReanchorJob: Job? = null
     private var pipReceiverRegistered = false
     private var notificationPermissionRequested = false
 
@@ -277,7 +281,29 @@ open class MainActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        val returningFromPip = wasInPipWindow
         wasInPipWindow = false
+        if (returningFromPip && usesTouchShell()) scheduleAvSyncReanchor()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // The universal Activity survives phone/tablet rotation. Wait for Compose/SurfaceView to
+        // publish its new dimensions, then flush any fixed AudioTrack/MediaCodec offset left behind.
+        if (usesTouchShell() && !pip.inPip.value) scheduleAvSyncReanchor()
+    }
+
+    private fun scheduleAvSyncReanchor() {
+        avSyncReanchorJob?.cancel()
+        avSyncReanchorJob = lifecycleScope.launch {
+            delay(350L)
+            if (
+                usesTouchShell() && mobileTuner.hasStream && !pip.inPip.value &&
+                !mobileEngine.audioOnly.value && !mobileEngine.audioOnlyMedia.value
+            ) {
+                mobileEngine.reanchorAudioVideo()
+            }
+        }
     }
 
     override fun onUserLeaveHint() {
@@ -309,6 +335,7 @@ open class MainActivity : FragmentActivity() {
     }
 
     override fun onDestroy() {
+        avSyncReanchorJob?.cancel()
         unregisterPipReceiver()
         super.onDestroy()
     }

@@ -1,3 +1,15 @@
+## Actualización ZenPlay 2.2.28
+
+[Descargas y cambios de la versión](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/tag/v2.2.28).
+
+- [Normal: ZenPlay.apk](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/latest/download/ZenPlay.apk)
+- [Legacy: ZenPlayLegacy.apk](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/latest/download/ZenPlayLegacy.apk)
+- [Código completo de 2.2.28](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/download/v2.2.28/ZenPlay-2.2.28-codigo.zip)
+
+La fuente de esta revisión está en el ZIP adjunto, con OwnTV_Core y artefactos locales. El árbol histórico de main puede ser anterior. Ver las notas de la versión para requisitos y límites de las pruebas.
+
+---
+
 ## Actualización ZenPlay 2.2.27
 
 [Descargas y cambios de la versión](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/tag/v2.2.27).

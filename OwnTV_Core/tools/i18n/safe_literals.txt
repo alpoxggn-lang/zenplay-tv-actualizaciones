@@ -4452,7 +4452,7 @@
 1	technical	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	${f.sampleRate / 1000}kHz
 1	technical	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	?
 2	compiler	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	Audio underruns are diagnostic only
-7	technical	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	AudioOutputPolicy
+8	technical	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	AudioOutputPolicy
 1	compiler	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	DEPRECATION
 1	technical	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	audio
 1	log	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	audio decoder: $decoderName (init ${initializationDurationMs}ms, passthrough=$passthrough)
@@ -4507,7 +4507,7 @@
 1	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	(decodedDrops=${currentDroppedFrames(player) - dropsBaseline} format=${player?.videoFormat?.sampleMimeType})
 1	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	, requested=${if (softwarePreferred) "software" else "hardware"})
 1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	AV1
-2	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	ExoPlayer
+3	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	ExoPlayer
 1	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	ExoPlayer error: ${error.errorCodeName}
 2	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	ExoSubtitleEngine
 1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	H.264
@@ -4527,7 +4527,7 @@
 1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	back on
 1	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	codec=${f?.sampleMimeType} ch=${f?.channelCount} rate=${f?.sampleRate}
 1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	device
-1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	exo/vod: $reason
+2	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	exo/vod: $reason
 1	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	film connection dropped at ${pos}ms — reopening in place ($next/$filmReconnects)
 3	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	hardware
 1	technical	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	hevc
@@ -4626,7 +4626,7 @@
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	Cookie
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	ENDED
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	EXO
-6	log	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	ExoPlayer
+7	log	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	ExoPlayer
 1	log	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	ExoPlayer error: ${error.errorCodeName}
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	H.264
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	HEVC
@@ -4684,7 +4684,7 @@
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	error ${error.errorCodeName}
 1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	error 0xfffffff4
 1	log	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	every rung spent — retrying at the panel's direct_source address
-1	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	exo/live: $reason
+2	technical	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	exo/live: $reason
 1	log	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	first frame after ${android.os.SystemClock.elapsedRealtime() - tune.playStartedMs}ms
 1	log	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	frame hook NOT wired — no video renderer found; picture-freeze detection falls back to the no-progress backstop
 1	log	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	frame hook send FAILED (${it.message}) — picture-freeze detection falls back to the no-progress backstop
@@ -5564,3 +5564,10 @@
 1	technical	player-core/src/main/java/tv/own/owntv/player/VideoQuality.kt	video/
 1	log	player-core/src/main/java/tv/own/owntv/player/VolumeBoost.kt	volume boost failed: ${it.javaClass.simpleName}
 1	log	player-core/src/main/java/tv/own/owntv/player/VolumeBoost.kt	volume boost unavailable: ${it.javaClass.simpleName}
+1	protocol	core/src/main/java/tv/own/owntv/core/games/GamesCompanion.kt	com.zenplay.games
+1	url	core/src/main/java/tv/own/owntv/core/games/GamesCompanion.kt	https://github.com/alpoxggn-lang/zenplay-juegos/releases/latest
+1	log	player-core/src/main/java/tv/own/owntv/player/AudioOutputPolicy.kt	preferring FFmpeg audio for this session: $reason
+1	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	audio watchdog: stereo output still silent — preferring bundled FFmpeg audio
+1	log	player-core/src/main/java/tv/own/owntv/player/ExoSubtitleEngine.kt	trying FFmpeg audio after silent stereo output: $reason
+1	log	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	audioWatchdog: stereo output still silent — preferring bundled FFmpeg audio
+1	log	player-core/src/main/java/tv/own/owntv/player/LivePreviewEngine.kt	trying FFmpeg audio after silent stereo output: $reason

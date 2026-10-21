@@ -1,3 +1,12 @@
+## Versión actual 2.2.29
+
+[Descargas y cambios](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/tag/v2.2.29). Usar las APK y el ZIP de código de esta release; main puede contener código anterior.
+
+- [ZenPlay.apk](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/latest/download/ZenPlay.apk)
+- [ZenPlayLegacy.apk](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/latest/download/ZenPlayLegacy.apk)
+
+---
+
 > **Publicación reparada de 2.2.28:** Android CI estaba reconstruyendo el árbol histórico y sustituyendo las APK integradas por archivos de 60 MB. Ese workflow está desactivado y ambas APK completas se restauraron: Normal 225.249.539 bytes; Legacy 225.667.279 bytes. Si instalaste la 2.2.28 de 60 MB, descarga nuevamente desde los enlaces fijos e instala encima sin desinstalar. Al conservar el mismo número de versión, el actualizador puede indicar que ya estás al día. No reactivar Android CI hasta sincronizar y validar el código integrado; las fuentes exactas están en el ZIP de la release.
 
 ## Actualización ZenPlay 2.2.28

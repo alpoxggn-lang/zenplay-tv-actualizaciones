@@ -1,3 +1,12 @@
+## Versión actual 2.2.31
+
+[Descargas y cambios](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/tag/v2.2.31). IPTV y juegos integrados. Fuente exacta en ZIP adjunto; main histórico.
+
+- [ZenPlay.apk](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/latest/download/ZenPlay.apk)
+- [ZenPlayLegacy.apk](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/latest/download/ZenPlayLegacy.apk)
+
+---
+
 ## Versión actual 2.2.29
 
 [Descargas y cambios](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/tag/v2.2.29). Usar las APK y el ZIP de código de esta release; main puede contener código anterior.

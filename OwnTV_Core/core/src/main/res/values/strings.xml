@@ -65,6 +65,7 @@
     <string name="common_nav_movies">Movies</string>
     <!-- Translators: Navigation label for the Series screen in the sidebar. -->
     <string name="common_nav_series">Series</string>
+    <string name="common_nav_games">Games</string>
     <!-- Translators: Navigation label for the Downloads screen in the sidebar. Also used in download notifications. -->
     <string name="common_nav_downloads">Downloads</string>
     <!-- Translators: Navigation label for the TV Guide screen in the sidebar. -->
@@ -77,6 +78,14 @@
     <string name="common_cast">Cast</string>
     <!-- Translators: Navigation label for the Settings screen in the sidebar. -->
     <string name="common_nav_settings">Settings</string>
+    <string name="games_companion_title">ZenPlay Games</string>
+    <string name="games_companion_description">Play games you own with the separate ZenPlay Games component, optimized for touch screens, controllers, Android TV and Fire TV.</string>
+    <string name="games_companion_installed">Ready to play on this device.</string>
+    <string name="games_companion_not_installed">Install the games component to import and organize your own library.</string>
+    <string name="games_companion_open">Open games</string>
+    <string name="games_companion_install">Install games component</string>
+    <string name="games_companion_legal_note">ZenPlay does not include ROMs or BIOS files. Import only games you own or public-domain software.</string>
+    <string name="games_companion_action_failed">No compatible app could open this action.</string>
     <!-- Translators: Status text when no content source is configured. -->
     <string name="shell_no_source">No source</string>
     <!-- Translators: Label of the sidebar item that jumps to the docked mini player or the audio session. -->

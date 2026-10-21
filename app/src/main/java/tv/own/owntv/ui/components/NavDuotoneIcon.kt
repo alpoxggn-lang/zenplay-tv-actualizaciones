@@ -94,6 +94,30 @@ fun NavDuotoneIcon(
                 dot(63f, 83f, 3f, soft)
             }
 
+            // ---- Games — controller silhouette + directional/action controls ----
+            MainSection.GAMES -> {
+                val body = Path().apply {
+                    moveTo(28f * s, 31f * s)
+                    lineTo(72f * s, 31f * s)
+                    cubicTo(80f * s, 31f * s, 83f * s, 38f * s, 86f * s, 49f * s)
+                    lineTo(91f * s, 70f * s)
+                    cubicTo(93f * s, 79f * s, 85f * s, 85f * s, 77f * s, 80f * s)
+                    lineTo(63f * s, 69f * s)
+                    lineTo(37f * s, 69f * s)
+                    lineTo(23f * s, 80f * s)
+                    cubicTo(15f * s, 85f * s, 7f * s, 79f * s, 9f * s, 70f * s)
+                    lineTo(14f * s, 49f * s)
+                    cubicTo(17f * s, 38f * s, 20f * s, 31f * s, 28f * s, 31f * s)
+                    close()
+                }
+                drawPath(body, soft, style = Fill)
+                drawPath(body, fill, style = stroke)
+                drawPath(poly(29f,43f, 29f,59f), fill, style = stroke)
+                drawPath(poly(21f,51f, 37f,51f), fill, style = stroke)
+                dot(70f, 46f, 4f, fill)
+                dot(79f, 56f, 4f, fill)
+            }
+
             // ---- Downloads — down-arrow tray + accent arcs -----------------------
             MainSection.DOWNLOADS -> {
                 drawPath(poly(50f,19f, 50f,58f), fill, style = stroke)

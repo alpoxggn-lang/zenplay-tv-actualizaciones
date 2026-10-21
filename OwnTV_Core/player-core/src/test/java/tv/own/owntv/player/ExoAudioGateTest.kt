@@ -94,9 +94,23 @@ class ExoAudioGateTest {
     }
 
     @Test
-    fun `silent stereo output changes engines instead of rebuilding forever`() {
-        assertEquals(SilentAudioRecovery.REBUILD_WITH_STEREO, silentAudioRecovery(stereoSinkAlreadyActive = false))
-        assertEquals(SilentAudioRecovery.TRY_ALTERNATE_ENGINE, silentAudioRecovery(stereoSinkAlreadyActive = true))
+    fun `silent output walks each genuinely different decoder route once`() {
+        assertEquals(
+            SilentAudioRecovery.REBUILD_WITH_STEREO,
+            silentAudioRecovery(false, ffmpegAlreadyPreferred = false, ffmpegAvailable = true),
+        )
+        assertEquals(
+            SilentAudioRecovery.REBUILD_WITH_FFMPEG,
+            silentAudioRecovery(true, ffmpegAlreadyPreferred = false, ffmpegAvailable = true),
+        )
+        assertEquals(
+            SilentAudioRecovery.TRY_ALTERNATE_ENGINE,
+            silentAudioRecovery(true, ffmpegAlreadyPreferred = true, ffmpegAvailable = true),
+        )
+        assertEquals(
+            SilentAudioRecovery.TRY_ALTERNATE_ENGINE,
+            silentAudioRecovery(true, ffmpegAlreadyPreferred = false, ffmpegAvailable = false),
+        )
     }
 
     @Test

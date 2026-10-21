@@ -801,11 +801,30 @@ class LivePreviewEngine(
                 // for 5.1 did not ask for silence — and cannot be turned off. On a hit the session latches
                 // to stereo (which every engine reads) and this channel is rebuilt on a stereo-only sink.
                 audioWatchdog.poll(p.isPlaying)?.let { reason ->
-                    when (silentAudioRecovery(!AudioOutputPolicy.allowsMultichannel(surroundMode))) {
+                    when (
+                        silentAudioRecovery(
+                            stereoSinkAlreadyActive = !AudioOutputPolicy.allowsMultichannel(surroundMode),
+                            ffmpegAlreadyPreferred = AudioOutputPolicy.ffmpegAudioLatched,
+                            ffmpegAvailable = FfmpegAudio.available,
+                        )
+                    ) {
                         SilentAudioRecovery.REBUILD_WITH_STEREO -> {
                             LiveDiagnosticsLog.event("audioWatchdog: $reason — forcing stereo for this session")
                             AudioOutputPolicy.latchStereo("exo/live: $reason")
                             PlaybackErrorLog.event(context, "ExoPlayer", live = true, reason = PlayerFailureReason.STEREO_FALLBACK, detail = reason)
+                            onAudioFallback?.invoke()
+                            rebuildForSettingChange()
+                        }
+                        SilentAudioRecovery.REBUILD_WITH_FFMPEG -> {
+                            LiveDiagnosticsLog.event("audioWatchdog: stereo output still silent — preferring bundled FFmpeg audio")
+                            AudioOutputPolicy.latchFfmpegAudio("exo/live: $reason")
+                            PlaybackErrorLog.event(
+                                context,
+                                "ExoPlayer",
+                                live = true,
+                                reason = PlayerFailureReason.STEREO_FALLBACK,
+                                detail = "trying FFmpeg audio after silent stereo output: $reason",
+                            )
                             onAudioFallback?.invoke()
                             rebuildForSettingChange()
                         }
@@ -3056,6 +3075,7 @@ class LivePreviewEngine(
             softwareFirst = !hwDecodingEnabled,
             audioDelay = audioDelayClock,
             passthrough = passthroughAllowed,
+            preferFfmpegAudio = AudioOutputPolicy.ffmpegAudioLatched,
         )
         val tunneled = wantTunneling().also { builtTunneled = it }
         if (tunneled) LiveDiagnosticsLog.event("building tunneled player (N19)")

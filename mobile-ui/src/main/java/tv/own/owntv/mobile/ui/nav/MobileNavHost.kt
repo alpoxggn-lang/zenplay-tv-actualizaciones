@@ -30,6 +30,7 @@ import tv.own.owntv.mobile.ui.screens.MoreScreen
 import tv.own.owntv.mobile.ui.player.PlayerScreen
 import tv.own.owntv.mobile.ui.screens.downloads.DownloadsScreen
 import tv.own.owntv.mobile.ui.screens.guide.GuideScreen
+import tv.own.owntv.mobile.ui.screens.games.GamesScreen
 import tv.own.owntv.mobile.ui.screens.home.HomeScreen
 import tv.own.owntv.mobile.ui.screens.library.DetailScreen
 import tv.own.owntv.mobile.ui.screens.library.LibraryScreen
@@ -123,6 +124,7 @@ fun MobileNavHost(
                     MobileDestination.DOWNLOADS -> DownloadsScreen(
                         onPlayerOpened = { navController.navigate(PLAYER_ROUTE) },
                     )
+                    MobileDestination.GAMES -> GamesScreen()
                     // Retain the old route for saved state from earlier APKs, without exposing the
                     // combined Library page again after the upgrade.
                     MobileDestination.LIBRARY -> LaunchedEffect(Unit) {

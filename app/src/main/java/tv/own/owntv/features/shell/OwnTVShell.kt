@@ -63,6 +63,7 @@ import tv.own.owntv.features.update.UpdateStatusToast
 import tv.own.owntv.features.epg.EpgScreen
 import tv.own.owntv.features.home.HomeScreen
 import tv.own.owntv.features.home.HomeViewModel
+import tv.own.owntv.features.games.GamesScreen
 import tv.own.owntv.features.live.LiveScreen
 import tv.own.owntv.features.live.LiveViewModel
 import tv.own.owntv.features.movies.MoviesScreen
@@ -1245,6 +1246,13 @@ fun OwnTVShell(
                             restoreFocus = restoreFocus,
                             onRestored = { restoreFocus = false },
                             modifier = Modifier.fillMaxSize(),
+                        )
+
+                        selectedSection == MainSection.GAMES -> GamesScreen(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .onFocusChanged { if (it.hasFocus) focusedLayer = ShellLayer.CONTENT }
+                                .focusGroup(),
                         )
 
                         selectedSection == MainSection.EPG -> EpgScreen(

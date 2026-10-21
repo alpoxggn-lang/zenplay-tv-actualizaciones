@@ -7,6 +7,16 @@
 > Issue numbers that are part of a title are fine; explanatory parentheticals are not. The detail —
 > what, why, files and verification — belongs in the commit message, never here.
 
+## v2.2.19 — 2026-10-20
+
+### ✨ Funciones nuevas
+- **Juegos integrado en la navegación de TV, Fire TV, celular y tablet**
+- **Acceso directo al componente ZenPlay Juegos desde la app principal**
+
+### 🐛 Correcciones
+- **Audio silencioso prueba estéreo, FFmpeg y motor alternativo sin reinicios infinitos**
+- **Instalación compatible con más cajas Android y Fire TV que reportan entrada táctil incompleta**
+
 ## v2.2.18 — 2026-10-19
 
 ### 🐛 Correcciones

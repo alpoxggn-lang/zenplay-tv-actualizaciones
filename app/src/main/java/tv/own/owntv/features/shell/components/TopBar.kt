@@ -151,7 +151,7 @@ fun TopBar(
         else -> selectedSection
     }
     val destinations = buildList {
-        listOf(MainSection.HOME, MainSection.LIVE_TV, MainSection.MOVIES, MainSection.SERIES)
+        listOf(MainSection.HOME, MainSection.LIVE_TV, MainSection.MOVIES, MainSection.SERIES, MainSection.GAMES)
             .filterTo(this) { it in visibleSections }
         add(MainSection.MORE)
     }
@@ -184,7 +184,7 @@ fun TopBar(
             .onFocusChanged { if (it.hasFocus) onFocused() }
             .focusGroup(),
     ) {
-        // Narrow 720p layouts keep the five destinations readable by hiding the profile name; the
+        // Narrow 720p layouts keep the destinations readable by hiding the profile name; the
         // avatar remains present and focusable. The panel above owns the only backdrop sample; these
         // children draw just their cheap tonal focus/selection state.
         val compact = maxWidth < 1120.dp

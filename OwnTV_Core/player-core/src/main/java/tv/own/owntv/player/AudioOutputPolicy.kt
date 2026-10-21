@@ -48,11 +48,15 @@ object AudioOutputPolicy {
     const val UNDERRUN_WINDOW_MS = 10_000L
 
     @Volatile private var latched = false
+    @Volatile private var ffmpegPreferred = false
     @Volatile var latchReason: String? = null
         private set
 
     /** True once the output has been caught failing; forces stereo PCM everywhere for this session. */
     val stereoLatched: Boolean get() = latched
+
+    /** True after a stereo ExoPlayer path was proven silent and FFmpeg should be tried first. */
+    val ffmpegAudioLatched: Boolean get() = ffmpegPreferred
 
     /**
      * True when this mode + the current latch permit anything other than plain stereo PCM.
@@ -68,23 +72,41 @@ object AudioOutputPolicy {
         android.util.Log.w("AudioOutputPolicy", "forcing stereo for this session: $reason")
     }
 
+    /** Prefer the bundled FFmpeg audio renderer for later ExoPlayer rebuilds in this session. */
+    fun latchFfmpegAudio(reason: String) {
+        if (ffmpegPreferred) return
+        ffmpegPreferred = true
+        android.util.Log.w("AudioOutputPolicy", "preferring FFmpeg audio for this session: $reason")
+    }
+
     /** The user changed the surround setting: give the output another chance. */
     fun clearLatch() {
         latched = false
+        ffmpegPreferred = false
         latchReason = null
     }
 }
 
 /** What to do after a decoder accepted an audio track but the output still produced silence. */
-internal enum class SilentAudioRecovery { REBUILD_WITH_STEREO, TRY_ALTERNATE_ENGINE }
+internal enum class SilentAudioRecovery {
+    REBUILD_WITH_STEREO,
+    REBUILD_WITH_FFMPEG,
+    TRY_ALTERNATE_ENGINE,
+}
 
 /**
  * One stereo rebuild is useful; rebuilding an already-stereo sink again is the same attempt in a loop.
  * At that point the other playback engine is the only recovery that adds a genuinely different route.
  */
-internal fun silentAudioRecovery(stereoSinkAlreadyActive: Boolean): SilentAudioRecovery =
-    if (stereoSinkAlreadyActive) SilentAudioRecovery.TRY_ALTERNATE_ENGINE
-    else SilentAudioRecovery.REBUILD_WITH_STEREO
+internal fun silentAudioRecovery(
+    stereoSinkAlreadyActive: Boolean,
+    ffmpegAlreadyPreferred: Boolean,
+    ffmpegAvailable: Boolean,
+): SilentAudioRecovery = when {
+    !stereoSinkAlreadyActive -> SilentAudioRecovery.REBUILD_WITH_STEREO
+    ffmpegAvailable && !ffmpegAlreadyPreferred -> SilentAudioRecovery.REBUILD_WITH_FFMPEG
+    else -> SilentAudioRecovery.TRY_ALTERNATE_ENGINE
+}
 
 /**
  * A [DefaultRenderersFactory] that can be pinned to plain stereo PCM.
@@ -117,6 +139,8 @@ class OwnTVRenderersFactory(
     private val audioDelay: AudioDelayClock? = null,
     /** N8 — false: decode Dolby/DTS in the app instead of bitstreaming it. */
     private val passthrough: Boolean = true,
+    /** Recovery-only path: try the bundled FFmpeg decoder before the vendor MediaCodec decoder. */
+    private val preferFfmpegAudio: Boolean = false,
 ) : DefaultRenderersFactory(context) {
 
     override fun buildAudioSink(
@@ -150,7 +174,13 @@ class OwnTVRenderersFactory(
             out,
         )
         if (FfmpegAudio.available) {
-            out.add(FfmpegAudioRenderer(eventHandler, eventListener, audioSink))
+            val ffmpeg = FfmpegAudioRenderer(eventHandler, eventListener, audioSink)
+            if (preferFfmpegAudio) {
+                val firstAudio = out.indexOfFirst { it.trackType == C.TRACK_TYPE_AUDIO }
+                out.add(if (firstAudio >= 0) firstAudio else out.size, ffmpeg)
+            } else {
+                out.add(ffmpeg)
+            }
         }
     }
 

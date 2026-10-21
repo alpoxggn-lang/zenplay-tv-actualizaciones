@@ -259,7 +259,7 @@ fun MobileShell(
     }
 
     // 600dp is Material's compact/medium boundary. ZenPlay keeps the tablet portrait design on the
-    // bottom bar and moves the exact same five destinations to a rail after rotation.
+    // bottom bar and moves the exact same destinations to a rail after rotation.
     val useRail = !compactHandset && windowWidthDp >= 600 && windowWidthDp >= windowHeightDp
     // Compact phones get tighter shell chrome so content keeps usable space in portrait: the same
     // 48 dp touch targets and the same islands, with less air around them. Tablet/landscape keeps

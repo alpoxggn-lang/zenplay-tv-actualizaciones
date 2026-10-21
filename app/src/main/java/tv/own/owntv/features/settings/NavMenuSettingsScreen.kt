@@ -49,10 +49,10 @@ import tv.own.owntv.ui.theme.OwnTVTheme
 
 /**
  * v4.3.0 — Nav menu customization. Two modes:
- * - **STATIC** (default): the user toggles which of the six browse icons show in the side rail.
+ * - **STATIC** (default): the user toggles which browse icons show in the side rail.
  *   Settings is always pinned at the bottom and can never be hidden here.
- * - **DYNAMIC**: the icons adapt to what the active playlist actually contains (Home & Settings always
- *   show). The per-icon list is hidden in this mode — there's nothing to toggle.
+ * - **DYNAMIC**: the icons adapt to what the active playlist actually contains (Home, Games and
+ *   Settings always show). The per-icon list is hidden in this mode — there's nothing to toggle.
  */
 @Composable
 fun NavMenuSettingsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {

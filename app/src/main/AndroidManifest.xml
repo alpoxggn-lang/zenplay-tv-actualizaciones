@@ -32,6 +32,12 @@
     <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="false" />
+    <!-- Some inexpensive Android/Fire TV boxes expose only the broader faketouch capability.
+         Keeping it optional lets the same APK remain installable on remotes, touch devices and
+         boxes whose feature declarations are incomplete. -->
+    <uses-feature
+        android:name="android.hardware.faketouch"
+        android:required="false" />
     <uses-feature
         android:name="android.software.leanback"
         android:required="false" />

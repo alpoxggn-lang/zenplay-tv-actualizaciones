@@ -403,15 +403,16 @@ class ExoSubtitleEngine(
         // The audio sink's capabilities are baked in at construction too, so the same rule applies: a
         // cached player built before the session latched to stereo would keep the sink that failed.
         val wantStereo = !AudioOutputPolicy.allowsMultichannel(surroundMode)
+        val wantFfmpegAudio = AudioOutputPolicy.ffmpegAudioLatched
         val wantNetwork = filmBufferSecs to filmTimeoutSecs
         val wantPassthrough = passthroughAllowed
-        if (player != null && (builtForSoftware != softwarePreferred || builtForStereo != wantStereo || builtForNetwork != wantNetwork || builtForPassthrough != wantPassthrough)) {
+        if (player != null && (builtForSoftware != softwarePreferred || builtForStereo != wantStereo || builtForFfmpegAudio != wantFfmpegAudio || builtForNetwork != wantNetwork || builtForPassthrough != wantPassthrough)) {
             android.util.Log.i(TAG, "rebuilding ExoPlayer for ${if (softwarePreferred) "software" else "hardware"} decode, ${if (wantStereo) "stereo" else "device"} audio")
             player?.release()
             boost.release() // bound to the outgoing player's audio session
             player = null
         }
-        val p = player ?: build().also { player = it; builtForSoftware = softwarePreferred; builtForStereo = wantStereo; builtForNetwork = wantNetwork; builtForPassthrough = wantPassthrough }
+        val p = player ?: build().also { player = it; builtForSoftware = softwarePreferred; builtForStereo = wantStereo; builtForFfmpegAudio = wantFfmpegAudio; builtForNetwork = wantNetwork; builtForPassthrough = wantPassthrough }
         // Both are plain setters, so a cached player picks up a setting changed since it was built —
         // no rebuild needed for either (unlike the renderer factory and the audio sink above).
         p.setVideoChangeFrameRateStrategy(
@@ -586,6 +587,8 @@ class ExoSubtitleEngine(
     }
     /** Whether the cached player's audio sink was pinned to stereo PCM. See the rebuild check in `start`. */
     private var builtForStereo = false
+    /** Whether the cached player tried bundled FFmpeg audio before the vendor MediaCodec path. */
+    private var builtForFfmpegAudio = false
     private var builtForPassthrough = true
 
     /** The (buffer, timeout) the cached player was built with. See the rebuild check in `start`. */
@@ -664,6 +667,7 @@ class ExoSubtitleEngine(
             softwareFirst = softwarePreferred,
             audioDelay = audioDelay,
             passthrough = passthroughAllowed,
+            preferFfmpegAudio = AudioOutputPolicy.ffmpegAudioLatched,
         )
         return ExoPlayer.Builder(context)
             .setRenderersFactory(renderers)
@@ -829,11 +833,29 @@ class ExoSubtitleEngine(
         // latches to stereo and the owner restarts this item — the sink's capabilities are decided at
         // construction, so nothing short of a rebuild can undo a bad choice.
         audioWatchdog.poll(p.isPlaying)?.let { reason ->
-            when (silentAudioRecovery(builtForStereo)) {
+            when (
+                silentAudioRecovery(
+                    stereoSinkAlreadyActive = builtForStereo,
+                    ffmpegAlreadyPreferred = builtForFfmpegAudio,
+                    ffmpegAvailable = FfmpegAudio.available,
+                )
+            ) {
                 SilentAudioRecovery.REBUILD_WITH_STEREO -> {
                     android.util.Log.w("ExoSubtitleEngine", "audio watchdog: $reason — forcing stereo for this session")
                     AudioOutputPolicy.latchStereo("exo/vod: $reason")
                     PlaybackErrorLog.event(context, "ExoPlayer", live = false, reason = PlayerFailureReason.STEREO_FALLBACK, detail = reason)
+                    onAudioFallback?.invoke()
+                }
+                SilentAudioRecovery.REBUILD_WITH_FFMPEG -> {
+                    android.util.Log.w(TAG, "audio watchdog: stereo output still silent — preferring bundled FFmpeg audio")
+                    AudioOutputPolicy.latchFfmpegAudio("exo/vod: $reason")
+                    PlaybackErrorLog.event(
+                        context,
+                        "ExoPlayer",
+                        live = false,
+                        reason = PlayerFailureReason.STEREO_FALLBACK,
+                        detail = "trying FFmpeg audio after silent stereo output: $reason",
+                    )
                     onAudioFallback?.invoke()
                 }
                 SilentAudioRecovery.TRY_ALTERNATE_ENGINE -> {

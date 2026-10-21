@@ -15,6 +15,7 @@ class TvSectionPolicyTest {
         assertFalse(MainSection.EPG in sections)
         assertTrue(MainSection.MOVIES in sections)
         assertTrue(MainSection.SERIES in sections)
+        assertTrue(MainSection.GAMES in sections)
     }
 
     @Test
@@ -23,6 +24,7 @@ class TvSectionPolicyTest {
 
         assertFalse(MainSection.DOWNLOADS in sections)
         assertTrue(MainSection.EPG in sections)
+        assertTrue(MainSection.GAMES in sections)
         assertEquals(sections.distinct(), sections)
     }
 }

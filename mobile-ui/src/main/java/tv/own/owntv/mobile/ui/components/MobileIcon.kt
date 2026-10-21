@@ -102,6 +102,18 @@ object MobileIcons {
             line(3f, 7f, 3f, 21f, 17f, 21f)
         }
     }
+    val Gamepad: ImageVector by lazy {
+        glyph() {
+            outline {
+                moveTo(7f, 8f); lineTo(17f, 8f)
+                lineTo(21f, 18f); lineTo(18f, 20f); lineTo(14.5f, 16f)
+                lineTo(9.5f, 16f); lineTo(6f, 20f); lineTo(3f, 18f)
+                lineTo(7f, 8f); close()
+            }
+            line(7f, 11f, 7f, 15f); line(5f, 13f, 9f, 13f)
+            dot(16f, 12f, 1f); dot(18.5f, 14.5f, 1f)
+        }
+    }
     val Image: ImageVector by lazy {
         glyph() {
             box(3f, 5f, 21f, 19f, 2f)

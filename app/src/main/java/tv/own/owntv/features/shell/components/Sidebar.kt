@@ -615,6 +615,7 @@ private fun zenRailEmoji(section: MainSection, actionIcon: OwnTVIcon?): String? 
         MainSection.LIVE_TV -> "📺"
         MainSection.MOVIES -> "🎬"
         MainSection.SERIES -> "🍿"
+        MainSection.GAMES -> "🎮"
         MainSection.DOWNLOADS -> "📥"
         MainSection.EPG -> "📅"
         MainSection.SEARCH -> "🔍"
@@ -630,6 +631,7 @@ private val MainSection.navIcon: OwnTVIcon
         MainSection.LIVE_TV -> OwnTVIcon.LIVE_TV
         MainSection.MOVIES -> OwnTVIcon.MOVIES
         MainSection.SERIES -> OwnTVIcon.SERIES
+        MainSection.GAMES -> OwnTVIcon.LIST_GRID
         MainSection.DOWNLOADS -> OwnTVIcon.DOWNLOADS
         MainSection.EPG -> OwnTVIcon.EPG
         MainSection.SETTINGS -> OwnTVIcon.SETTINGS

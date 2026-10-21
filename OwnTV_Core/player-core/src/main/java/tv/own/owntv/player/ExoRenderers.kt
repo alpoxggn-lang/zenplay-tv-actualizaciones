@@ -27,8 +27,16 @@ fun ownTVRenderers(
     audioDelay: AudioDelayClock? = null,
     /** N8 — false: Dolby/DTS decoded in the app, see [OwnTVRenderersFactory]. */
     passthrough: Boolean = true,
+    /** Put the bundled FFmpeg audio renderer before MediaCodec after a confirmed silent output. */
+    preferFfmpegAudio: Boolean = false,
 ): DefaultRenderersFactory =
-    OwnTVRenderersFactory(context, forceStereo = forceStereo, audioDelay = audioDelay, passthrough = passthrough)
+    OwnTVRenderersFactory(
+        context,
+        forceStereo = forceStereo,
+        audioDelay = audioDelay,
+        passthrough = passthrough,
+        preferFfmpegAudio = preferFfmpegAudio,
+    )
         // Media3 runs MediaCodec asynchronously by default on API 31+, and on every Fire TV device
         // (`com.amazon.hardware.tv_screen`) from API 28 up. That async path corrupts (macroblocks)
         // some UHD-HEVC content on Realtek/Amlogic VPUs — the synchronous path is what players like

@@ -619,6 +619,7 @@
 2	technical	app/src/main/java/tv/own/owntv/features/shell/components/Sidebar.kt	\0
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/Sidebar.kt	nowPlayingRing
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/Sidebar.kt	nowPlayingRingAlpha
+1	technical	app/src/main/java/tv/own/owntv/features/shell/components/Sidebar.kt	🎮
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/SolidAmbientBackdrop.kt	solidAmbientPulse
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/SolidAmbientBackdrop.kt	solidAmbientRingPresence
 1	technical	app/src/main/java/tv/own/owntv/features/shell/components/SolidAmbientBackdrop.kt	solidAmbientRingScale

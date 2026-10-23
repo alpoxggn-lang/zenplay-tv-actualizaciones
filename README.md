@@ -1,3 +1,12 @@
+## Versión actual 2.2.41
+
+[Descargas y cambios](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/tag/v2.2.41). Edición de deportes en TV, filas y foco del catálogo estabilizados, navegación en vivo conservada y todas las consolas Retro TV visibles. Fuente exacta en ZIP adjunto; main histórico.
+
+- [ZenPlay.apk](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/latest/download/ZenPlay.apk) — Android 7+
+- [ZenPlayLegacy.apk](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/latest/download/ZenPlayLegacy.apk) — Android 5.1+
+
+---
+
 ## Versión actual 2.2.40
 
 [Descargas y cambios](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/tag/v2.2.40). Retro TV como único catálogo de juegos; navegación TV corregida y Legacy adaptada para Android 5.1. Fuente exacta en ZIP adjunto; main histórico.

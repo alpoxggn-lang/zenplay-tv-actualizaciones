@@ -1,3 +1,12 @@
+## Versión actual 2.2.45
+
+[Descargas y cambios](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/tag/v2.2.45). Detiene el audio invisible al cambiar de apartado sin reproductor, conservando vista previa, PiP y transmisión a TV. Fuente exacta en ZIP adjunto; main histórico.
+
+- [ZenPlay.apk](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/latest/download/ZenPlay.apk) — Android 7+
+- [ZenPlayLegacy.apk](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/latest/download/ZenPlayLegacy.apk) — Android 5.1+
+
+---
+
 ## Versión actual 2.2.44
 
 [Descargas y cambios](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/tag/v2.2.44). Filtros visibles en búsqueda TV, corrección del campo de escritura en películas y series y regreso de pantalla completa sin solicitar ventana flotante. Fuente exacta en ZIP adjunto; main histórico.

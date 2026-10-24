@@ -1,3 +1,12 @@
+## Versión actual 2.2.43
+
+[Descargas y cambios](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/tag/v2.2.43). Reproductor con iconos en todos los dispositivos, aviso del siguiente episodio un minuto antes del final y fichas de TV unificadas para películas y series. Fuente exacta en ZIP adjunto; main histórico.
+
+- [ZenPlay.apk](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/latest/download/ZenPlay.apk) — Android 7+
+- [ZenPlayLegacy.apk](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/latest/download/ZenPlayLegacy.apk) — Android 5.1+
+
+---
+
 ## Versión actual 2.2.42
 
 [Descargas y cambios](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/tag/v2.2.42). Corrección del formulario inicial de perfil en Normal y Legacy, y más botones compatibles para controles de TV en juegos. Fuente exacta en ZIP adjunto; main histórico.

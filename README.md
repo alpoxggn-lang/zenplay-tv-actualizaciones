@@ -1,3 +1,12 @@
+## Versión actual 2.2.47
+
+[Descargas y cambios](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/tag/v2.2.47). Añade 163 competiciones, incluidas femeniles, LMB y LMP con calendarios y marcadores. Fuente exacta en ZIP adjunto; main histórico.
+
+- [ZenPlay.apk](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/latest/download/ZenPlay.apk) — Android 7+
+- [ZenPlayLegacy.apk](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/latest/download/ZenPlayLegacy.apk) — Android 5.1+
+
+---
+
 ## Versión actual 2.2.46
 
 [Descargas y cambios](https://github.com/alpoxggn-lang/zenplay-tv-actualizaciones/releases/tag/v2.2.46). Detiene el canal y su audio al volver de la vista previa a Categorías en móviles y tablets. Fuente exacta en ZIP adjunto; main histórico.
